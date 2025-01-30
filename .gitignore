@@ -1,5 +1,6 @@
 log/
 .cache/
+install/
 
 # Based on github ROS gitignore
 devel/
