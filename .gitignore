@@ -1,5 +1,10 @@
+log/
+.cache/
+
+# Based on github ROS gitignore
 devel/
 logs/
+log/
 build/
 bin/
 lib/
