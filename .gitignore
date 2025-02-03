@@ -1,6 +1,9 @@
 log/
 .cache/
 install/
+*.pdf
+*.gv
+*.log
 
 # Based on github ROS gitignore
 devel/

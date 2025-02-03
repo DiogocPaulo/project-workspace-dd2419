@@ -100,7 +100,7 @@ class Odometry(Node):
         t.transform.rotation.w = q[3]
 
         # Send the transformation
-        self._tf_broadcaster.sendTransform(t)
+        self.transform_broadcaster.sendTransform(t)
 
     def publish_path(self, stamp, x, y, yaw):
         """Takes a 2D pose appends it to the path and publishes the whole path.
