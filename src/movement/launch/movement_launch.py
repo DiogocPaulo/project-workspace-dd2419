@@ -12,6 +12,9 @@ def generate_launch_description():
     joystick_launch_file = os.path.join(
         get_package_share_directory("teleop_twist_joy"), "launch", "teleop-launch.py"
     ) 
+    phidgets_launch_file = os.path.join(
+        get_package_share_directory("robp_launch"), "launch", "phidgets_launch.py"
+    ) 
     joystick_config_filepath = os.path.join(
         get_package_share_directory("movement"), "config", "gamepad.yaml"
     ) 
@@ -31,6 +34,9 @@ def generate_launch_description():
             executable="static_transform_publisher",
             arguments=["0", "0", "0", "0", "0", "0", "1", "map", "odom"],
             output="screen",
+        ),
+        IncludeLaunchDescription(
+            launch_description_source=PythonLaunchDescriptionSource(phidgets_launch_file),
         ),
         IncludeLaunchDescription(
             launch_description_source=PythonLaunchDescriptionSource(joystick_launch_file),
