@@ -74,9 +74,9 @@ class MultiServoPublisher(Node):
         self.timer = self.create_timer(5.0, self.publish_pose)
         self.publisher = self.create_publisher(Int16MultiArray, "/multi_servo_cmd_sub", 10)
         self.i = 0
-        # self.publish_pose()
 
     def publish_pose(self):
+        self.get_logger().info(f"Published servo command message")
         msg = Int16MultiArray()
         msg.layout = MultiArrayLayout(dim=[MultiArrayDimension(label="", size=12, stride=12)], data_offset=0)
         

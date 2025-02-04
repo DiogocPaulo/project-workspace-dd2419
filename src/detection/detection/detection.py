@@ -135,7 +135,7 @@ class ExamineImage(Node):
 
         r, g, b = colors[:,0], colors[:,1], colors[:,2]
         red_f = (r > 0.7) & (g < 0.4) & (b < 0.4)
-        green_f = (r < 0.2) & (g > 0.5) & (b < 0.2)
+        green_f = (r < 0.3) & (g > 0.6) & (b < 0.75)
 
         red_points = points[red_f]
         green_points = points[green_f]
@@ -148,57 +148,70 @@ class ExamineImage(Node):
         frame_id = msg.header.frame_id
         time_stamp = msg.header.stamp
 
-        # tf_future = self.tfBuffer.wait_for_transform_async(
-        #     target_frame = 'map',
-        #     source_frame = frame_id,
-        #     time = time_stamp
-        # )
+        tf_future = self.tfBuffer.wait_for_transform_async(
+            target_frame = 'map',
+            source_frame = frame_id,
+            time = time_stamp
+        )
 
-        # rclpy.spin_until_future_complete(self,tf_future, timeout_sec=1)
+        rclpy.spin_until_future_complete(self,tf_future, timeout_sec=1)
 
-        # try:
-        #     t = self.tfBuffer.lookup_transform(
-        #         'map',
-        #         frame_id,
-        #         time_stamp)
-        # except TransformException as ex:
-        #     self.get_logger().info(
-        #         f'Could not transform {frame_id} to map: {ex}'
-        #     )
+        try:
+            t = self.tfBuffer.lookup_transform(
+                'map',
+                frame_id,
+                time_stamp)
+        except TransformException as ex:
+            self.get_logger().info(
+                f'Could not transform {frame_id} to map: {ex}'
+            )
 
-        # cloud_msg_red = PointCloud2()
-        # cloud_msg_red.header.stamp = time_stamp
-        # cloud_msg_red.header.frame_id = 'map'
-        # cloud_msg_red.height = 1
-        # cloud_msg_red.width = len(red_points)
-        # cloud_msg_red.fields = [
-        #     PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
-        #     PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1),
-        #     PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1),
-        #     PointField(name='rgb', offset=12, datatype=PointField.FLOAT32, count=1)
-        # ]
-        # cloud_msg_red.is_bigendian=False
-        # cloud_msg_red.point_step = 16
-        # cloud_msg_red.row_step = cloud_msg_red.point_step * len(red_points)
-        # cloud_msg_red.is_dense = True
+        cloud_msg_red = PointCloud2()
+        cloud_msg_red.header.stamp = time_stamp
+        cloud_msg_red.header.frame_id = 'map'
+        cloud_msg_red.height = 1
+        cloud_msg_red.width = len(red_points) + len(green_points)
+        cloud_msg_red.fields = [
+            PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
+            PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1),
+            PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1),
+            PointField(name='rgb', offset=12, datatype=PointField.FLOAT32, count=1)
+        ]
+        cloud_msg_red.is_bigendian=False
+        cloud_msg_red.point_step = 16
+        cloud_msg_red.row_step = cloud_msg_red.point_step * (len(red_points) + len(green_points))
+        cloud_msg_red.is_dense = True
 
 
-        # cloud_data = []
-        # for p in red_points:
-        #     point_stamped = PointStamped()
-        #     point_stamped.header.frame_id = 'map'
-        #     point_stamped.header.stamp = time_stamp
-        #     point_stamped.point.x = p[0]
-        #     point_stamped.point.y = p[1]
-        #     point_stamped.point.z = p[2]
-        #     transformed_point = do_transform_point(point_stamped,t)
-        #     r,g,b = 255,0,0
-        #     rgb = struct.unpack('I',struct.pack('BBBB',int(b),int(g),int(b),0))[0]
-        #     cloud_data.append(struct.unpack('ffff',transformed_point.point.x,transformed_point.point.y,transformed_point.point.z,rgb))
+        cloud_data = []
+        for p in red_points:
 
-        # cloud_msg_red.data = b''.join(cloud_data)
+            point_stamped = PointStamped()
+            point_stamped.header.frame_id = 'map'
+            point_stamped.header.stamp = time_stamp
+            point_stamped.point.x = p[0]
+            point_stamped.point.y = p[1]
+            point_stamped.point.z = p[2]
+            transformed_point = do_transform_point(point_stamped,t)
+            r,g,b = 255,0,0
+            rgb = struct.unpack('I',struct.pack('BBBB',int(r),int(g),int(b),0))[0]
+            cloud_data.append(struct.pack('ffff',transformed_point.point.x,transformed_point.point.y,transformed_point.point.z,rgb))
 
-        # self.pub.publish(cloud_msg_red)
+        for p in green_points:
+            point_stamped = PointStamped()
+            point_stamped.header.frame_id = 'map'
+            point_stamped.header.stamp = time_stamp
+            point_stamped.point.x = p[0]
+            point_stamped.point.y = p[1]
+            point_stamped.point.z = p[2]
+            transformed_point = do_transform_point(point_stamped,t)
+            r,g,b = 50,255,150
+            rgb = struct.unpack('I',struct.pack('BBBB',int(r),int(g),int(b),0))[0]
+            cloud_data.append(struct.pack('ffff',transformed_point.point.x,transformed_point.point.y,transformed_point.point.z,rgb))
+
+        cloud_msg_red.data = b''.join(cloud_data)
+
+        self.pub.publish(cloud_msg_red)
 
 
 
