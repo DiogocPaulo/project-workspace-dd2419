@@ -1,13 +1,9 @@
 log/
 .cache/
 install/
-<<<<<<< HEAD
-*.gv
-*.pdf
-=======
 *.pdf
 *.gv
->>>>>>> movement
+bags/
 
 # Based on github ROS gitignore
 devel/
