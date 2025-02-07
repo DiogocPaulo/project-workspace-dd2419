@@ -18,7 +18,7 @@ from geometry_msgs.msg import PoseStamped
 class Odometry(Node):
     
     def __init__(self):
-        super().__init__("odometry")
+        super().__init__('odometry')
 
         self.transform_broadcaster = TransformBroadcaster(self)
 
