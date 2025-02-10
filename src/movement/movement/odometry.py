@@ -24,7 +24,7 @@ class Odometry(Node):
 
         self.path_publisher = self.create_publisher(
                 Path,
-                'path',
+                "odom_path",
                 10)
         self.robot_path = Path()
 
@@ -44,7 +44,7 @@ class Odometry(Node):
         dt = 50 / 1000                      # Update interval rate (seconds)
         ticks_per_rev = 48 * 64             # Ticks per revolution
         wheel_radius = 0.04921              # Wheel radius (meters)
-        base = 0.2                          # Distance between wheels (meters)
+        base = 0.3                          # Distance between wheels (meters)
 
         delta_ticks_left = msg.delta_encoder_left
         delta_ticks_right = msg.delta_encoder_right
@@ -81,8 +81,8 @@ class Odometry(Node):
 
         t = TransformStamped()
         t.header.stamp = stamp
-        t.header.frame_id = 'map'
-        t.child_frame_id = 'base_link'
+        t.header.frame_id = "odom"
+        t.child_frame_id = "base_link"
 
         # The robot only exists in 2D, thus we set x and y translation
         # coordinates and set the z coordinate to 0
