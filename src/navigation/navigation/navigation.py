@@ -9,31 +9,17 @@ from rclpy.node import Node
 from robp_interfaces.msg import Encoders
 from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseStamped
-<<<<<<< HEAD
 from robp_interfaces.msg import DutyCycles
 
 from example_interfaces.srv import Trigger
-=======
-
-from robp_interfaces.msg import DutyCycles
-from tf2_ros import TransformBroadcaster
-from tf_transformations import quaternion_from_euler, euler_from_quaternion
->>>>>>> 90022044b423cea3560868e28cf4fb0190b427ed
 
 DEBUG = True
 
 # Robot parameters
-<<<<<<< HEAD
 base = 0.3  # Wheelbase of the vehicle
 lookahead_gain = 0.2   # Look-ahead distance gain
 lookahead_min = 1  # Minimum look-ahead distance
 distance_threshold = 0.3
-=======
-base = 2.5  # Wheelbase of the vehicle
-lookahead_gain = 0.1   # Look-ahead distance gain
-lookahead_min = 2.0  # Minimum look-ahead distance
-
->>>>>>> 90022044b423cea3560868e28cf4fb0190b427ed
 
 class RobotState:
     """Using odometry message to update the current state of the robot"""
@@ -77,22 +63,14 @@ class TargetPath:
         if self.old_nearest_point_index is None:
             # Search for nearest point on path to robot state
             dx = [state.x - i for i in self.x_points]
-<<<<<<< HEAD
             dy = [state.y - i for i in self.y_points]
-=======
-            dy = [state.x - i for i in self.y_points]
->>>>>>> 90022044b423cea3560868e28cf4fb0190b427ed
             distances = np.hypot(dx, dy)
             index = np.argmin(distances)
         else:
             index = self.old_nearest_point_index
             distance_to_index = state.distance_to_state(self.x_points[index], self.y_points[index])
             while True:
-<<<<<<< HEAD
                 if (index + 1) >= len(self.x_points):
-=======
-                if index + 1 > len(self.x_points):
->>>>>>> 90022044b423cea3560868e28cf4fb0190b427ed
                     break
                 distance_to_next_index = state.distance_to_state(self.x_points[index + 1], self.y_points[index + 1])
                 if distance_to_index < distance_to_next_index:
@@ -115,12 +93,6 @@ class TargetPath:
 def pure_pursuit_control(state, target_path):
     index, lookahead = target_path.search_target_index(state)
     
-<<<<<<< HEAD
-=======
-    # if previous_index >= index:
-    #     index = previous_index
-
->>>>>>> 90022044b423cea3560868e28cf4fb0190b427ed
     if index is None:
         return 0.0, 0
     
@@ -133,18 +105,12 @@ def pure_pursuit_control(state, target_path):
         index = len(target_path.x_points) - 1
 
     alpha = math.atan2(target_y - state.y, target_x - state.x) - state.yaw
-<<<<<<< HEAD
     alpha = math.atan2(math.sin(alpha), math.cos(alpha))
     kappa = 2.0 * math.sin(alpha) / lookahead
 
     omega = state.velocity * kappa
 
     return omega, index
-=======
-    delta = math.atan2(2.0 * base * math.sin(alpha)/lookahead, 1.0)
-
-    return delta, index
->>>>>>> 90022044b423cea3560868e28cf4fb0190b427ed
 
 class Navigation(Node):
 
@@ -167,13 +133,10 @@ class Navigation(Node):
                 self.path_callback,
                 10)
         self.motor_publisher = self.create_publisher(DutyCycles, "/motor/duty_cycles", 10)
-<<<<<<< HEAD
         self.new_path_client = self.create_client(Trigger, "new_path")
         while not self.new_path_client.wait_for_service(timeout_sec=2.0):
             self.get_logger().info('Waiting for service...')
         self.new_path_request()
-=======
->>>>>>> 90022044b423cea3560868e28cf4fb0190b427ed
 
         self.create_timer(0.05, self.control_loop)
 
@@ -185,7 +148,6 @@ class Navigation(Node):
     def path_callback(self, msg: Path):
         self.target_path.update_path(msg)
 
-<<<<<<< HEAD
     def new_path_request(self):
         request = Trigger.Request()
         future = self.new_path_client.call_async(request)
@@ -198,14 +160,11 @@ class Navigation(Node):
         else:
             self.get_logger().error("Error - Failed to receive response.")
 
-=======
->>>>>>> 90022044b423cea3560868e28cf4fb0190b427ed
     def control_loop(self):
         if not self.target_path.x_points:
             self.get_logger().info(f"Error - No target path")
             return
 
-<<<<<<< HEAD
         omega, self.previous_index = pure_pursuit_control(self.state, self.target_path)
         if DEBUG: self.get_logger().info(f"Velocity: {self.state.velocity}, Steering Angle: {omega:.2f}, Target Index: {self.previous_index}")
 
@@ -218,20 +177,6 @@ class Navigation(Node):
 
         left_wheel = self.state.velocity - (base/2) * omega
         right_wheel = self.state.velocity + (base/2) * omega
-=======
-        delta, self.previous_index = pure_pursuit_control(self.state, self.target_path)
-        if DEBUG: self.get_logger().info(f"Velocity: {self.state.velocity}, Steering Angle: {delta:.2f}, Target Index: {self.previous_index}")
-
-        left_wheel = self.state.velocity - delta
-        right_wheel = self.state.velocity + delta
-        max_speed = 0.6
-        if left_wheel > max_speed: left_wheel = 1
-        if left_wheel < -max_speed: left_wheel = -max_speed
-        if right_wheel > max_speed: right_wheel = max_speed
-        if right_wheel < -max_speed: right_wheel = -max_speed
-        dutyCycles.duty_cycle_left = left_wheel
-        dutyCycles.duty_cycle_right = right_wheel
->>>>>>> 90022044b423cea3560868e28cf4fb0190b427ed
 
         max_value = max(abs(left_wheel), abs(right_wheel))
 
@@ -239,7 +184,6 @@ class Navigation(Node):
             left_wheel = left_wheel / max_value
             right_wheel = right_wheel / max_value
 
-<<<<<<< HEAD
         max_speed = 0.6
         if left_wheel > max_speed: left_wheel = max_speed
         if left_wheel < -max_speed: left_wheel = -max_speed
@@ -249,11 +193,6 @@ class Navigation(Node):
         dutyCycles = DutyCycles()
         dutyCycles.header.frame_id = "base_link"
         dutyCycles.header.stamp = self.get_clock().now().to_msg()
-=======
-        dutyCycles = DutyCycles()
-        dutyCycles.header.frame_id = "base_link"
-        dutyCycles.header.stamp = self.stamp
->>>>>>> 90022044b423cea3560868e28cf4fb0190b427ed
         dutyCycles.duty_cycle_left = left_wheel
         dutyCycles.duty_cycle_right = right_wheel
         self.motor_publisher.publish(dutyCycles)

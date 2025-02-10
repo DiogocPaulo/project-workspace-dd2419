@@ -8,11 +8,7 @@ import os
 
 from launch_ros.actions import Node
 
-<<<<<<< HEAD
-def generate_launch_description():
-=======
 def generate_launch_description(): 
->>>>>>> 90022044b423cea3560868e28cf4fb0190b427ed
     frames_launch_file = os.path.join(
         get_package_share_directory("robp_launch"), "launch", "frames_launch.xml"
     ) 
@@ -26,13 +22,10 @@ def generate_launch_description():
         IncludeLaunchDescription(
             launch_description_source=AnyLaunchDescriptionSource(lidar_launch_file),
         ),
-<<<<<<< HEAD
         Node(
             package="lidar",
             executable="lidar",
             name="lidar",
         ),
-=======
->>>>>>> 90022044b423cea3560868e28cf4fb0190b427ed
     ])
 
