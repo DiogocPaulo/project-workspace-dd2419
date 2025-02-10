@@ -121,7 +121,7 @@ class Navigation(Node):
         self.state = RobotState()
         self.target_path = TargetPath()
         self.previous_index = 0
-        #self.stamp = None
+        self.stamp = None
 
         self.create_subscription(
                 Path,
@@ -140,7 +140,7 @@ class Navigation(Node):
 
     def odom_callback(self, msg: Path):
         self.state.update_state(msg)
-        #self.stamp = msg.poses[-1].header.stamp
+        self.stamp = msg.poses[-1].header.stamp
 
     def path_callback(self, msg: Path):
         self.target_path.update_path(msg)
@@ -153,19 +153,21 @@ class Navigation(Node):
         delta, self.previous_index = pure_pursuit_control(self.state, self.target_path)
         if DEBUG: self.get_logger().info(f"Velocity: {self.state.velocity}, Steering Angle: {delta:.2f}, Target Index: {self.previous_index}")
 
-        # left_wheel = self.state.velocity + delta
-        # right_wheel = self.state.velocity - delta
-        #
-        # max_value = max(abs(left_wheel), abs(right_wheel))
-        #
-        # if max_value > 1:
-        #     left_wheel = left_wheel / max_value
-        #     right_wheel = right_wheel / max_value
-        #
-        # dutyCycles = DutyCycles()
-        # dutyCycles.header.frame_id = "base_link"
-        # dutyCycles.header.stamp = self.stamp
-        # self.motor_publisher.publish(dutyCycles)
+        left_wheel = self.state.velocity + delta
+        right_wheel = self.state.velocity - delta
+
+        max_value = max(abs(left_wheel), abs(right_wheel))
+
+        if max_value > 1:
+            left_wheel = left_wheel / max_value
+            right_wheel = right_wheel / max_value
+
+        dutyCycles = DutyCycles()
+        dutyCycles.header.frame_id = "base_link"
+        dutyCycles.header.stamp = self.stamp
+        dutyCycles.duty_cycle_left = left_wheel
+        dutyCycles.duty_cycle_right = right_wheel
+        self.motor_publisher.publish(dutyCycles)
 
 
 def main():
