@@ -10,6 +10,7 @@ from robp_interfaces.msg import Encoders
 from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseStamped
 
+from robp_interfaces.msg import DutyCycles
 from tf2_ros import TransformBroadcaster
 from tf_transformations import quaternion_from_euler, euler_from_quaternion
 
@@ -30,10 +31,10 @@ class RobotState:
         self.velocity = 0.0
 
     def update_state(self, odom_msg):
-        self.x = odom_msg.pose.position.x
-        self.y = odom_msg.pose.position.y
+        self.x = odom_msg.poses[-1].pose.position.x
+        self.y = odom_msg.poses[-1].pose.position.y
 
-        q = odom_msg.pose.orientation
+        q = odom_msg.poses[-1].pose.orientation
         t0 = +2.0 * (q.w * q.z + q.x * q.y)
         t1 = +1.0 - 2.0 * (q.y * q.y + q.z * q.z)
         self.yaw = math.atan2(t0, t1)
@@ -56,7 +57,7 @@ class TargetPath:
         self.old_nearest_point_index = None
 
     def search_target_index(self, state):
-        if not x_points or not y_points:
+        if not self.x_points or not self.y_points:
             # Checks if there exits a path
             return None, None
 
@@ -90,7 +91,7 @@ class TargetPath:
 
         return index, lookahead
 
-def pure_pursuit_control(self, state, target_path):
+def pure_pursuit_control(state, target_path):
     index, lookahead = target_path.search_target_index(state)
     
     # if previous_index >= index:
@@ -117,15 +118,10 @@ class Navigation(Node):
     def __init__(self):
         super().__init__("navigation")
 
-        self.lookahead_distance = 1
-        self.max_speed = 0.6
-        self.current_pose = None
-        self.pathing_points = []
-
         self.state = RobotState()
         self.target_path = TargetPath()
         self.previous_index = 0
-        self.stamp = 0
+        self.stamp = None
 
         self.create_subscription(
                 Path,
@@ -134,7 +130,7 @@ class Navigation(Node):
                 10)
         self.create_subscription(
                 Path,
-                "current_path",
+                "custom_path",
                 self.path_callback,
                 10)
         self.motor_publisher = self.create_publisher(DutyCycles, "/motor/duty_cycles", 10)
@@ -149,17 +145,25 @@ class Navigation(Node):
     def path_callback(self, msg: Path):
         self.target_path.update_path(msg)
 
-    def control_loop(self)
+    def control_loop(self):
         if not self.target_path.x_points:
             self.get_logger().info(f"Error - No target path")
             return
 
-        delta, self.previous_index = self.target_path.pure_pursuit_control(self.state, self.target_path, self.previous_index)
+        delta, self.previous_index = pure_pursuit_control(self.state, self.target_path)
+        if DEBUG: self.get_logger().info(f"Velocity: {self.state.velocity}, Steering Angle: {delta:.2f}, Target Index: {self.previous_index}")
 
-        left_wheel = self.state.velocity + delta
-        right_wheel = self.state.velocity - delta
+        left_wheel = self.state.velocity - delta
+        right_wheel = self.state.velocity + delta
+        max_speed = 0.6
+        if left_wheel > max_speed: left_wheel = 1
+        if left_wheel < -max_speed: left_wheel = -max_speed
+        if right_wheel > max_speed: right_wheel = max_speed
+        if right_wheel < -max_speed: right_wheel = -max_speed
+        dutyCycles.duty_cycle_left = left_wheel
+        dutyCycles.duty_cycle_right = right_wheel
 
-        max_value = max(abs(left), abs(right))
+        max_value = max(abs(left_wheel), abs(right_wheel))
 
         if max_value > 1:
             left_wheel = left_wheel / max_value
@@ -168,9 +172,10 @@ class Navigation(Node):
         dutyCycles = DutyCycles()
         dutyCycles.header.frame_id = "base_link"
         dutyCycles.header.stamp = self.stamp
+        dutyCycles.duty_cycle_left = left_wheel
+        dutyCycles.duty_cycle_right = right_wheel
         self.motor_publisher.publish(dutyCycles)
 
-        if DEBUG: self.get_logger().info(f"Velocity: {self.state.velocity}, Steering Angle: {delta:.2f}, Target Index: {self.prev_index}")
 
 def main():
     rclpy.init()

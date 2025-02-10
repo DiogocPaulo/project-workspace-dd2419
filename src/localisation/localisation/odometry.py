@@ -26,7 +26,7 @@ class Odometry(Node):
 
         self.path_publisher = self.create_publisher(
                 Path,
-                "path",
+                "odom_path",
                 10)
         self.robot_path = Path()
 
