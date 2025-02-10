@@ -13,6 +13,9 @@ run-movement:
 
 run-localisation:
 	ros2 launch localisation localisation_launch.py | tee test_logs/localisation.log
+	
+run-navigation:
+	ros2 launch navigation navigation_launch.py | tee test_logs/navigation.log
 
 clean:
 	rm -rf build/ install/ package/
