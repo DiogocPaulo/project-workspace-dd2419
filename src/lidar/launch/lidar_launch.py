@@ -23,9 +23,9 @@ def generate_launch_description():
             launch_description_source=AnyLaunchDescriptionSource(lidar_launch_file),
         ),
         Node(
-            package="localisation",
-            executable="odometry",
-            name="robot_odometry",
+            package="lidar",
+            executable="lidar",
+            name="lidar",
         ),
     ])
 
