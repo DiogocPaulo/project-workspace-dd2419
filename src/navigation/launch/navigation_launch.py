@@ -20,10 +20,4 @@ def generate_launch_description():
             executable="navigation",
             name="robot_navigation",
         ),
-        # Node(
-        #     package="tf2_ros",
-        #     executable="static_transform_publisher",
-        #     arguments=["0", "0", "0", "0", "0", "0", "1", "map", "odom"],
-        #     output="screen",
-        # ),
     ])

@@ -120,7 +120,6 @@ class Navigation(Node):
         self.state = RobotState()
         self.target_path = TargetPath()
         self.previous_index = 0
-        self.stamp = None
 
         self.create_subscription(
                 Path,
@@ -143,7 +142,7 @@ class Navigation(Node):
 
     def odom_callback(self, msg: Path):
         self.state.update_state(msg)
-        self.stamp = msg.poses[-1].header.stamp
+        #self.stamp = msg.poses[-1].header.stamp
 
     def path_callback(self, msg: Path):
         self.target_path.update_path(msg)
@@ -196,7 +195,6 @@ class Navigation(Node):
         dutyCycles.duty_cycle_left = left_wheel
         dutyCycles.duty_cycle_right = right_wheel
         self.motor_publisher.publish(dutyCycles)
-
 
 def main():
     rclpy.init()
