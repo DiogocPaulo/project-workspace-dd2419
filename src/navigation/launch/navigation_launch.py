@@ -12,18 +12,18 @@ def generate_launch_description():
     return LaunchDescription([
         Node(
             package="navigation",
-            executable="navigation",
-            name="robot_navigation",
-        ),
-        Node(
-            package="navigation",
             executable="pathing",
             name="robot_pathing",
         ),
         Node(
-            package="tf2_ros",
-            executable="static_transform_publisher",
-            arguments=["0", "0", "0", "0", "0", "0", "1", "map", "odom"],
-            output="screen",
+            package="navigation",
+            executable="navigation",
+            name="robot_navigation",
         ),
+        # Node(
+        #     package="tf2_ros",
+        #     executable="static_transform_publisher",
+        #     arguments=["0", "0", "0", "0", "0", "0", "1", "map", "odom"],
+        #     output="screen",
+        # ),
     ])
