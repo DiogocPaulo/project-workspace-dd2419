@@ -70,7 +70,6 @@ class Pathing(Node):
 def main():
     rclpy.init()
     node = Pathing()
-    #node.update_end_point()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
