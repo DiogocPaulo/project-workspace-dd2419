@@ -142,7 +142,7 @@ class Navigation(Node):
 
     def odom_callback(self, msg: Path):
         self.state.update_state(msg)
-        #self.stamp = msg.poses[-1].header.stamp
+        self.stamp = msg.poses[-1].header.stamp
 
     def path_callback(self, msg: Path):
         self.target_path.update_path(msg)
