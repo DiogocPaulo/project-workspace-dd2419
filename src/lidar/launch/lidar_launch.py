@@ -22,5 +22,10 @@ def generate_launch_description():
         IncludeLaunchDescription(
             launch_description_source=AnyLaunchDescriptionSource(lidar_launch_file),
         ),
+        Node(
+            package="lidar",
+            executable="lidar",
+            name="lidar",
+        ),
     ])
 
