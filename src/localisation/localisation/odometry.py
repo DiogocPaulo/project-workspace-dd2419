@@ -15,22 +15,24 @@ from robp_interfaces.msg import Encoders
 from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseStamped
 
+DEBUG = False
+
 class Odometry(Node):
     
     def __init__(self):
-        super().__init__('odometry')
+        super().__init__("odometry")
 
         self.transform_broadcaster = TransformBroadcaster(self)
 
         self.path_publisher = self.create_publisher(
                 Path,
-                'path',
+                "path",
                 10)
         self.robot_path = Path()
 
         self.create_subscription(
                 Encoders,
-                '/motor/encoders',
+                "/motor/encoders",
                 self.encoder_callback,
                 10)
 
@@ -48,7 +50,8 @@ class Odometry(Node):
 
         delta_ticks_left = msg.delta_encoder_left
         delta_ticks_right = msg.delta_encoder_right
-        self.get_logger().info(f"Time [{msg.header.stamp.sec}] \n\tLeft ({msg.delta_encoder_left}) \n\tRight ({msg.delta_encoder_right})")
+
+        if DEBUG then self.get_logger().info(f"Time [{msg.header.stamp.sec}] \n\tLeft ({msg.delta_encoder_left}) \n\tRight ({msg.delta_encoder_right})")
 
         delta_left_wheel_angle = (delta_ticks_left/ticks_per_rev) * 2 * (math.pi) * wheel_radius
         delta_right_wheel_angle = (delta_ticks_right/ticks_per_rev) * 2 * (math.pi) * wheel_radius
@@ -81,8 +84,8 @@ class Odometry(Node):
 
         t = TransformStamped()
         t.header.stamp = stamp
-        t.header.frame_id = 'map'
-        t.child_frame_id = 'base_link'
+        t.header.frame_id = "odom"
+        t.child_frame_id = "base_link"
 
         # The robot only exists in 2D, thus we set x and y translation
         # coordinates and set the z coordinate to 0
