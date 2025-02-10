@@ -21,11 +21,14 @@ def generate_launch_description():
     ) 
     return LaunchDescription([
         IncludeLaunchDescription(
-            launch_description_source=AnyLaunchDescriptionSource(frames_launch_file),
+            launch_description_source=PythonLaunchDescriptionSource(phidgets_launch_file),
         ),
-        IncludeLaunchDescription(
-            launch_description_source=AnyLaunchDescriptionSource(lidar_launch_file),
-        ),
+        # IncludeLaunchDescription(
+        #     launch_description_source=AnyLaunchDescriptionSource(frames_launch_file),
+        # ),
+        # IncludeLaunchDescription(
+        #     launch_description_source=AnyLaunchDescriptionSource(lidar_launch_file),
+        # ),
         Node(
             package="localisation",
             executable="odometry",
@@ -41,9 +44,6 @@ def generate_launch_description():
             executable="static_transform_publisher",
             arguments=["0", "0", "0", "0", "0", "0", "1", "map", "odom"],
             output="screen",
-        ),
-        IncludeLaunchDescription(
-            launch_description_source=PythonLaunchDescriptionSource(phidgets_launch_file),
         ),
     ])
 
