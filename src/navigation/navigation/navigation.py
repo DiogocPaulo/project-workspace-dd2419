@@ -153,8 +153,15 @@ class Navigation(Node):
         delta, self.previous_index = pure_pursuit_control(self.state, self.target_path)
         if DEBUG: self.get_logger().info(f"Velocity: {self.state.velocity}, Steering Angle: {delta:.2f}, Target Index: {self.previous_index}")
 
-        left_wheel = self.state.velocity + delta
-        right_wheel = self.state.velocity - delta
+        left_wheel = self.state.velocity - delta
+        right_wheel = self.state.velocity + delta
+        max_speed = 0.6
+        if left_wheel > max_speed: left_wheel = 1
+        if left_wheel < -max_speed: left_wheel = -max_speed
+        if right_wheel > max_speed: right_wheel = max_speed
+        if right_wheel < -max_speed: right_wheel = -max_speed
+        dutyCycles.duty_cycle_left = left_wheel
+        dutyCycles.duty_cycle_right = right_wheel
 
         max_value = max(abs(left_wheel), abs(right_wheel))
 

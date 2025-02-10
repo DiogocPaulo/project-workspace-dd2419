@@ -31,8 +31,8 @@ class Pathing(Node):
         path_resolution = 10
         start_x = 0
         start_y = 0
-        end_x = 5
-        end_y = 2
+        end_x = 3
+        end_y = 0
 
         for i in range(path_resolution):
             pose = PoseStamped()
