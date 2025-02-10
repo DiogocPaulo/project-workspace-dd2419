@@ -34,7 +34,7 @@ class RobotState:
         self.x = odom_msg.poses[-1].pose.position.x
         self.y = odom_msg.poses[-1].pose.position.y
 
-        q = odom_msg.pose.orientation
+        q = odom_msg.poses[-1].pose.orientation
         t0 = +2.0 * (q.w * q.z + q.x * q.y)
         t1 = +1.0 - 2.0 * (q.y * q.y + q.z * q.z)
         self.yaw = math.atan2(t0, t1)
