@@ -51,7 +51,7 @@ class Odometry(Node):
         delta_ticks_left = msg.delta_encoder_left
         delta_ticks_right = msg.delta_encoder_right
 
-        if DEBUG then self.get_logger().info(f"Time [{msg.header.stamp.sec}] \n\tLeft ({msg.delta_encoder_left}) \n\tRight ({msg.delta_encoder_right})")
+        if DEBUG: self.get_logger().info(f"Time [{msg.header.stamp.sec}] \n\tLeft ({msg.delta_encoder_left}) \n\tRight ({msg.delta_encoder_right})")
 
         delta_left_wheel_angle = (delta_ticks_left/ticks_per_rev) * 2 * (math.pi) * wheel_radius
         delta_right_wheel_angle = (delta_ticks_right/ticks_per_rev) * 2 * (math.pi) * wheel_radius
