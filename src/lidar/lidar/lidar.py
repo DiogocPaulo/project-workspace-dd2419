@@ -9,6 +9,8 @@ import tf2_ros
 import tf2_geometry_msgs
 import numpy as np
 from geometry_msgs.msg import PointStamped
+from tf2_ros import TransformException
+from tf2_geometry_msgs import do_transform_point
 
 class LidarRepublisher(Node):
     def __init__(self):
@@ -53,7 +55,7 @@ class LidarRepublisher(Node):
         points = self.laser_scan_to_points(msg)
 
         # Transform each point to the map frame
-        transformed_points = self.transform_points(points, "map", msg.header.frame_id, msg.header.stamp)
+        transformed_points = self.transform_points(points, 'map', msg.header.frame_id, msg.header.stamp)
 
         if not transformed_points:
             return  # Skip if no transformed points
@@ -80,24 +82,36 @@ class LidarRepublisher(Node):
 
     def transform_points(self, points, target_frame, source_frame, timestamp):
         """Transform each point to the target frame and return a new list of transformed points."""
+        tf_future = self.tf_buffer.wait_for_transform_async(
+            target_frame = target_frame,
+            source_frame = source_frame,
+            time = timestamp
+        )
+
+        rclpy.spin_until_future_complete(self,tf_future, timeout_sec=1)
+
         try:
-            transform = self.tf_buffer.lookup_transform(target_frame, source_frame, timestamp)
+            t = self.tf_buffer.lookup_transform(
+                target_frame,
+                source_frame,
+                timestamp)
+        except TransformException as ex:
+            self.get_logger().info(
+                f'Could not transform {source_frame} to {target_frame}: {ex}'
+            )
+        
 
-            transformed_points = []
-            for x, y, z in points:
-                point_msg = PointStamped()
-                point_msg.header.frame_id = source_frame
-                point_msg.header.stamp = timestamp
-                point_msg.point.x, point_msg.point.y, point_msg.point.z = x, y, z
+        transformed_points = []
+        for x, y, z in points:
+            point_msg = PointStamped()
+            point_msg.header.frame_id = source_frame
+            point_msg.header.stamp = timestamp
+            point_msg.point.x, point_msg.point.y, point_msg.point.z = x, y, z
 
-                transformed_point = tf2_ros.Buffer().transform(point_msg, target_frame)
-                transformed_points.append((transformed_point.point.x, transformed_point.point.y, transformed_point.point.z))
+            transformed_point = do_transform_point(point_msg,t)
+            transformed_points.append((transformed_point.point.x, transformed_point.point.y, transformed_point.point.z))
 
-            return transformed_points
-
-        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
-            self.get_logger().warn(f"Transform error: {e}")
-            return []
+        return transformed_points
 
 def main(args=None):
     rclpy.init(args=args)
