@@ -46,7 +46,7 @@ class ExamineImage(Node):
        
         self.pub = self.create_publisher(PointCloud2,'camera/camera_depth/color/points_transformed',100) 
 
-        folder_path = '/home/robot/project/project-workspace-dd2419/Maps'
+        folder_path = '/home/sneezy/Repos/project-workspace-dd2419/Maps'
         file_name = 'Map.txt'
         self.file_path = os.path.join(folder_path, file_name)
 
@@ -124,7 +124,7 @@ class ExamineImage(Node):
         
         max_dist = 0.9
         distance = np.linalg.norm(transformed_points, axis=1)
-        mask = (distance < max_dist) & (transformed_points[:,2] >= 0.01) & (transformed_points[:,2] <= 0.1)
+        mask = (distance < max_dist) & (transformed_points[:,2] >= 0.015) & (transformed_points[:,2] <= 0.1)
         points = transformed_points[mask] 
         colors = colors[mask]
 
