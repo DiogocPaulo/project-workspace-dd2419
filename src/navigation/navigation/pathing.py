@@ -33,8 +33,8 @@ class Pathing(Node):
     def new_path_callback(self, request, response):
         self.previous_end_x = self.end_x
         self.previous_end_y = self.end_y
-        self.end_x = random.uniform(2.2, -2.2)
-        self.end_y = random.uniform(1.3, -1.3)
+        self.end_x = random.uniform(2, -2)
+        self.end_y = random.uniform(1, -1)
         self.start_x = self.previous_end_x
         self.start_y = self.previous_end_y
         if DEBUG: self.get_logger().info("Message - updated custom path")

@@ -183,7 +183,7 @@ class Navigation(Node):
             left_wheel = left_wheel / max_value
             right_wheel = right_wheel / max_value
 
-        max_speed = 0.6
+        max_speed = 0.5
         if left_wheel > max_speed: left_wheel = max_speed
         if left_wheel < -max_speed: left_wheel = -max_speed
         if right_wheel > max_speed: right_wheel = max_speed
