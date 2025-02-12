@@ -176,15 +176,18 @@ class Navigation(Node):
                 self.new_path_request()
                 return
 
-        velocity = self.state.velocity
+        # if (alpha > alpha_threshold or alpha < -alpha_threshold):
+        #     left_wheel = velocity - (base/2) * omega
+        #     right_wheel = velocity + (base/2) * omega
+        # else:
+        #     left_wheel = self.state.velocity - (base/2) * omega
+        #     right_wheel = self.state.velocity + (base/2) * omega
 
-        if (alpha > alpha_threshold or alpha < -alpha_threshold):
-            velocity = 0
+        left_wheel = self.state.velocity - (base/2) * omega
+        right_wheel = self.state.velocity + (base/2) * omega
 
-        left_wheel = velocity - (base/2) * omega
-        right_wheel = velocity + (base/2) * omega
 
-        if DEBUG: self.get_logger().info(f"Alpha: {alpha:.2f}, Omega: {omega:.2f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
+        # if DEBUG: self.get_logger().info(f"Alpha: {alpha:.2f}, Omega: {omega:.2f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
 
         max_value = max(abs(left_wheel), abs(right_wheel))
 
