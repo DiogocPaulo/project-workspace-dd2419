@@ -19,7 +19,8 @@ DEBUG = True
 base = 0.3  # Wheelbase of the vehicle
 lookahead_gain = 0.2   # Look-ahead distance gain
 lookahead_min = 1  # Minimum look-ahead distance
-distance_threshold = 0.3
+distance_threshold = 0.2
+omega_threshold = 0.2
 
 class RobotState:
     """Using odometry message to update the current state of the robot"""
@@ -174,8 +175,13 @@ class Navigation(Node):
                 self.new_path_request()
                 return
 
-        left_wheel = self.state.velocity - (base/2) * omega
-        right_wheel = self.state.velocity + (base/2) * omega
+        velocity = self.state.velocity
+
+        if (omega > omega_threshold or omega < -omega_threshold):
+            velocity = 0
+
+        left_wheel = velocity - (base/2) * omega
+        right_wheel = velocity + (base/2) * omega
 
         max_value = max(abs(left_wheel), abs(right_wheel))
 
