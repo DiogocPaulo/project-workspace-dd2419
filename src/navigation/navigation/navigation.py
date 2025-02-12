@@ -17,10 +17,10 @@ DEBUG = True
 
 # Robot parameters
 base = 0.3  # Wheelbase of the vehicle
-lookahead_gain = 0.2   # Look-ahead distance gain
+lookahead_gain = 0.1   # Look-ahead distance gain
 lookahead_min = 1  # Minimum look-ahead distance
 distance_threshold = 0.2
-omega_threshold = 0.2
+alpha_threshold = 0.5
 
 class RobotState:
     """Using odometry message to update the current state of the robot"""
@@ -111,7 +111,7 @@ def pure_pursuit_control(state, target_path):
 
     omega = state.velocity * kappa
 
-    return omega, index
+    return omega, alpha, index
 
 class Navigation(Node):
 
@@ -165,7 +165,7 @@ class Navigation(Node):
             self.get_logger().info(f"Error - No target path")
             return
 
-        omega, self.previous_index = pure_pursuit_control(self.state, self.target_path)
+        omega, alpha, self.previous_index = pure_pursuit_control(self.state, self.target_path)
         if DEBUG: self.get_logger().info(f"Velocity: {self.state.velocity}, Steering Angle: {omega:.2f}, Target Index: {self.previous_index}")
 
         if self.previous_index >= len(self.target_path.x_points) - 1:
@@ -177,11 +177,13 @@ class Navigation(Node):
 
         velocity = self.state.velocity
 
-        if (omega > omega_threshold or omega < -omega_threshold):
+        if (alpha > alpha_threshold or alpha < -alpha_threshold):
             velocity = 0
 
         left_wheel = velocity - (base/2) * omega
         right_wheel = velocity + (base/2) * omega
+
+        if DEBUG: self.get_logger().info(f"Alpha: {alpha:.2f}, Omega: {omega:.2f}, Target Index: {self.previous_index}")
 
         max_value = max(abs(left_wheel), abs(right_wheel))
 
