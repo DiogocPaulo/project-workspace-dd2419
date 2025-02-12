@@ -39,7 +39,7 @@ class RobotState:
         t1 = +1.0 - 2.0 * (q.y * q.y + q.z * q.z)
         self.yaw = math.atan2(t0, t1)
 
-        self.velocity = 0.3 # Temp fixed velocity
+        self.velocity = 0.5 # Temp fixed velocity
 
     def distance_to_state(self, x, y):
         return np.hypot(self.x - x, self.y - y)
@@ -167,7 +167,7 @@ class Navigation(Node):
             return
 
         omega, alpha, self.previous_index = pure_pursuit_control(self.state, self.target_path)
-        if DEBUG: self.get_logger().info(f"Velocity: {self.state.velocity}, Steering Angle: {omega:.2f}, Target Index: {self.previous_index}")
+        #if DEBUG: self.get_logger().info(f"Velocity: {self.state.velocity}, Steering Angle: {omega:.2f}, Target Index: {self.previous_index}")
 
         if self.previous_index >= len(self.target_path.x_points) - 1:
             distance = np.hypot(self.state.x - self.target_path.x_points[-1], self.state.y - self.target_path.y_points[-1])
@@ -184,7 +184,7 @@ class Navigation(Node):
         left_wheel = velocity - (base/2) * omega
         right_wheel = velocity + (base/2) * omega
 
-        if DEBUG: self.get_logger().info(f"Alpha: {alpha:.2f}, Omega: {omega:.2f}, Target Index: {self.previous_index}")
+        if DEBUG: self.get_logger().info(f"Alpha: {alpha:.2f}, Omega: {omega:.2f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
 
         max_value = max(abs(left_wheel), abs(right_wheel))
 
