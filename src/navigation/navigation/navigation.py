@@ -18,8 +18,8 @@ DEBUG = True
 # Robot parameters
 base = 0.3  # Wheelbase of the vehicle
 lookahead_gain = 0.1   # Look-ahead distance gain
-lookahead_min = 1  # Minimum look-ahead distance
-distance_threshold = 0.2
+lookahead_min = 0.2  # Minimum look-ahead distance
+distance_threshold = 0.3
 alpha_threshold = 0.5
 
 class RobotState:
@@ -39,7 +39,7 @@ class RobotState:
         t1 = +1.0 - 2.0 * (q.y * q.y + q.z * q.z)
         self.yaw = math.atan2(t0, t1)
 
-        self.velocity = 0.5 # Temp fixed velocity
+        self.velocity = 0.2 # Temp fixed velocity
 
     def distance_to_state(self, x, y):
         return np.hypot(self.x - x, self.y - y)

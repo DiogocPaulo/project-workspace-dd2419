@@ -61,7 +61,7 @@ class Odometry(Node):
         # Odometry
         delta_x = translation_speed * math.cos(self.yaw) * dt
         delta_y = translation_speed * math.sin(self.yaw) * dt
-        delta_yaw = rotation_speed * dt
+        delta_yaw = (rotation_speed * dt) / 2
         self.x += delta_x
         self.y += delta_y
         self.yaw += delta_yaw
