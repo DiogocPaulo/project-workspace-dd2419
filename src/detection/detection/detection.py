@@ -22,6 +22,7 @@ from tf2_ros.transform_listener import TransformListener
 import tf2_geometry_msgs
 from tf2_geometry_msgs import do_transform_point
 from geometry_msgs.msg import PointStamped
+import os
 
 
 class ExamineImage(Node):
@@ -49,6 +50,14 @@ class ExamineImage(Node):
             100)
        
         self.pub = self.create_publisher(PointCloud2,'camera/camera_depth/color/points_transformed',100)
+
+        folder_path = '/home/sneezy/Repos/project-workspace-dd2419/Maps'
+        file_name = 'Map.txt'
+        self.file_path = os.path.join(folder_path, file_name)
+
+        with open(self.file_path, 'w') as file:
+            file.write(f"")
+
 
     def image_callback(self, msg):
         sz = (msg.height, msg.width)
@@ -108,7 +117,8 @@ class ExamineImage(Node):
         # Convert RGB to HSV
         rgb_colors = colors * 255  # Scale back to 0-255
         if rgb_colors is None or rgb_colors.size == 0:
-            raise ValueError("Input rgb_colors array is empty!")
+            self.get_logger().info('rgb empty')
+            return None
         hsv_colors = cv2.cvtColor(rgb_colors.reshape(1, -1, 3).astype(np.uint8), cv2.COLOR_RGB2HSV).reshape(-1, 3)
 
         # Define HSV ranges for filtering
@@ -317,9 +327,24 @@ class ExamineImage(Node):
 
         self.get_logger().info(f"Plushie Check - length: {length:.3f}, width: {width:.3f}, height: {height:.3f}")
 
-
+        self.create_object('plushie',0,0,0)
         # Check box dimensions (with tolerance)
         return (0.8 <= length <= 0.9 and 0.11 <= width <= 0.15 and 0.56 <= height <= 0.66)
+    
+    def create_object(self,type,x,y,angle):
+        
+        if type == 'cube': L = 1
+        elif type == 'sphere': L = 2
+        elif type == 'plushie': L = 3
+        elif type == 'box': L = 'B'
+        else: L = 'Undefined'
+
+        with open(self.file_path, 'a') as file:
+            file.write(f"{L} {x} {y} {x} {angle} \n")
+
+        self.get_logger().info(f"Created object: {L} at postion:({x},{y})")
+
+        return None
 
 
 
