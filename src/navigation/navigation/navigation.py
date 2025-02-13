@@ -133,10 +133,10 @@ class Navigation(Node):
                 self.path_callback,
                 10)
         self.motor_publisher = self.create_publisher(DutyCycles, "/motor/duty_cycles", 10)
-        self.new_path_client = self.create_client(Trigger, "new_path")
-        while not self.new_path_client.wait_for_service(timeout_sec=2.0):
-            self.get_logger().info('Waiting for service...')
-        self.new_path_request()
+        #self.new_path_client = self.create_client(Trigger, "new_path")
+        # while not self.new_path_client.wait_for_service(timeout_sec=2.0):
+        #     self.get_logger().info('Waiting for service...')
+        #self.new_path_request()
 
         self.create_timer(0.05, self.control_loop)
 
@@ -148,17 +148,17 @@ class Navigation(Node):
     def path_callback(self, msg: Path):
         self.target_path.update_path(msg)
 
-    def new_path_request(self):
-        request = Trigger.Request()
-        future = self.new_path_client.call_async(request)
-        future.add_done_callback(self.new_path_callback)
+    # def new_path_request(self):
+    #     request = Trigger.Request()
+    #     future = self.new_path_client.call_async(request)
+    #     future.add_done_callback(self.new_path_callback)
 
-    def new_path_callback(self, future):
-        response = future.result()
-        if response:
-            self.get_logger().info(f"Response: {response.message}")
-        else:
-            self.get_logger().error("Error - Failed to receive response.")
+    # def new_path_callback(self, future):
+    #     response = future.result()
+    #     if response:
+    #         self.get_logger().info(f"Response: {response.message}")
+    #     else:
+    #         self.get_logger().error("Error - Failed to receive response.")
 
     def control_loop(self):
         if not self.target_path.x_points:
@@ -172,7 +172,7 @@ class Navigation(Node):
             distance = np.hypot(self.state.x - self.target_path.x_points[-1], self.state.y - self.target_path.y_points[-1])
             if distance <= distance_threshold:
                 self.get_logger().info(f"Message - Reached destination")
-                self.new_path_request()
+                #self.new_path_request()
                 return
 
         left_wheel = self.state.velocity - (base/2) * omega
