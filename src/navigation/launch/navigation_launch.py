@@ -12,12 +12,12 @@ def generate_launch_description():
     return LaunchDescription([
         Node(
             package="navigation",
-            executable="pathing",
-            name="robot_pathing",
+            executable="navigation",
+            name="robot_navigation",
         ),
         Node(
             package="navigation",
-            executable="navigation",
-            name="robot_navigation",
+            executable="pathing",
+            name="robot_pathing",
         ),
     ])

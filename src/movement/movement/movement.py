@@ -32,10 +32,11 @@ class Movement(Node):
         dutyCycles.header = msg.header
         left_wheel = msg.twist.linear.x - msg.twist.angular.z
         right_wheel = msg.twist.linear.x + msg.twist.angular.z
-        if left_wheel > 1: left_wheel = 1
-        if left_wheel < -1: left_wheel = -1
-        if right_wheel > 1: right_wheel = 1
-        if right_wheel < -1: right_wheel = -1
+        max_speed = 0.3
+        if left_wheel > max_speed: left_wheel = max_sped
+        if left_wheel < -max_speed: left_wheel = -max_speed
+        if right_wheel > max_speed: right_wheel = max_speed
+        if right_wheel < -max_speed: right_wheel = -max_speed
         dutyCycles.duty_cycle_left = left_wheel
         dutyCycles.duty_cycle_right = right_wheel
         self.motor_publisher.publish(dutyCycles)

@@ -65,7 +65,8 @@ class LidarRepublisher(Node):
 
         # Create and publish the aggregated PointCloud2 message
         aggregated_pc_msg = pc2.create_cloud_xyz32(msg.header, self.aggregated_points)
-        self.get_logger().info('Publishing aggrigated cloud')
+        aggregated_pc_msg.header.frame_id = 'map'
+        self.get_logger().info('Publishing aggregated cloud')
         self.publisher.publish(aggregated_pc_msg)
 
     def laser_scan_to_points(self, msg):
