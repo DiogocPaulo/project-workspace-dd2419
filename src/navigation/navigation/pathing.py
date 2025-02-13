@@ -29,7 +29,6 @@ class Pathing(Node):
         #self.new_path_service = self.create_service(Trigger, "new_path", self.new_path_callback)
         self.timer = self.create_timer(2.0, self.publish_custom_path)
 
-<<<<<<< HEAD
     # def new_path_callback(self, request, response):
     #     self.start_x = self.end_x
     #     self.start_y = self.end_y
@@ -39,17 +38,6 @@ class Pathing(Node):
     #     response.success = True
     #     response.message = "Updated custom path!"
     #     return response
-=======
-    def new_path_callback(self, request, response):
-        self.start_x = self.end_x
-        self.start_y = self.end_y
-        self.end_x = random.uniform(-1.5, 1.5)
-        self.end_y = random.uniform(-0.5, 0.5)
-        if DEBUG: self.get_logger().info("Message - updated custom path")
-        response.success = True
-        response.message = "Updated custom path!"
-        return response
->>>>>>> FETCH_HEAD
 
     def publish_custom_path(self):
         custom_path = Path()
