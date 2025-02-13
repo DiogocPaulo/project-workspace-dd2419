@@ -40,16 +40,26 @@ class Odometry(Node):
         self.x = 0.0
         self.y = 0.0
         self.yaw = 0.0
+        self.total_ticks_left = 0
+        self.total_ticks_right = 0
 
     def encoder_callback(self, msg):
 
         dt = 50 / 1000                      # Update interval rate (seconds)
         ticks_per_rev = 48 * 64             # Ticks per revolution
         wheel_radius = 0.04921              # Wheel radius (meters)
-        base = 0.2                          # Distance between wheels (meters)
+        base = 0.3                          # Distance between wheels (meters)
 
-        delta_ticks_left = msg.delta_encoder_left
-        delta_ticks_right = msg.delta_encoder_right
+        #delta_ticks_left = msg.delta_encoder_left
+        #delta_ticks_right = msg.delta_encoder_right
+
+        new_total_ticks_left = msg.encoder_left
+        new_total_ticks_right = msg.encoder_right
+        delta_ticks_left = new_total_ticks_left - self.total_ticks_left
+        delta_ticks_right = new_total_ticks_right - self.total_ticks_right
+
+        self.total_ticks_left = new_total_ticks_left
+        self.total_ticks_right = new_total_ticks_right
 
         if DEBUG: self.get_logger().info(f"Time [{msg.header.stamp.sec}] \n\tLeft ({msg.delta_encoder_left}) \n\tRight ({msg.delta_encoder_right})")
 
@@ -115,7 +125,7 @@ class Odometry(Node):
         """
 
         self.robot_path.header.stamp = stamp
-        self.robot_path.header.frame_id = 'map'
+        self.robot_path.header.frame_id = "map"
 
         pose = PoseStamped()
         pose.header = self.robot_path.header

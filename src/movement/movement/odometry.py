@@ -112,7 +112,7 @@ class Odometry(Node):
         """
 
         self.robot_path.header.stamp = stamp
-        self.robot_path.header.frame_id = 'map'
+        self.robot_path.header.frame_id = "map"
 
         pose = PoseStamped()
         pose.header = self.robot_path.header
