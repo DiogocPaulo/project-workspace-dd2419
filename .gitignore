@@ -4,6 +4,7 @@ install/
 *.pdf
 *.gv
 bags/
+*.log
 
 
 # Based on github ROS gitignore
