@@ -17,7 +17,7 @@ from example_interfaces.srv import Trigger
 # Robot parameters
 base = 0.3                  # Wheelbase of the vehicle
 lookahead_gain = 0.1        # Look-ahead distance gain
-lookahead_min = 0.1         # Minimum look-ahead distance
+lookahead_min = 0.3         # Minimum look-ahead distance
 distance_threshold = 0.2    # Stop distance threshold
 target_velocity = 0.3       # Robot's target velocity
 
@@ -178,13 +178,6 @@ class Navigation(Node):
         left_wheel = command_velocity - (base/2) * omega
         right_wheel = command_velocity + (base/2) * omega
         self.get_logger().info(f"Velocity: {command_velocity}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
-
-        # if (alpha > alpha_threshold or alpha < -alpha_threshold):
-        #     left_wheel = velocity - (base/2) * omega
-        #     right_wheel = velocity + (base/2) * omega
-        # else:
-        #     left_wheel = self.state.velocity - (base/2) * omega
-        #     right_wheel = self.state.velocity + (base/2) * omega
 
         max_value = max(abs(left_wheel), abs(right_wheel))
 

@@ -20,7 +20,7 @@ class Pathing(Node):
 
         self.start_x = 0
         self.start_y = 0
-        self.end_x = 1
+        self.end_x = -2
         self.end_y = -0.5
         self.path_publisher = self.create_publisher(
                 Path,
