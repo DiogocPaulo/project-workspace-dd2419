@@ -65,8 +65,8 @@ class MultiServoPublisher(Node):
 
         
         world_position = Point()
-        world_position.x = 0.5
-        world_position.y = 0.5
+        world_position.x = 0.1
+        world_position.y = 0.1
         world_position.z = 0.1
 
 
@@ -77,15 +77,21 @@ class MultiServoPublisher(Node):
 
         # TODO: Calculate the arm parameters to "hawk" over the object's position
         # First calculate the base rotation
-        base_rotation_angle = math.atan2(position)
+        base_rotation_angle = math.atan2(position.position.y,position.position.x)
 
+        distance = distance(position.position.x,position.position.y)
+
+        alpha,beta = self.CalcKinematics1(distance,position.position.z + 0.4)
+
+
+        self.get_logger().info(f"Received parameter: base={base_rotation_angle} servo5={alpha} servo4={beta}")
 
         # TODO: transform angle from radians to arm parameters
 
         # placeholder
-        pose = [12000,12000,8000,20000,6700,6000,move_time,move_time,move_time,move_time,move_time,move_time]
-        msg.data = pose
-        self.publisher.publish(msg)
+        # pose = [12000,12000,8000,20000,6700,6000,move_time,move_time,move_time,move_time,move_time,move_time]
+        # msg.data = pose
+        # self.publisher.publish(msg)
 
 
 
@@ -171,6 +177,23 @@ class MultiServoPublisher(Node):
 
     #     # TODO: Done
 
+
+    def CalcKinematics1(self,x,y): #Servos 5 & 4
+        l1 = 0.101
+        l2 = 0.095
+
+
+        c2 = (x**2 + y**2 - l1**2 - l2**2) / (2*l1*l2)
+        v2 = math.acos(c2)
+
+        alpha = math.atan2(y,x)
+
+        beta = math.acos((x**2 + y**2 + l1**2 - l2**2)/(2*l1*math.sqrt(x**2 + y**2)))
+
+        v1 = alpha - beta 
+        
+
+        return v1, v2
 
         
 
