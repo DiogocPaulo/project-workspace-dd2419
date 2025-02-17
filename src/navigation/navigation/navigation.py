@@ -37,7 +37,7 @@ class RobotState:
         cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z)
         self.yaw = np.arctan2(siny_cosp, cosy_cosp)
 
-        self.velocity = odom_msg.twist.twist.linear.x
+        self.velocity = 0.3# odom_msg.twist.twist.linear.x
 
     def distance_to_state(self, x, y):
         return np.hypot(self.x - x, self.y - y)
@@ -189,7 +189,7 @@ class Navigation(Node):
             left_wheel = left_wheel / max_value
             right_wheel = right_wheel / max_value
 
-        max_speed = 0.5
+        max_speed = 0.3
         if left_wheel > max_speed: left_wheel = max_speed
         if left_wheel < -max_speed: left_wheel = -max_speed
         if right_wheel > max_speed: right_wheel = max_speed
