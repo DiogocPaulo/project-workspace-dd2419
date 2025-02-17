@@ -67,7 +67,7 @@ class MultiServoPublisher(Node):
                 f'Could not transform map to arm_base: {ex}'
             )
 
-        rclpy.sleep(1.5) #Give arm time to do its thing
+        #rclpy.sleep(1.5) #Give arm time to do its thing
 
         # TODO: Get position of object in map frame (SOLVED)
 
