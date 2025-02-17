@@ -16,10 +16,10 @@ from example_interfaces.srv import Trigger
 
 # Robot parameters
 base = 0.3                  # Wheelbase of the vehicle
-lookahead_gain = 0.05       # Look-ahead distance gain
+lookahead_gain = 0.1        # Look-ahead distance gain
 lookahead_min = 0.1         # Minimum look-ahead distance
 distance_threshold = 0.2    # Stop distance threshold
-target_velocity = 0.3
+target_velocity = 0.3       # Robot's target velocity
 
 class RobotState:
     """Using odometry message to update the current state of the robot"""
@@ -174,7 +174,7 @@ class Navigation(Node):
                 #self.new_path_request()
                 return
 
-        command_velocity = self.state.velocity * np.exp(-1 * np.abs(alpha))
+        command_velocity = self.state.velocity * np.exp(-2 * np.abs(alpha))
         left_wheel = command_velocity - (base/2) * omega
         right_wheel = command_velocity + (base/2) * omega
         self.get_logger().info(f"Velocity: {command_velocity}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
