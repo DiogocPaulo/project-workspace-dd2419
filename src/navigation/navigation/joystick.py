@@ -26,13 +26,12 @@ class Joystick(Node):
             self.joystick_callback,
             10)
 
-
     def joystick_callback(self, msg):
         dutyCycles = DutyCycles()
         dutyCycles.header = msg.header
         left_wheel = msg.twist.linear.x - msg.twist.angular.z
         right_wheel = msg.twist.linear.x + msg.twist.angular.z
-        max_speed = 1
+        max_speed = 0.4
         if left_wheel > max_speed: left_wheel = max_sped
         if left_wheel < -max_speed: left_wheel = -max_speed
         if right_wheel > max_speed: right_wheel = max_speed

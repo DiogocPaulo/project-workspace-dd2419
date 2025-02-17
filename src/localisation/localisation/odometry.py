@@ -41,7 +41,7 @@ class Odometry(Node):
 
         self.create_subscription(Encoders, "/motor/encoders", self.encoder_callback, 10)
         self.odom_publisher = self.create_publisher(OdometryType, "odom", 10)
-        self.path_publisher = self.create_publisher(Path, "path", 10)
+        self.path_publisher = self.create_publisher(Path, "odom_path", 10)
         self.odom_path = Path()
         self.odom_broadcaster = TransformBroadcaster(self)
 
