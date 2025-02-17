@@ -11,7 +11,7 @@ from tf2_ros import TransformBroadcaster
 from geometry_msgs.msg import TransformStamped
 from robp_interfaces.msg import Encoders
 from nav_msgs.msg import Path
-from nav_msgs.msg import Odometry
+from nav_msgs.msg import Odometry as OdometryType
 from geometry_msgs.msg import PoseStamped
 from geometry_msgs.msg import Quaternion
 
@@ -40,7 +40,7 @@ class Odometry(Node):
         self.angular_velocity = 0.0
 
         self.create_subscription(Encoders, "/motor/encoders", self.encoder_callback, 10)
-        self.odom_publisher = self.create_publisher(Odometry, "odom", 10)
+        self.odom_publisher = self.create_publisher(OdometryType, "odom", 10)
         self.path_publisher = self.create_publisher(Path, "path", 10)
         self.odom_path = Path()
         self.odom_broadcaster = TransformBroadcaster(self)
@@ -100,7 +100,7 @@ class Odometry(Node):
         self.odom_broadcaster.sendTransform(transform_msg)
 
         # Publish odometry
-        odometry_msg = Odometry()
+        odometry_msg = OdometryType()
         odometry_msg.header.stamp = now_time.to_msg()
         odometry_msg.header.frame_id = "odom"
         odometry_msg.child_frame_id = "base_link"

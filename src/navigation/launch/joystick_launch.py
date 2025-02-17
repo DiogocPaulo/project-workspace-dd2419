@@ -15,7 +15,7 @@ def generate_launch_description():
         get_package_share_directory("teleop_twist_joy"), "launch", "teleop-launch.py"
     ) 
     joystick_config_filepath = os.path.join(
-        get_package_share_directory("movement"), "config", "gamepad.yaml"
+        get_package_share_directory("navigation"), "config", "gamepad.yaml"
     ) 
     return LaunchDescription([
         Node(
