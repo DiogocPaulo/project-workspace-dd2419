@@ -1,4 +1,4 @@
-#/usr/bin/env python
+#!/usr/bin/env python
 
 import math
 import numpy as np
@@ -15,10 +15,11 @@ from robp_interfaces.msg import DutyCycles
 from example_interfaces.srv import Trigger
 
 # Robot parameters
-base = 0.3  # Wheelbase of the vehicle
-lookahead_gain = 0.05   # Look-ahead distance gain
-lookahead_min = 0.1  # Minimum look-ahead distance
-distance_threshold = 0.2
+base = 0.3                  # Wheelbase of the vehicle
+lookahead_gain = 0.05       # Look-ahead distance gain
+lookahead_min = 0.1         # Minimum look-ahead distance
+distance_threshold = 0.2    # Stop distance threshold
+target_velocity = 0.3
 
 class RobotState:
     """Using odometry message to update the current state of the robot"""
@@ -37,7 +38,8 @@ class RobotState:
         cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z)
         self.yaw = np.arctan2(siny_cosp, cosy_cosp)
 
-        self.velocity = 0.3# odom_msg.twist.twist.linear.x
+        odom_velocity = odom_msg.twist.twist.linear.x
+        self.velocity = odom_velocity + (target_velocity - odom_velocity)
 
     def distance_to_state(self, x, y):
         return np.hypot(self.x - x, self.y - y)
@@ -165,6 +167,9 @@ class Navigation(Node):
         omega, alpha, self.previous_index = pure_pursuit_control(self.state, self.target_path)
         #self.get_logger().info(f"Velocity: {self.state.velocity}, Steering Angle: {omega:.2f}, Target Index: {self.previous_index}")
 
+        factor = math.exp(-k * abs(alpha))
+        v_cmd = v_min + (v_max - v_min) * factor
+
         if self.previous_index >= len(self.target_path.x_points) - 1:
             distance = np.hypot(self.state.x - self.target_path.x_points[-1], self.state.y - self.target_path.y_points[-1])
             if distance <= distance_threshold:
@@ -172,9 +177,10 @@ class Navigation(Node):
                 #self.new_path_request()
                 return
 
-        left_wheel = self.state.velocity - (base/2) * omega
-        right_wheel = self.state.velocity + (base/2) * omega
-        self.get_logger().info(f"Velocity: {self.state.velocity}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
+        command_velocity = self.state.velocity * np.exp(-1 * np.abs(alpha))
+        left_wheel = command_velocity - (base/2) * omega
+        right_wheel = command_velocity + (base/2) * omega
+        self.get_logger().info(f"Velocity: {command_velocity}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
 
         # if (alpha > alpha_threshold or alpha < -alpha_threshold):
         #     left_wheel = velocity - (base/2) * omega
@@ -188,12 +194,6 @@ class Navigation(Node):
         if max_value > 1:
             left_wheel = left_wheel / max_value
             right_wheel = right_wheel / max_value
-
-        max_speed = 0.3
-        if left_wheel > max_speed: left_wheel = max_speed
-        if left_wheel < -max_speed: left_wheel = -max_speed
-        if right_wheel > max_speed: right_wheel = max_speed
-        if right_wheel < -max_speed: right_wheel = -max_speed
 
         dutyCycles = DutyCycles()
         dutyCycles.header.frame_id = "base_link"

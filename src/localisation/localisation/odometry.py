@@ -25,7 +25,7 @@ class Odometry(Node):
         # Parameters
         self.ticks_per_revolution = 48 * 64
         self.wheel_radius = 0.04921
-        self.base_width = 0.3
+        self.base_width = 0.31
 
         # Internal variables
         self.then_time = self.get_clock().now()
