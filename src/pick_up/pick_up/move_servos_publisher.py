@@ -14,6 +14,8 @@ from tf2_ros import TransformException
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
 
+import rclpy.time
+
 class MultiServoPublisher(Node):
     def __init__(self):
         super().__init__("multi_servo_publisher")
@@ -29,7 +31,7 @@ class MultiServoPublisher(Node):
         # self.server = ActionServer(self,PickupAction,'PickupCube',self.pickup_callback)
 
     def publish_pose(self): #Test function (not the actual function)
-        self.get_logger().info(f"Lets go!")
+        self.get_logger().info(f"Lets go!--------------------------------------------------------------------------")
         msg = Int16MultiArray()
         msg.layout = MultiArrayLayout(dim=[MultiArrayDimension(label="", size=12, stride=12)], data_offset=0)
         move_time = 1000 #arm speed (milliseconds)
@@ -39,12 +41,16 @@ class MultiServoPublisher(Node):
         pose = [3000,12000,12000,12000,12000,12000,move_time,move_time,move_time,move_time,move_time,move_time]
         msg.data = pose
         self.publisher.publish(msg)
+        zero_time = Time()
+        zero_time.sec = 0
+        zero_time.nanosec = 0
+
 
         # TODO: Get transform between arm base and map (SOLVED)
         tf_future = self.tfBuffer.wait_for_transform_async(
             target_frame = 'arm_base',
             source_frame = 'map',
-            time = 0 # Get latest transform instead of timestamped, since we want to pickup when the robot is standing still
+            time = zero_time # Get latest transform instead of timestamped, since we want to pickup when the robot is standing still
         )
 
         rclpy.spin_until_future_complete(self,tf_future, timeout_sec=1)
@@ -53,7 +59,8 @@ class MultiServoPublisher(Node):
             t = self.tfBuffer.lookup_transform(
                 'arm_base',
                 'map',
-                time = 0)
+                zero_time
+        )
         except TransformException as ex:
             self.get_logger().info(
                 f'Could not transform map to arm_base: {ex}'
