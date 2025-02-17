@@ -25,6 +25,7 @@ setup(
         'console_scripts': [
             'navigation = navigation.navigation:main',
             'pathing = navigation.pathing:main',
+            'joystick = navigation.joystick:main',
         ],
     },
 )

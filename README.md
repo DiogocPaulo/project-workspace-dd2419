@@ -1,7 +1,13 @@
 # Robotics Project Group 4
 ROS2 workspace for robotics project (DD2419). Group 4 with robot **Sneezy**!
 
-# Arm controll
+# Localisation and Navigation Steps
+Have to launch phidgets before Localisation and navigation. Thus for movement do the following:
+1. Launch phidgets and frames `make run-setup`
+2. Launch localisation includes odometry `make run-localisation`
+3. Launch navigation method `make run-navigation` for pure pursuit or `make run-joystick`
+
+# Arm control
 ros2 launch pick_up pick_up_launch.py
 
 # Arm Camera
@@ -30,14 +36,6 @@ Rviz instructions:
 - Add
 - By topic
 - camera_depth/color/points_transformed -> PointCloud2
-
-# Movement
-
-First make sure inside movment branch
-
-Also make sure that controller is connected
-ros2 launch detection detection_launch.py
-make run-movement
 
 # Lidar (probably since we havent been able to test it yet)
 
