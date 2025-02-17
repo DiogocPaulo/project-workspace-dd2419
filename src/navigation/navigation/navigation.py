@@ -8,19 +8,17 @@ from rclpy.node import Node
 
 from robp_interfaces.msg import Encoders
 from nav_msgs.msg import Path
+from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PoseStamped
 from robp_interfaces.msg import DutyCycles
 
 from example_interfaces.srv import Trigger
 
-DEBUG = True
-
 # Robot parameters
 base = 0.3  # Wheelbase of the vehicle
 lookahead_gain = 0.05   # Look-ahead distance gain
 lookahead_min = 0.1  # Minimum look-ahead distance
-distance_threshold = 0.3
-alpha_threshold = 0.5
+distance_threshold = 0.2
 
 class RobotState:
     """Using odometry message to update the current state of the robot"""
@@ -31,15 +29,15 @@ class RobotState:
         self.velocity = 0.0
 
     def update_state(self, odom_msg):
-        self.x = odom_msg.poses[-1].pose.position.x
-        self.y = odom_msg.poses[-1].pose.position.y
+        self.x = odom_msg.pose.pose.position.x
+        self.y = odom_msg.pose.pose.position.y
 
-        q = odom_msg.poses[-1].pose.orientation
-        t0 = +2.0 * (q.w * q.z + q.x * q.y)
-        t1 = +1.0 - 2.0 * (q.y * q.y + q.z * q.z)
-        self.yaw = math.atan2(t0, t1)
+        q = odom_msg.pose.pose.orientation
+        siny_cosp = 2 * (q.w * q.z + q.x * q.y)
+        cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z)
+        self.yaw = np.arctan2(siny_cosp, cosy_cosp)
 
-        self.velocity = 0.2 # Temp fixed velocity
+        self.velocity = odom_msg.twist.twist.linear.x
 
     def distance_to_state(self, x, y):
         return np.hypot(self.x - x, self.y - y)
@@ -123,8 +121,8 @@ class Navigation(Node):
         self.previous_index = 0
 
         self.create_subscription(
-                Path,
-                "odom_path",
+                Odometry,
+                "odom",
                 self.odom_callback,
                 10)
         self.create_subscription(
@@ -141,9 +139,8 @@ class Navigation(Node):
         self.create_timer(0.05, self.control_loop)
 
 
-    def odom_callback(self, msg: Path):
+    def odom_callback(self, msg: Odometry):
         self.state.update_state(msg)
-        self.stamp = msg.poses[-1].header.stamp
 
     def path_callback(self, msg: Path):
         self.target_path.update_path(msg)
@@ -166,7 +163,7 @@ class Navigation(Node):
             return
 
         omega, alpha, self.previous_index = pure_pursuit_control(self.state, self.target_path)
-        #if DEBUG: self.get_logger().info(f"Velocity: {self.state.velocity}, Steering Angle: {omega:.2f}, Target Index: {self.previous_index}")
+        #self.get_logger().info(f"Velocity: {self.state.velocity}, Steering Angle: {omega:.2f}, Target Index: {self.previous_index}")
 
         if self.previous_index >= len(self.target_path.x_points) - 1:
             distance = np.hypot(self.state.x - self.target_path.x_points[-1], self.state.y - self.target_path.y_points[-1])
@@ -177,7 +174,7 @@ class Navigation(Node):
 
         left_wheel = self.state.velocity - (base/2) * omega
         right_wheel = self.state.velocity + (base/2) * omega
-        if DEBUG: self.get_logger().info(f"Alpha: {alpha:.2f}, Omega: {omega:.2f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
+        self.get_logger().info(f"Velocity: {self.state.velocity}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
 
         # if (alpha > alpha_threshold or alpha < -alpha_threshold):
         #     left_wheel = velocity - (base/2) * omega
