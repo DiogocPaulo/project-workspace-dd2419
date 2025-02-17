@@ -81,7 +81,7 @@ class MultiServoPublisher(Node):
 
         distance = distance(position.position.x,position.position.y)
 
-        alpha,beta = self.CalcKinematics1(distance,position.position.z + 0.4)
+        alpha,beta = self.CalcKinematics1(distance,position.position.z + 0.2)
 
 
         self.get_logger().info(f"Received parameter: base={base_rotation_angle} servo5={alpha} servo4={beta}")
