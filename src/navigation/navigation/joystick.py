@@ -31,8 +31,8 @@ class Joystick(Node):
         dutyCycles.header = msg.header
         left_wheel = msg.twist.linear.x - msg.twist.angular.z
         right_wheel = msg.twist.linear.x + msg.twist.angular.z
-        max_speed = 0.4
-        if left_wheel > max_speed: left_wheel = max_sped
+        max_speed = 0.3
+        if left_wheel > max_speed: left_wheel = max_speed
         if left_wheel < -max_speed: left_wheel = -max_speed
         if right_wheel > max_speed: right_wheel = max_speed
         if right_wheel < -max_speed: right_wheel = -max_speed
