@@ -1,0 +1,10 @@
+# Goal: The position of the object to be picked up in map frame coordinates
+geometry_msgs/Point position
+
+---
+# Result: Success or failure of the pickup
+bool success
+
+---
+# Feedback: A string to provide progress feedback
+string feedback

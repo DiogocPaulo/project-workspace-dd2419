@@ -9,6 +9,7 @@ data_files.append((os.path.join('share', package_name, 'launch'), glob(os.path.j
 data_files.append((os.path.join('share', package_name, 'rviz'), glob(os.path.join('rviz', '*.rviz'))))
 data_files.append(('share/' + package_name, ['package.xml']))
 data_files.append((os.path.join('share', package_name, 'config'), glob(os.path.join('config', '*.yaml'))))
+data_files.append((os.path.join('share', package_name, 'action'), glob(os.path.join('action', '*.action'))))
 
 setup(
     name=package_name,
