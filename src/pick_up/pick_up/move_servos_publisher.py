@@ -53,7 +53,7 @@ class MultiServoPublisher(Node):
             t = self.tfBuffer.lookup_transform(
                 'arm_base',
                 'map',
-                0)
+                time = 0)
         except TransformException as ex:
             self.get_logger().info(
                 f'Could not transform map to arm_base: {ex}'
