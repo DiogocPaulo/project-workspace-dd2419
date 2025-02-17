@@ -167,9 +167,6 @@ class Navigation(Node):
         omega, alpha, self.previous_index = pure_pursuit_control(self.state, self.target_path)
         #self.get_logger().info(f"Velocity: {self.state.velocity}, Steering Angle: {omega:.2f}, Target Index: {self.previous_index}")
 
-        factor = math.exp(-k * abs(alpha))
-        v_cmd = v_min + (v_max - v_min) * factor
-
         if self.previous_index >= len(self.target_path.x_points) - 1:
             distance = np.hypot(self.state.x - self.target_path.x_points[-1], self.state.y - self.target_path.y_points[-1])
             if distance <= distance_threshold:
