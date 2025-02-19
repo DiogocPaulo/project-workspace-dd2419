@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, HistoryPolicy
 from sensor_msgs.msg import Image
 from sensor_msgs.msg import PointCloud2, PointField
 import sensor_msgs_py.point_cloud2 as pc2
@@ -36,15 +37,21 @@ class ExamineImage(Node):
         self.tfBuffer = tf2_ros.Buffer()
         self.listener = tf2_ros.TransformListener(self.tfBuffer, self)
 
+        qos_profile = QoSProfile(
+            depth=1,
+            history=HistoryPolicy.KEEP_LAST
+        )
+
         self.sub2 = self.create_subscription(
             PointCloud2,
             '/camera/camera/depth/color/points',
             self.cloud_callback,
-            100)
+            qos_profile
+        )
 
         self.pub = self.create_publisher(PointCloud2, 'camera/camera_depth/color/points_transformed', 100)
 
-        folder_path = '/home/robot/project/project-workspace-dd2419/Maps'
+        folder_path = '/home/sneezy/Repos/project-workspace-dd2419/Maps'
         file_name = 'Map.txt'
         self.file_path = os.path.join(folder_path, file_name)
 
@@ -72,7 +79,7 @@ class ExamineImage(Node):
         ]
 
         # Publish the workspace perimeter
-        self.publish_workspace_perimeter()
+        self.workspace_timer = self.create_timer(2.0, self.publish_workspace_perimeter)
 
     def cloud_callback(self, msg: PointCloud2):
         # Transform point cloud to 'map' frame
@@ -115,7 +122,7 @@ class ExamineImage(Node):
 
         max_dist = 0.9
         distance = np.linalg.norm(transformed_points, axis=1)
-        mask = (distance < max_dist) & (transformed_points[:, 2] >= 0.005) & (transformed_points[:, 2] <= 0.1)
+        mask = (distance < max_dist) & (transformed_points[:, 2] >= 0.015) & (transformed_points[:, 2] <= 0.1)
         points = transformed_points[mask]
         colors = colors[mask]
 
@@ -290,13 +297,13 @@ class ExamineImage(Node):
         max_coords = np.max(points_filtered, axis=0)
         dimensions = max_coords - min_coords
         length, width, height = sorted(dimensions, reverse=True)
-
-        # self.get_logger().info(f"Plushie Check - length: {length:.3f}, width: {width:.3f}, height: {height:.3f}")
+        ratio = length / width
+        self.get_logger().info(f"Plushie Check - length: {length:.3f}, width: {width:.3f}, height: {ratio:.3f}")
 
         # Check box dimensions (with tolerance)
         return (0.06 <= length <= 0.12 and 0.03 <= width and height <= 0.9)
 
-    def classify_based_on_floor_contact(self, cluster_points, floor_threshold=0.01, contact_threshold=205):
+    def classify_based_on_floor_contact(self, cluster_points, floor_threshold=0.02, contact_threshold=205):
         cluster_points = np.array(cluster_points)
         if cluster_points.shape[0] == 0:
             return "unknown"
@@ -305,7 +312,7 @@ class ExamineImage(Node):
         floor_contact_points = cluster_points[np.abs(cluster_points[:, 2]) < floor_threshold]
         num_floor_contacts = len(floor_contact_points)
 
-        # self.get_logger().info(f"📊 Floor Contact Points: {num_floor_contacts} (Threshold: {contact_threshold})")
+        self.get_logger().info(f"📊 Floor Contact Points: {num_floor_contacts} (Threshold: {contact_threshold})")
 
         # Classification based on contact point count
         if num_floor_contacts > contact_threshold and num_floor_contacts < 300:
