@@ -20,13 +20,11 @@ class Pathing(Node):
 
         self.start_x = 0
         self.start_y = 0
-        self.end_x = 2
-        self.end_y = -0.5
+        self.end_x = 4
+        self.end_y = 0
 
-        self.amplitude = 1.0
+        self.amplitude = 0.5
         self.cycles = 1.0
-
-        array = [[-2.0, 0.0], [2.0, 0.0], [2.0, -1.0]]
 
         self.path_publisher = self.create_publisher(
                 Path,
@@ -34,8 +32,8 @@ class Pathing(Node):
                 10)
         #self.new_path_service = self.create_service(Trigger, "new_path", self.new_path_callback)
 
-        self.timer = self.create_timer(2.0, self.publish_straight_path)
-        # self.timer = self.create_timer(2.0, self.publish_curved_path)
+        # self.timer = self.create_timer(2.0, self.publish_straight_path)
+        self.timer = self.create_timer(2.0, self.publish_curved_path)
 
     # def new_path_callback(self, request, response):
     #     self.start_x = self.end_x
