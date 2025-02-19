@@ -1,3 +1,5 @@
+# Launches joystick based movement
+
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
@@ -12,31 +14,14 @@ def generate_launch_description():
     joystick_launch_file = os.path.join(
         get_package_share_directory("teleop_twist_joy"), "launch", "teleop-launch.py"
     ) 
-    phidgets_launch_file = os.path.join(
-        get_package_share_directory("robp_launch"), "launch", "phidgets_launch.py"
-    ) 
     joystick_config_filepath = os.path.join(
-        get_package_share_directory("movement"), "config", "gamepad.yaml"
+        get_package_share_directory("navigation"), "config", "gamepad.yaml"
     ) 
     return LaunchDescription([
         Node(
-            package="movement",
-            executable="movement",
-            name="robot_movement",
-        ),
-        Node(
-            package="movement",
-            executable="odometry",
-            name="robot_odometry",
-        ),
-        Node(
-            package="tf2_ros",
-            executable="static_transform_publisher",
-            arguments=["0", "0", "0", "0", "0", "0", "1", "map", "odom"],
-            output="screen",
-        ),
-        IncludeLaunchDescription(
-            launch_description_source=PythonLaunchDescriptionSource(phidgets_launch_file),
+            package="navigation",
+            executable="joystick",
+            name="robot_joystick",
         ),
         IncludeLaunchDescription(
             launch_description_source=PythonLaunchDescriptionSource(joystick_launch_file),

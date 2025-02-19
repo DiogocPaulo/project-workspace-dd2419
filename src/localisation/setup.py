@@ -8,7 +8,6 @@ data_files.append(('share/ament_index/resource_index/packages', ['resource/' + p
 data_files.append((os.path.join('share', package_name, 'launch'), glob(os.path.join('launch', '*launch.[pxy][yma]*'))))
 data_files.append((os.path.join('share', package_name, 'rviz'), glob(os.path.join('rviz', '*.rviz'))))
 data_files.append(('share/' + package_name, ['package.xml']))
-data_files.append((os.path.join('share', package_name, 'config'), glob(os.path.join('config', '*.yaml'))))
 
 setup(
     name=package_name,
@@ -24,7 +23,9 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'localisation = localisation.localisation:main'
+            'localisation = localisation.localisation:main',
+            'odometry = localisation.odometry:main',
+            'navigation = localisation.navigation:main',
         ],
     },
 )
