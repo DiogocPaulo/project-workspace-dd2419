@@ -12,12 +12,35 @@ from geometry_msgs.msg import PoseStamped
 
 from example_interfaces.srv import Trigger
 
+from grid_map import GridMap
+
 class Pathing(Node):
     
     def __init__(self):
         super().__init__("pathing")
 
 
+        self.grid_map = GridMap(200, 200, 1) # x, y in cm and res is a division factor
+
+        """self.create_subscription(
+                FILL IN,
+                "plan_path",
+                self.plan_callback,
+                10)""" # The master node or Navigiation node will tell when to plan a path and to where
+
+        """self.create_subscription(
+                PointCloud2,
+                "detection",
+                self.detection_callback,
+                10)""" # The detection node will publish detected objects here
+
+        self.path_publisher = self.create_publisher(
+                Path,
+                "custom_path",
+                10)
+        self.timer = self.create_timer(1.0, self.publish_path)
+
+        # REMOVE BELOW
         self.start_x = 0
         self.start_y = 0
         self.end_x = 4
@@ -26,14 +49,10 @@ class Pathing(Node):
         self.amplitude = 0.5
         self.cycles = 1.0
 
-        self.path_publisher = self.create_publisher(
-                Path,
-                "custom_path",
-                10)
         #self.new_path_service = self.create_service(Trigger, "new_path", self.new_path_callback)
 
         # self.timer = self.create_timer(2.0, self.publish_straight_path)
-        self.timer = self.create_timer(2.0, self.publish_curved_path)
+        #self.timer = self.create_timer(2.0, self.publish_curved_path)
 
     # def new_path_callback(self, request, response):
     #     self.start_x = self.end_x
@@ -44,6 +63,35 @@ class Pathing(Node):
     #     response.success = True
     #     response.message = "Updated custom path!"
     #     return response
+
+    def publish_path(self):
+        custom_path = Path()
+        now = self.get_clock().now().to_msg()
+        custom_path.header.stamp = now
+        custom_path.header.frame_id = "map"
+
+        start_point = (0, 0)
+        end_point = (3, 0)
+        path = self.grid_map.a_star_search(start_point, end_point)
+
+        for point in range(path):
+            pose = PoseStamped()
+            pose.header = custom_path.header
+            pose.pose.position.x = point[0]
+            pose.pose.position.y = point[1]
+            pose.pose.position.z = 0.0
+            # For simplicity, use a neutral orientation (no rotation)
+            pose.pose.orientation.w = 1.0
+            custom_path.poses.append(pose)
+
+        self.path_publisher.publish(custom_path)
+        if DEBUG: self.get_logger().info("Published custom path")
+
+    def plan_callback(self):
+        pass
+
+    def detection_callback(self):
+        pass
 
     def publish_curved_path(self):
         path_msg = Path()
