@@ -6,7 +6,6 @@ from rclpy.action import ActionServer
 from geometry_msgs.msg import Point
 from tf2_ros import TransformException
 from tf2_geometry_msgs import do_transform_point
-from pick_up.action import PickupAction
 
 import math
 import tf2_ros
@@ -17,19 +16,27 @@ from tf2_ros.transform_listener import TransformListener
 import rclpy.time
 from builtin_interfaces.msg import Time
 
+from sensor_msgs.msg import JointState
+from std_msgs.msg import Header
+
 class MultiServoPublisher(Node):
     def __init__(self):
         super().__init__("multi_servo_publisher")
         # self.timer = self.create_timer(5.0, self.publish_pose)
         self.publisher = self.create_publisher(Int16MultiArray, "/multi_servo_cmd_sub", 10)
+        self.publisher_sim = self.create_publisher(JointState, '/joint_states', 10)
         self.i = 0
 
         self.tfBuffer = tf2_ros.Buffer()
         self.listener = tf2_ros.TransformListener(self.tfBuffer,self)
         
-
-        self.publish_pose()
         # self.server = ActionServer(self,PickupAction,'PickupCube',self.pickup_callback)
+
+        
+
+        self.clock = self.get_clock()
+
+        self.publish_pose_sim()
 
     def publish_pose(self): #Test function (not the actual function)
         self.get_logger().info(f"Lets go!--------------------------------------------------------------------------")
@@ -104,6 +111,40 @@ class MultiServoPublisher(Node):
         # self.publisher.publish(msg)
 
 
+
+
+    def publish_pose_sim(self): #Test function (not the actual function)
+        self.get_logger().info(f"Simulating!")
+        
+        joint_names = ['xarm_6_joint', 'xarm_5_joint', 'xarm_4_joint', 'xarm_3_joint', 'xarm_2_joint']
+
+        move_time = 2000 #arm speed (milliseconds)
+
+        # pose publish
+        # If not already in the base pose, go to it:
+        
+        self.publish_JointStates(joint_names,[0.0,0.0,0.0,0.0,0.0])
+
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
+
+        
+        position = Point()
+        position.x = 0.1
+        position.y = 0.1
+        position.z = 0.1
+
+        # TODO: Calculate the arm parameters to "hawk" over the object's position
+        # First calculate the base rotation
+        base_rotation_angle = (math.atan2(position.y,position.x))
+
+        distance = self.distance_calc(0,0,position.x,position.y)
+
+        alpha,beta = self.CalcKinematics(distance,position.z)
+
+        self.publish_JointStates(joint_names,[base_rotation_angle,0.6,0.6,0.0,0.0])
+
+
+        self.get_logger().info("Done!")
 
 
 
@@ -188,9 +229,10 @@ class MultiServoPublisher(Node):
     #     # TODO: Done
 
 
-    def CalcKinematics1(self,x,y): #Servos 5 & 4
-        l1 = 0.101
-        l2 = 0.095
+    def CalcKinematics(self,x,y): #Servos 5 & 4
+        self.get_logger().info(f'Position: {x},{y}')
+        l1 = 0.1
+        l2 = 0.1
 
 
         c2 = (x**2 + y**2 - l1**2 - l2**2) / (2*l1*l2)
@@ -204,6 +246,24 @@ class MultiServoPublisher(Node):
         
 
         return v1, v2
+    
+    def publish_JointStates(self, names, states):
+        self.get_logger().info("*** Publishing!***")
+        msg = JointState()
+        msg.header = Header()
+        msg.header.stamp = self.get_clock().now().to_msg()
+
+        
+        msg.name = names
+        msg.position = states
+        msg.velocity = []  # Optional, leave empty if not used
+        msg.effort = []    # Optional, leave empty if not used
+
+        self.publisher_sim.publish(msg)
+        self.get_logger().info(f'Publishing joint states: {msg.position}')
+
+    def distance_calc(self, x1, y1, x2, y2):
+        return math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
 
         
 

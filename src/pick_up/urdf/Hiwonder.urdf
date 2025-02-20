@@ -33,7 +33,7 @@
             <origin rpy="0 0 0" xyz="0.0 0.0 0.0" />
             <geometry>
                 <!-- <mesh filename="package://xarm_description/meshes/xarm6/visual/base.stl" scale="1.0 1.0 1.0" /> -->
-                <cylinder radius="0.05" length="0.1" />
+                <cylinder radius="0.01" length="0.05" />
             </geometry>
             <material name="Blue" />
         </visual>
@@ -41,7 +41,7 @@
             <origin rpy="0 0 0" xyz="0 0 0" />
             <geometry>
                 <!-- <mesh filename="package://xarm_description/meshes/xarm6/visual/base.stl" scale="1.0 1.0 1.0" /> -->
-                <cylinder radius="0.05" length="0.1" />
+                <cylinder radius="0.01" length="0.05" />
             </geometry>
         </collision>
         
@@ -56,7 +56,7 @@
             <origin rpy="0 0 0" xyz="0.0 0.0 0.0" />
             <geometry>
                 <!-- <mesh filename="package://xarm_description/meshes/xarm6/visual/link6.stl" scale="1.0 1.0 1.0" /> -->
-                <cylinder radius="0.05" length="0.1" />
+                <cylinder radius="0.01" length="0.05" />
             </geometry>
             <material name="DarkGrey" />
         </visual>
@@ -64,7 +64,7 @@
             <origin rpy="0 0 0" xyz="0.0 0.0 0.0" />
             <geometry>
                 <!-- <mesh filename="package://xarm_description/meshes/xarm6/visual/link6.stl" scale="1.0 1.0 1.0" /> -->
-                <cylinder radius="0.05" length="0.1" />
+                <cylinder radius="0.01" length="0.05" />
             </geometry>
         </collision>
         <inertial>
@@ -78,7 +78,7 @@
             <origin rpy="0 0 0" xyz="0.0 0.0 0.0" />
             <geometry>
                 <!-- <mesh filename="package://xarm_description/meshes/xarm6/visual/link5.stl" scale="1.0 1.0 1.0" /> -->
-                <cylinder radius="0.05" length="0.1" />
+                <cylinder radius="0.01" length="0.05" />
             </geometry>
             <material name="Blue" />
         </visual>
@@ -86,7 +86,7 @@
             <origin rpy="0 0 0" xyz="0.0 0.0 0.0" />
             <geometry>
                 <!-- <mesh filename="package://xarm_description/meshes/xarm6/visual/link5.stl" scale="1.0 1.0 1.0" /> -->
-                <cylinder radius="0.05" length="0.1" />
+                <cylinder radius="0.01" length="0.05" />
             </geometry>
         </collision>
         <inertial>
@@ -100,7 +100,7 @@
             <origin rpy="0 0 0" xyz="0.0 0.0 0.0" />
             <geometry>
                 <!-- <mesh filename="package://xarm_description/meshes/xarm6/visual/link4.stl" scale="1.0 1.0 1.0" /> -->
-                <cylinder radius="0.05" length="0.1" />
+                <cylinder radius="0.01" length="0.05" />
             </geometry>
             <material name="DarkGrey" />
         </visual>
@@ -108,7 +108,7 @@
             <origin rpy="0 0 0" xyz="0.0 0.0 0.0" />
             <geometry>
                 <!-- <mesh filename="package://xarm_description/meshes/xarm6/visual/link4.stl" scale="1.0 1.0 1.0" /> -->
-                <cylinder radius="0.05" length="0.1" />
+                <cylinder radius="0.01" length="0.05" />
             </geometry>
         </collision>
         <inertial>
@@ -122,7 +122,7 @@
             <origin rpy="0 0 0" xyz="0.0 0.0 0.0" />
             <geometry>
                 <!-- <mesh filename="package://xarm_description/meshes/xarm6/visual/link3.stl" scale="1.0 1.0 1.0" /> -->
-                <cylinder radius="0.05" length="0.1" />
+                <cylinder radius="0.01" length="0.05" />
             </geometry>
             <material name="Blue" />
         </visual>
@@ -130,7 +130,7 @@
             <origin rpy="0 0 0" xyz="0.0 0.0 0.0" />
             <geometry>
                 <!-- <mesh filename="package://xarm_description/meshes/xarm6/visual/link3.stl" scale="1.0 1.0 1.0" /> -->
-                <cylinder radius="0.05" length="0.1" />
+                <cylinder radius="0.01" length="0.05" />
             </geometry>
         </collision>
         <inertial>
@@ -144,7 +144,7 @@
             <origin rpy="0 0 0" xyz="0.0 0.0 0.0" />
             <geometry>
                 <!-- <mesh filename="package://xarm_description/meshes/xarm6/visual/link2.stl" scale="1.0 1.0 1.0" /> -->
-                <cylinder radius="0.05" length="0.1" />
+                <cylinder radius="0.01" length="0.05" />
             </geometry>
             <material name="DarkGrey" />
         </visual>
@@ -152,7 +152,7 @@
             <origin rpy="0 0 0" xyz="0.0 0.0 0.0" />
             <geometry>
                 <!-- <mesh filename="package://xarm_description/meshes/xarm6/visual/link2.stl" scale="1.0 1.0 1.0" /> -->
-                <cylinder radius="0.05" length="0.1" />
+                <cylinder radius="0.01" length="0.05" />
             </geometry>
         </collision>
         <inertial>
