@@ -10,6 +10,7 @@ data_files.append((os.path.join('share', package_name, 'rviz'), glob(os.path.joi
 data_files.append(('share/' + package_name, ['package.xml']))
 data_files.append((os.path.join('share', package_name, 'config'), glob(os.path.join('config', '*.yaml'))))
 data_files.append((os.path.join('share', package_name, 'action'), glob(os.path.join('action', '*.action'))))
+data_files.append((os.path.join('share', package_name, 'urdf'), glob(os.path.join('urdf', '*.urdf'))))
 
 setup(
     name=package_name,

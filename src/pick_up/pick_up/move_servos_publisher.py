@@ -6,7 +6,7 @@ from rclpy.action import ActionServer
 from geometry_msgs.msg import Point
 from tf2_ros import TransformException
 from tf2_geometry_msgs import do_transform_point
-# from pick_up.action import PickupAction
+from pick_up.action import PickupAction
 
 import math
 import tf2_ros
@@ -35,7 +35,7 @@ class MultiServoPublisher(Node):
         self.get_logger().info(f"Lets go!--------------------------------------------------------------------------")
         msg = Int16MultiArray()
         msg.layout = MultiArrayLayout(dim=[MultiArrayDimension(label="", size=12, stride=12)], data_offset=0)
-        move_time = 1000 #arm speed (milliseconds)
+        move_time = 2000 #arm speed (milliseconds)
 
         # pose publish
         # If not already in the base pose, go to it:
@@ -85,11 +85,13 @@ class MultiServoPublisher(Node):
 
         # TODO: Calculate the arm parameters to "hawk" over the object's position
         # First calculate the base rotation
-        base_rotation_angle = math.atan2(position.position.y,position.position.x)
+        base_rotation_angle = int(math.degrees(math.atan2(position.position.y,position.position.x))*10)
 
         distance = distance(position.position.x,position.position.y)
 
         alpha,beta = self.CalcKinematics1(distance,position.position.z + 0.2)
+        alpha = int(math.degrees(alpha)*10)
+        beta = int(math.degrees(beta)*10)
 
 
         self.get_logger().info(f"Received parameter: base={base_rotation_angle} servo5={alpha} servo4={beta}")
