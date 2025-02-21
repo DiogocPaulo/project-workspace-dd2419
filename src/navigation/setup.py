@@ -25,6 +25,7 @@ setup(
     entry_points={
         'console_scripts': [
             'navigation = navigation.navigation:main',
+            'mapping = navigation.mapping:main',
             'pathing = navigation.pathing:main',
             'joystick = navigation.joystick:main',
         ],
