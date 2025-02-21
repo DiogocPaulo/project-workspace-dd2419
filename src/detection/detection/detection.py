@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, HistoryPolicy
+from rclpy.qos import QoSProfile, HistoryPolicy, ReliabilityPolicy
 from sensor_msgs.msg import Image
 from sensor_msgs.msg import PointCloud2, PointField
 import sensor_msgs_py.point_cloud2 as pc2
@@ -40,7 +40,8 @@ class ExamineImage(Node):
 
         qos_profile = QoSProfile(
             depth=1,
-            history=HistoryPolicy.KEEP_LAST
+            history=HistoryPolicy.KEEP_LAST,
+            reliability=ReliabilityPolicy.BEST_EFFORT
         )
 
         self.sub2 = self.create_subscription(
@@ -123,7 +124,7 @@ class ExamineImage(Node):
 
         max_dist = 0.9
         distance = np.linalg.norm(transformed_points, axis=1)
-        mask = (distance < max_dist) & (transformed_points[:, 2] >= 0.015) & (transformed_points[:, 2] <= 0.1)
+        mask = (distance < max_dist) & (transformed_points[:, 2] >= 0.018) & (transformed_points[:, 2] <= 0.1)
         points = transformed_points[mask]
         colors = colors[mask]
 
@@ -160,18 +161,20 @@ class ExamineImage(Node):
             lower_green1, upper_green1 = np.array([81, 100, 44]), np.array([84, 255, 105])
             lower_green2, upper_green2 = np.array([73, 210, 90]), np.array([74, 240, 120])
             lower_blue, upper_blue = np.array([99, 254, 75]), np.array([99, 255, 82])
+            lower_brown, upper_brown =np.array([15, 68, 137]), np.array([17, 76, 134])
 
             # Create masks for the current cluster
             red_mask = ((hsv_colors[:, 0] >= lower_red[0]) & (hsv_colors[:, 0] <= upper_red[0]))
             green_mask = (hsv_colors[:, 0] >= lower_green1[0]) & (hsv_colors[:, 0] <= upper_green1[0]) | \
                         ((hsv_colors[:, 0] >= lower_green2[0]) & (hsv_colors[:, 0] <= upper_green2[0]))
             blue_mask = (hsv_colors[:, 0] >= lower_blue[0]) & (hsv_colors[:, 0] <= upper_blue[0])
+            brown_mask = (hsv_colors[:, 0] >= lower_brown[0]) & (hsv_colors[:, 0] <= upper_brown[0])
 
             # Apply masks for the current cluster
             red_points = cluster_points[red_mask]
             green_points = cluster_points[green_mask]
             blue_points = cluster_points[blue_mask]
-
+            brown_points = cluster_points[brown_mask]
 
             # Calculate the total number of points in the cluster
             total_points = len(cluster_points)
@@ -180,23 +183,26 @@ class ExamineImage(Node):
             red_ratio = len(red_points) / total_points
             green_ratio = len(green_points) / total_points
             blue_ratio = len(blue_points) / total_points
+            brown_ratio = len(brown_points) / total_points
 
-            #self.get_logger().info(f'RED: {red_ratio} and GREEN: {green_ratio} and BLUE: {blue_ratio}')
+            #self.get_logger().info(f'RED: {red_ratio} and GREEN: {green_ratio} and BLUE: {blue_ratio} and BROWN: {brown_ratio}')
 
-            pure_red = pure_green = pure_blue = False
+            pure_red = pure_green = pure_blue = pure_brown = False
 
             # Check if the cluster is predominantly red, green, or blue
-            if red_ratio > 0.01 and green_ratio == 0.0 and blue_ratio == 0.0:
+            if red_ratio > 0.01 and green_ratio == 0.0 and blue_ratio == 0.0 and brown_ratio == 0.0:
                 pure_red = True
-            elif green_ratio > 0.01 and red_ratio == 0.0 and blue_ratio == 0.0:
+            elif green_ratio > 0.01 and red_ratio == 0.0 and blue_ratio == 0.0 and brown_ratio == 0.0:
                 pure_green = True
-            elif blue_ratio > 0.01 and red_ratio == 0.0 and green_ratio == 0.0:
+            elif blue_ratio > 0.01 and red_ratio == 0.0 and green_ratio == 0.0 and brown_ratio == 0.0:
                 pure_blue = True
+            elif brown_ratio > 0.01 and red_ratio == 0.0 and green_ratio == 0.0 and blue_ratio == 0.0:
+                pure_brown = True
 
             # Classify based on floor contact points for the current cluster
             object_type = self.classify_based_on_floor_contact(cluster_points)
 
-            if pure_red or pure_green or pure_blue:
+            if pure_red or pure_green or pure_blue or pure_brown:
                 centroid = np.mean(cluster_points, axis=0)
                 x, y, z = centroid
 
@@ -214,7 +220,7 @@ class ExamineImage(Node):
 
                 # Compute the orientation angle of the box
                 angle = self.estimate_box_orientation(cluster_points)
-
+                self.get_logger().info(f"angle {angle}")
                 # Store box with angle information
                 centroid = np.mean(cluster_points, axis=0)
                 x, y, z = centroid
@@ -278,14 +284,16 @@ class ExamineImage(Node):
         principal_axis = pca.components_[0]
 
         # Compute the angle between the principal axis and the x-axis
-        angle = np.arctan2(principal_axis[1], principal_axis[0])
+        #angle = np.arctan2(principal_axis[1], principal_axis[0])
 
         # Convert to degrees and ensure it's within 0-180 degrees
-        angle_deg = np.degrees(angle) % 180
+        #angle_deg = np.degrees(angle) % 180
 
         # Ensure the angle is relative to the long edge
-        if angle_deg > 90:
-            angle_deg -= 180  # Adjust to -90 to 90 degrees
+        #if angle_deg > 90:
+         #   angle_deg -= 180  # Adjust to -90 to 90 degrees
+        
+
 
         # Compute the dimensions of the box
         min_coords = np.min(cluster_points, axis=0)
@@ -301,12 +309,12 @@ class ExamineImage(Node):
             angle_deg = 90.0
         else:
             # Ensure the angle is within -90 to 90 degrees
-            angle_deg = angle_deg % 180
-            if angle_deg > 90:
-                angle_deg -= 180
+          #  angle_deg = angle_deg % 180
+           # if angle_deg > 90:
+            #    angle_deg -= 180
 
             # Invert the angle for consistency with your coordinate system
-            angle_deg = -angle_deg
+            #angle_deg = -angle_deg
 
         return angle_deg
 
@@ -366,10 +374,10 @@ class ExamineImage(Node):
         Height is always Z-axis, length/width from horizontal PCA.
         """
         # Expected box dimensions (meters)
-        EXPECTED_LENGTH = 0.24
-        EXPECTED_WIDTH = 0.16
-        EXPECTED_HEIGHT = 0.10
-        TOLERANCE = 0.03  # 3cm tolerance
+        EXPECTED_LENGTH = 0.09
+        EXPECTED_WIDTH = 0.045
+        EXPECTED_HEIGHT = 0.06
+        TOLERANCE = 0.035  # 3cm tolerance
 
         # 1. Calculate TRUE VERTICAL HEIGHT (Z-axis)
         z_values = cluster_points[:, 2]
@@ -388,24 +396,22 @@ class ExamineImage(Node):
 
         # 3. Match dimensions to expected length/width
         dim_match = (
-            (abs(h_length - EXPECTED_LENGTH) < TOLERANCE) or
-            (abs(h_length - EXPECTED_WIDTH) < TOLERANCE) or
+            (abs(h_length - EXPECTED_LENGTH) < TOLERANCE) and
             (abs(h_width - EXPECTED_WIDTH) < TOLERANCE)
         )
 
         # 4. Aspect ratio validation
-        expected_aspect_1 = EXPECTED_LENGTH / EXPECTED_HEIGHT 
-        expected_aspect_2 = EXPECTED_WIDTH / EXPECTED_HEIGHT 
+        expected_aspect_1 = EXPECTED_LENGTH / EXPECTED_HEIGHT  
         actual_aspect = h_length / height
-        aspect_ok = abs(actual_aspect - expected_aspect_1) < 0.2 or abs(actual_aspect - expected_aspect_2) < 0.2
+        aspect_ok = abs(actual_aspect - expected_aspect_1) < 0.2
 
         # Debug output
-        self.get_logger().info(
-            f"📏 Vertical Height (Z): {height:.3f}m | {'✅' if height_ok else '❌'}\n"
-            f"📐 Horizontal Dimensions: L={h_length:.3f}m, W={h_width:.3f}m\n"
-            f"🎯 Expected: L={EXPECTED_LENGTH}m, W={EXPECTED_WIDTH}m\n"
-            f"🔍 Dim Match: {dim_match} | Aspect Ratio: {actual_aspect:.2f} ({aspect_ok})"
-        )
+        #self.get_logger().info(
+            #f"📏 Vertical Height (Z): {height:.3f}m | {'✅' if height_ok else '❌'}\n"
+            #f"📐 Horizontal Dimensions: L={h_length:.3f}m, W={h_width:.3f}m\n"
+            #f"🎯 Expected: L={EXPECTED_LENGTH}m, W={EXPECTED_WIDTH}m\n"
+            #f"🔍 Dim Match: {dim_match} | Aspect Ratio: {actual_aspect:.2f} ({aspect_ok})"
+        #)
 
         return height_ok and (dim_match or aspect_ok)
 
@@ -440,11 +446,11 @@ class ExamineImage(Node):
 
         # Log the results for debugging
         #self.get_logger().info(
-            #f"📊 Floor Contact Points: {num_floor_contacts}, "
             #f"Middle Layer: {num_middle_layer_points}, "
             #f"Highest Layer: {num_highest_layer_points}, "
             #f"Ratio: {ratio:.2f}"
         #)
+
         # Classification based on the ratio
         if 1 < ratio <= 7:  # Cube: ratio is approximately 1
             return "cube"
