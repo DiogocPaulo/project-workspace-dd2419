@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, HistoryPolicy
 from sensor_msgs.msg import Image
 from sensor_msgs.msg import PointCloud2, PointField
 import sensor_msgs_py.point_cloud2 as pc2
@@ -22,6 +23,7 @@ from sklearn.cluster import DBSCAN
 from visualization_msgs.msg import Marker, MarkerArray
 from geometry_msgs.msg import Point, Pose, Quaternion, Vector3
 from sklearn.decomposition import PCA
+from itertools import permutations
 
 
 class ExamineImage(Node):
@@ -36,11 +38,17 @@ class ExamineImage(Node):
         self.tfBuffer = tf2_ros.Buffer()
         self.listener = tf2_ros.TransformListener(self.tfBuffer, self)
 
+        qos_profile = QoSProfile(
+            depth=1,
+            history=HistoryPolicy.KEEP_LAST
+        )
+
         self.sub2 = self.create_subscription(
             PointCloud2,
             '/camera/camera/depth/color/points',
             self.cloud_callback,
-            100)
+            qos_profile
+        )
 
         self.pub = self.create_publisher(PointCloud2, 'camera/camera_depth/color/points_transformed', 100)
 
@@ -72,7 +80,7 @@ class ExamineImage(Node):
         ]
 
         # Publish the workspace perimeter
-        self.publish_workspace_perimeter()
+        self.workspace_timer = self.create_timer(2.0, self.publish_workspace_perimeter)
 
     def cloud_callback(self, msg: PointCloud2):
         # Transform point cloud to 'map' frame
@@ -115,7 +123,7 @@ class ExamineImage(Node):
 
         max_dist = 0.9
         distance = np.linalg.norm(transformed_points, axis=1)
-        mask = (distance < max_dist) & (transformed_points[:, 2] >= 0.005) & (transformed_points[:, 2] <= 0.1)
+        mask = (distance < max_dist) & (transformed_points[:, 2] >= 0.015) & (transformed_points[:, 2] <= 0.1)
         points = transformed_points[mask]
         colors = colors[mask]
 
@@ -125,71 +133,101 @@ class ExamineImage(Node):
         # self.get_logger().info(f'PCL: {len(points)} {len(clusters)} {len(labels)}')
         self.publish_clusters(points, labels)
 
-        if colors.shape[0] == 0:
-            self.get_logger().info('NOT OBJECT1')
-            return
+        # After DBSCAN clustering
+        clusters, labels = self.dbscan(points, eps=0.05, min_samples=300)
 
-        # Convert RGB to HSV
-        rgb_colors = colors * 255  # Scale back to 0-255
-        hsv_colors = cv2.cvtColor(rgb_colors.reshape(1, -1, 3).astype(np.uint8), cv2.COLOR_RGB2HSV).reshape(-1, 3)
+        # Iterate over each cluster
+        unique_labels = np.unique(labels)
+        for cluster_label in unique_labels:
+            if cluster_label == -1:
+                continue  # Skip noise points (label = -1)
 
-        # Define HSV ranges for filtering
-        lower_red, upper_red = np.array([2, 230, 95]), np.array([2, 240, 100])
-        lower_green1, upper_green1 = np.array([81, 100, 44]), np.array([84, 255, 105])
-        lower_green2, upper_green2 = np.array([73, 210, 90]), np.array([74, 240, 120])
-        lower_blue, upper_blue = np.array([99, 254, 75]), np.array([99, 255, 80])
+            # Extract points and colors for the current cluster
+            cluster_mask = (labels == cluster_label)
+            cluster_points = points[cluster_mask]
+            cluster_colors = colors[cluster_mask]
 
-        # Create masks
-        red_mask = ((hsv_colors[:, 0] >= lower_red[0]) & (hsv_colors[:, 0] <= upper_red[0]))
-        green_mask = (hsv_colors[:, 0] >= lower_green1[0]) & (hsv_colors[:, 0] <= upper_green1[0]) | \
-                     ((hsv_colors[:, 0] >= lower_green2[0]) & (hsv_colors[:, 0] <= upper_green2[0]))
-        blue_mask = (hsv_colors[:, 0] >= lower_blue[0]) & (hsv_colors[:, 0] <= upper_blue[0])
+            if cluster_colors.shape[0] == 0:
+                self.get_logger().info(f'Cluster {cluster_label} has no valid colors. Skipping.')
+                continue
 
-        # Apply masks
-        red_points = points[red_mask]
-        green_points = points[green_mask]
-        blue_points = points[blue_mask]
+            # Convert RGB to HSV for the current cluster
+            rgb_colors = cluster_colors * 255  # Scale back to 0-255
+            hsv_colors = cv2.cvtColor(rgb_colors.reshape(1, -1, 3).astype(np.uint8), cv2.COLOR_RGB2HSV).reshape(-1, 3)
 
-        pure_red = pure_green = pure_blue = False
+            # Define HSV ranges for filtering
+            lower_red, upper_red = np.array([2, 230, 95]), np.array([2, 240, 100])
+            lower_green1, upper_green1 = np.array([81, 100, 44]), np.array([84, 255, 105])
+            lower_green2, upper_green2 = np.array([73, 210, 90]), np.array([74, 240, 120])
+            lower_blue, upper_blue = np.array([99, 254, 75]), np.array([99, 255, 82])
 
-        if len(red_points) > 300 and len(green_points) < 10 and len(blue_points) < 10:
-            pure_red = True
-        if len(red_points) < 10 and len(green_points) > 300 and len(blue_points) < 10:
-            pure_green = True
-        if len(red_points) < 10 and len(green_points) < 10 and len(blue_points) > 300:
-            pure_blue = True
-        #self.get_logger().info(f'RGB: {len(red_points)} {len(green_points)} {len(blue_points)}')
+            # Create masks for the current cluster
+            red_mask = ((hsv_colors[:, 0] >= lower_red[0]) & (hsv_colors[:, 0] <= upper_red[0]))
+            green_mask = (hsv_colors[:, 0] >= lower_green1[0]) & (hsv_colors[:, 0] <= upper_green1[0]) | \
+                        ((hsv_colors[:, 0] >= lower_green2[0]) & (hsv_colors[:, 0] <= upper_green2[0]))
+            blue_mask = (hsv_colors[:, 0] >= lower_blue[0]) & (hsv_colors[:, 0] <= upper_blue[0])
 
-        if len(clusters) > 0:
-            centroid = np.mean(points, axis=0)
-            x, y, z = centroid
+            # Apply masks for the current cluster
+            red_points = cluster_points[red_mask]
+            green_points = cluster_points[green_mask]
+            blue_points = cluster_points[blue_mask]
 
-            # Classify based on floor contact points
-            object_type = self.classify_based_on_floor_contact(points)
+
+            # Calculate the total number of points in the cluster
+            total_points = len(cluster_points)
+
+            # Calculate the ratio of red, green, and blue points
+            red_ratio = len(red_points) / total_points
+            green_ratio = len(green_points) / total_points
+            blue_ratio = len(blue_points) / total_points
+
+            #self.get_logger().info(f'RED: {red_ratio} and GREEN: {green_ratio} and BLUE: {blue_ratio}')
+
+            pure_red = pure_green = pure_blue = False
+
+            # Check if the cluster is predominantly red, green, or blue
+            if red_ratio > 0.01 and green_ratio == 0.0 and blue_ratio == 0.0:
+                pure_red = True
+            elif green_ratio > 0.01 and red_ratio == 0.0 and blue_ratio == 0.0:
+                pure_green = True
+            elif blue_ratio > 0.01 and red_ratio == 0.0 and green_ratio == 0.0:
+                pure_blue = True
+
+            # Classify based on floor contact points for the current cluster
+            object_type = self.classify_based_on_floor_contact(cluster_points)
 
             if pure_red or pure_green or pure_blue:
+                centroid = np.mean(cluster_points, axis=0)
+                x, y, z = centroid
+
                 if object_type == "sphere":
-                    self.get_logger().info('🔵 Object is a sphere!')
+                    self.get_logger().info(f'🔵 Cluster {cluster_label} is a sphere!')
                     self.create_object('sphere', x + 0.01, y, 0.0)
                 elif object_type == "cube":
-                    self.get_logger().info('🟥 Object is a cube!')
+                    self.get_logger().info(f'🟥 Cluster {cluster_label} is a cube!')
                     self.create_object('cube', x, y, 0.0)
+                elif object_type == "unknown":
+                    self.get_logger().info(f'Object not identified :(!')
 
-            elif self.is_box(points):  # If detected object is a box
-                self.get_logger().info('📦 Object is a box!')
+            elif self.is_box(cluster_points):  # If detected object is a box
+                self.get_logger().info(f'📦 Cluster {cluster_label} is a box!')
 
                 # Compute the orientation angle of the box
-                angle = self.estimate_box_orientation(points)
+                angle = self.estimate_box_orientation(cluster_points)
 
                 # Store box with angle information
+                centroid = np.mean(cluster_points, axis=0)
+                x, y, z = centroid
                 self.create_object('box', x + 0.08, y, angle)
 
-            elif self.is_plushie(points):
-                self.get_logger().info('🧸 Object is a plushie!')
-                self.create_object('plushie', x+0.01, y, 0.0)
+            elif self.is_plushie(cluster_points):
+                self.get_logger().info(f'🧸 Cluster {cluster_label} is a plushie!')
+                centroid = np.mean(cluster_points, axis=0)
+                x, y, z = centroid
+                self.create_object('plushie', x + 0.01, y, 0.0)
 
             else:
-                self.get_logger().info('NOT OBJECT2')
+                self.get_logger().info(f'Cluster {cluster_label} is NOT a recognized object.')
 
     def publish_workspace_perimeter(self):
         """
@@ -272,48 +310,149 @@ class ExamineImage(Node):
 
         return angle_deg
 
-    def is_box(self, points_filtered):
-        # Detect if the object is a box based on dimensions.
-        min_coords = np.min(points_filtered, axis=0)
-        max_coords = np.max(points_filtered, axis=0)
-        dimensions = max_coords - min_coords
-        length, width, height = sorted(dimensions, reverse=True)
+    def is_box(self, cluster_points):
+        """
+        Accurate box detection with explicit vertical/horizontal separation.
+        Height is always Z-axis, length/width from horizontal PCA.
+        """
+        # Expected box dimensions (meters)
+        EXPECTED_LENGTH = 0.24
+        EXPECTED_WIDTH = 0.16
+        EXPECTED_HEIGHT = 0.10
+        TOLERANCE = 0.03  # 3cm tolerance
 
-        #self.get_logger().info(f"Box Check - length: {length:.3f}, width: {width:.3f}, height: {height:.3f}")
+        # 1. Calculate TRUE VERTICAL HEIGHT (Z-axis)
+        z_values = cluster_points[:, 2]
+        height = np.max(z_values) - np.min(z_values)
+        height_ok = abs(height - EXPECTED_HEIGHT) < TOLERANCE
 
-        # Check box dimensions (with tolerance)
-        return (0.23 <= length and 0.15 <= width and 0.09 <= height <= 0.1)
+        # 2. Calculate HORIZONTAL DIMENSIONS (X-Y plane)
+        xy_points = cluster_points[:, :2]
+        pca = PCA(n_components=2)
+        pca.fit(xy_points)
+        
+        # Project points onto horizontal principal axes
+        projected = xy_points @ pca.components_.T
+        h_length = np.ptp(projected[:, 0])  # Primary horizontal dimension
+        h_width = np.ptp(projected[:, 1])   # Secondary horizontal dimension
 
-    def is_plushie(self, points_filtered):
-        # Detect if the object is a box based on dimensions.
-        min_coords = np.min(points_filtered, axis=0)
-        max_coords = np.max(points_filtered, axis=0)
-        dimensions = max_coords - min_coords
-        length, width, height = sorted(dimensions, reverse=True)
+        # 3. Match dimensions to expected length/width
+        dim_match = (
+            (abs(h_length - EXPECTED_LENGTH) < TOLERANCE) or
+            (abs(h_length - EXPECTED_WIDTH) < TOLERANCE) or
+            (abs(h_width - EXPECTED_WIDTH) < TOLERANCE)
+        )
 
-        # self.get_logger().info(f"Plushie Check - length: {length:.3f}, width: {width:.3f}, height: {height:.3f}")
+        # 4. Aspect ratio validation
+        expected_aspect_1 = EXPECTED_LENGTH / EXPECTED_HEIGHT 
+        expected_aspect_2 = EXPECTED_WIDTH / EXPECTED_HEIGHT 
+        actual_aspect = h_length / height
+        aspect_ok = abs(actual_aspect - expected_aspect_1) < 0.2 or abs(actual_aspect - expected_aspect_2) < 0.2
 
-        # Check box dimensions (with tolerance)
-        return (0.06 <= length <= 0.12 and 0.03 <= width and height <= 0.9)
+        # Debug output
+        """self.get_logger().info(
+            f"📏 Vertical Height (Z): {height:.3f}m | {'✅' if height_ok else '❌'}\n"
+            f"📐 Horizontal Dimensions: L={h_length:.3f}m, W={h_width:.3f}m\n"
+            f"🎯 Expected: L={EXPECTED_LENGTH}m, W={EXPECTED_WIDTH}m\n"
+            f"🔍 Dim Match: {dim_match} | Aspect Ratio: {actual_aspect:.2f} ({aspect_ok})"
+        )"""
 
-    def classify_based_on_floor_contact(self, cluster_points, floor_threshold=0.01, contact_threshold=205):
+        return height_ok and (dim_match or aspect_ok)
+
+
+    def is_plushie(self, cluster_points):
+        """
+        Accurate box detection with explicit vertical/horizontal separation.
+        Height is always Z-axis, length/width from horizontal PCA.
+        """
+        # Expected box dimensions (meters)
+        EXPECTED_LENGTH = 0.24
+        EXPECTED_WIDTH = 0.16
+        EXPECTED_HEIGHT = 0.10
+        TOLERANCE = 0.03  # 3cm tolerance
+
+        # 1. Calculate TRUE VERTICAL HEIGHT (Z-axis)
+        z_values = cluster_points[:, 2]
+        height = np.max(z_values) - np.min(z_values)
+        height_ok = abs(height - EXPECTED_HEIGHT) < TOLERANCE
+
+        # 2. Calculate HORIZONTAL DIMENSIONS (X-Y plane)
+        xy_points = cluster_points[:, :2]
+        pca = PCA(n_components=2)
+        pca.fit(xy_points)
+        
+        # Project points onto horizontal principal axes
+        projected = xy_points @ pca.components_.T
+        h_length = np.ptp(projected[:, 0])  # Primary horizontal dimension
+        h_width = np.ptp(projected[:, 1])   # Secondary horizontal dimension
+
+        # 3. Match dimensions to expected length/width
+        dim_match = (
+            (abs(h_length - EXPECTED_LENGTH) < TOLERANCE) or
+            (abs(h_length - EXPECTED_WIDTH) < TOLERANCE) or
+            (abs(h_width - EXPECTED_WIDTH) < TOLERANCE)
+        )
+
+        # 4. Aspect ratio validation
+        expected_aspect_1 = EXPECTED_LENGTH / EXPECTED_HEIGHT 
+        expected_aspect_2 = EXPECTED_WIDTH / EXPECTED_HEIGHT 
+        actual_aspect = h_length / height
+        aspect_ok = abs(actual_aspect - expected_aspect_1) < 0.2 or abs(actual_aspect - expected_aspect_2) < 0.2
+
+        # Debug output
+        self.get_logger().info(
+            f"📏 Vertical Height (Z): {height:.3f}m | {'✅' if height_ok else '❌'}\n"
+            f"📐 Horizontal Dimensions: L={h_length:.3f}m, W={h_width:.3f}m\n"
+            f"🎯 Expected: L={EXPECTED_LENGTH}m, W={EXPECTED_WIDTH}m\n"
+            f"🔍 Dim Match: {dim_match} | Aspect Ratio: {actual_aspect:.2f} ({aspect_ok})"
+        )
+
+        return height_ok and (dim_match or aspect_ok)
+
+    def classify_based_on_floor_contact(self, cluster_points, middle_layer_range = 0.005,top_layer_range=0.005):
         cluster_points = np.array(cluster_points)
         if cluster_points.shape[0] == 0:
             return "unknown"
 
-        # Find points that are very close to the ground (y ≈ 0)
-        floor_contact_points = cluster_points[np.abs(cluster_points[:, 2]) < floor_threshold]
-        num_floor_contacts = len(floor_contact_points)
+        # Dynamically calculate the middle layer of the cluster
+        # The middle layer is defined as points within a small range around the median height of the cluster
+        median_height = np.median(cluster_points[:, 2])  # Median height of the cluster
+        middle_layer_range = 0.02  # Range around the median height to define the middle layer
+        middle_layer_points = cluster_points[
+            (cluster_points[:, 2] >= median_height - middle_layer_range) &
+            (cluster_points[:, 2] <= median_height + middle_layer_range)
+        ]
+        num_middle_layer_points = len(middle_layer_points)
 
-        # self.get_logger().info(f"📊 Floor Contact Points: {num_floor_contacts} (Threshold: {contact_threshold})")
+        # Dynamically calculate the highest layer of the cluster
+        max_height = np.max(cluster_points[:, 2])  # Maximum height of the cluster
+        highest_layer_points = cluster_points[
+            (cluster_points[:, 2] >= max_height - top_layer_range) &
+            (cluster_points[:, 2] <= max_height)
+        ]
+        num_highest_layer_points = len(highest_layer_points)
 
-        # Classification based on contact point count
-        if num_floor_contacts > contact_threshold and num_floor_contacts < 300:
-            #   self.get_logger().info("✅ Object is a Cube (many floor contact points)")
+        # Calculate the ratio of middle layer points to highest layer points
+        if num_highest_layer_points == 0:
+            return "unknown"  # Avoid division by zero
+
+        ratio = num_middle_layer_points / num_highest_layer_points
+
+        # Log the results for debugging
+        #self.get_logger().info(
+            #f"📊 Floor Contact Points: {num_floor_contacts}, "
+            #f"Middle Layer: {num_middle_layer_points}, "
+            #f"Highest Layer: {num_highest_layer_points}, "
+            #f"Ratio: {ratio:.2f}"
+        #)
+        # Classification based on the ratio
+        if 1 < ratio <= 7:  # Cube: ratio is approximately 1
             return "cube"
-        else:
-            #  self.get_logger().info("🔵 Object is a Sphere (few floor contact points)")
+        elif 14 > ratio > 7:  # Sphere: middle layer has significantly more points
             return "sphere"
+        else:
+            return "unknown"  # Undefined object
+
 
     def dbscan(self, points, eps=0.05, min_samples=200):
         if len(points) == 0:
