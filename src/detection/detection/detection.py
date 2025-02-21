@@ -220,7 +220,7 @@ class ExamineImage(Node):
 
                 # Compute the orientation angle of the box
                 angle = self.estimate_box_orientation(cluster_points)
-                self.get_logger().info(f"angle {angle}")
+                
                 # Store box with angle information
                 centroid = np.mean(cluster_points, axis=0)
                 x, y, z = centroid
@@ -293,6 +293,24 @@ class ExamineImage(Node):
         #if angle_deg > 90:
          #   angle_deg -= 180  # Adjust to -90 to 90 degrees
         
+        x_axis = np.array([1, 0])  # Fixed x-axis in the reference frame
+    
+        # Compute the dot product and magnitude to calculate the angle
+        dot_product = np.dot(x_axis, principal_axis)
+        norm_x_axis = np.linalg.norm(x_axis)
+        norm_principal_axis = np.linalg.norm(principal_axis)
+        
+        cos_angle = dot_product / (norm_x_axis * norm_principal_axis)
+        angle = np.arccos(np.clip(cos_angle, -1.0, 1.0))  # Clip to handle floating-point precision
+        
+        # Convert to degrees
+        angle_deg = np.degrees(angle)
+        
+        self.get_logger().info(f"angle {angle_deg}")
+
+        # Ensure the angle is within 0-180 degrees
+        angle_deg = angle_deg % 180
+    
 
 
         # Compute the dimensions of the box
