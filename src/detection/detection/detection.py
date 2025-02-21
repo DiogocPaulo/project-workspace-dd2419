@@ -281,8 +281,13 @@ class ExamineImage(Node):
         pca.fit(cluster_points[:, :2])  # Only consider x and y coordinates
 
         # The first principal component is the direction of the longest axis
-        principal_axis = pca.components_[0]
+        component_0 = pca.components_[0]
+        component_1 = pca.components_[1]
 
+        if abs(component_0[0]) < abs(component_1[0]):
+            principal_axis = component_0
+        else:
+            principal_axis = component_1        
         # Compute the angle between the principal axis and the x-axis
         #angle = np.arctan2(principal_axis[1], principal_axis[0])
 
@@ -305,7 +310,8 @@ class ExamineImage(Node):
         
         # Convert to degrees
         angle_deg = np.degrees(angle)
-        
+
+        angle_deg = -angle_deg
         self.get_logger().info(f"angle {angle_deg}")
 
         # Ensure the angle is within 0-180 degrees
@@ -325,7 +331,7 @@ class ExamineImage(Node):
             angle_deg = 0.0  # Rotate by 90 degrees to align with the long edge
         elif width > 0.23:
             angle_deg = 90.0
-        else:
+        #else:
             # Ensure the angle is within -90 to 90 degrees
           #  angle_deg = angle_deg % 180
            # if angle_deg > 90:
