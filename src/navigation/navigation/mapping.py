@@ -11,13 +11,30 @@ from nav_msgs.msg import OccupancyGrid
 from visualization_msgs.msg import Marker, MarkerArray
 from geometry_msgs.msg import Point, Pose, Quaternion, Vector3
 
+class Map:
+    def __init__(self, resolution, origin_x, origin_y):
+        self.resolution = resolution
+        self.origin_x = origin_x
+        self.origin_y = origin_y
+
+    def world_to_grid(self, x, y):
+        grid_x = int((x - self.origin_x) / self.resolution)
+        grid_y = int((y - self.origin_y) / self.resolution)
+        return grid_x, grid_y
+
+    def grid_to_world(self, x, y):
+        world_x = self.origin_x + x * self.resolution
+        world_y = self.origin_y + y * self.resolution
+        return world_x, world_y
+
+
 class Mapping(Node):
 
     def __init__(self):
         super().__init__("mapping")
 
-        self.map_publisher = self.create_publisher(OccupancyGrid, "map", 10)
-        self.marker_publisher = self.create_publisher(Marker, 'workspace_perimeter', 10)
+        self.map_publisher = self.create_publisher(OccupancyGrid, "/map", 10)
+        self.marker_publisher = self.create_publisher(Marker, "/workspace", 10)
 
         self.create_timer(0.5, self.update_map)
         self.create_timer(0.5, self.update_marker)
@@ -28,7 +45,9 @@ class Mapping(Node):
         self.height = 400       # 200 cells in height
         self.origin_x = -10.0     # Map origin x
         self.origin_y = -10.0     # Map origin y
+        self.map = Map(self.resolution, self.origin_x, self.origin_y)
 
+        # Exploration workspace
         self.workspace_vertices = [
             (-2.20, -1.30),
             (2.20, -1.30),
@@ -40,6 +59,7 @@ class Mapping(Node):
             (-2.20, 1.30)
         ]
 
+        # Collection workspace
         # self.workspace_vertices = [
         #     (-2.20, -1.30),
         #     (2.20, -1.30),
@@ -86,16 +106,10 @@ class Mapping(Node):
         # Publish the marker
         self.marker_publisher.publish(marker)
 
-    def world_to_grid(self, x, y):
-        grid_x = int((x - self.origin_x) / self.resolution)
-        grid_y = int((y - self.origin_y) / self.resolution)
-        return grid_x, grid_y
-
     def define_workspace(self, width, height, vertices):
         for i in range(width):
             for j in range(height):
-                x = self.origin_x + j * self.resolution
-                y = self.origin_y + i * self.resolution
+                x, y = self.map.grid_to_world(j, i)
 
                 if self.is_workspace_point(x, y, self.workspace_vertices):
                     self.grid[i, j] = 0
@@ -147,7 +161,6 @@ class Mapping(Node):
         
 
     def update_map(self):
-
         map_msg = OccupancyGrid()
         map_msg.header.stamp = self.get_clock().now().to_msg()
         map_msg.header.frame_id = "map"
