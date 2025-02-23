@@ -94,6 +94,7 @@ class ExamineImage(Node):
         # Add a counter to track the number of messages received
         self.message_counter = 0
         self.last_line_count = 0
+        self.existing_entries = []
         
 
     def cloud_callback(self, msg: PointCloud2):
@@ -221,30 +222,56 @@ class ExamineImage(Node):
             pure_red = pure_green = pure_blue = pure_brown = False
 
             # Check if the cluster is predominantly red, green, or blue
-            if red_ratio > 0.01 and green_ratio == 0.0 and blue_ratio == 0.0 and brown_ratio == 0.0:
+            if red_ratio > 0.001 and green_ratio == 0.0 and blue_ratio == 0.0:
                 pure_red = True
-            elif green_ratio > 0.01 and red_ratio == 0.0 and blue_ratio == 0.0 and brown_ratio == 0.0:
+            elif green_ratio > 0.001 and red_ratio == 0.0 and blue_ratio == 0.0 and brown_ratio == 0.0:
                 pure_green = True
-            elif blue_ratio > 0.01 and red_ratio == 0.0 and green_ratio == 0.0 and brown_ratio == 0.0:
+            elif blue_ratio > 0.001 and red_ratio == 0.0 and green_ratio == 0.0 and brown_ratio < 0.0001:
                 pure_blue = True
-            elif brown_ratio > 0.01 and red_ratio == 0.0 and green_ratio == 0.0 and blue_ratio == 0.0:
+            elif brown_ratio > 0.001 and red_ratio == 0.0 and green_ratio == 0.0 and blue_ratio == 0.0:
                 pure_brown = True
 
             # Classify based on floor contact points for the current cluster
             object_type = self.classify_based_on_floor_contact(cluster_points)
 
-            if pure_red or pure_green or pure_blue or pure_brown:
+            if pure_brown:
+                centroid = np.mean(cluster_points, axis=0)
+                x, y, z = centroid
+
+                if object_type == "cube":
+                    self.get_logger().info(f'🟫 Cluster {cluster_label} is a cube!')
+                    self.create_object('cube', x, z + 0.02, 0.0, msg.header.stamp)
+
+            if pure_red or pure_green or pure_blue:
                 centroid = np.mean(cluster_points, axis=0)
                 x, y, z = centroid
 
                 if object_type == "sphere":
-                    self.get_logger().info(f'🔵 Cluster {cluster_label} is a sphere!')
-                    self.create_object('sphere', x, z + 0.02, 0.0)
+                    if pure_red:
+                        emoji = "🔴"  # Red circle emoji
+                    elif pure_green:
+                        emoji = "🟢"  # Green circle emoji
+                    elif pure_blue:
+                        emoji = "🔵"  # Blue circle emoji
+                    self.get_logger().info(f'{emoji} Cluster {cluster_label} is a sphere!')
+                    self.create_object('sphere', x, z + 0.02, 0.0, msg.header.stamp)
                 elif object_type == "cube":
-                    self.get_logger().info(f'🟥 Cluster {cluster_label} is a cube!')
-                    self.create_object('cube', x, z + 0.02, 0.0)
+                    if pure_red:
+                        emoji = "🟥"  # Red square emoji
+                    elif pure_green:
+                        emoji = "🟩"  # Green square emoji
+                    elif pure_blue:
+                        emoji = "🟦"  # Blue square emoji
+                    self.get_logger().info(f'{emoji} Cluster {cluster_label} is a cube!')
+                    self.create_object('cube', x, z + 0.02, 0.0, msg.header.stamp)
                 elif object_type == "unknown":
                     self.get_logger().info(f'Object not identified :(!')
+
+            elif self.is_plushie(cluster_points):
+                self.get_logger().info(f'🧸 Cluster {cluster_label} is a plushie!')
+                centroid = np.mean(cluster_points, axis=0)
+                x, y, z = centroid
+                self.create_object('plushie', x + 0.01, z, 0.0, msg.header.stamp)
 
             elif self.is_box(cluster_points):  # If detected object is a box
                 self.get_logger().info(f'📦 Cluster {cluster_label} is a box!')
@@ -256,17 +283,12 @@ class ExamineImage(Node):
                 centroid = np.mean(cluster_points, axis=0)
                 x, y, z = centroid
                 if angle == 0.0:
-                    self.create_object('box', x, z + 0.08, angle)
+                    self.create_object('box', x, z + 0.08, angle, msg.header.stamp)
                 elif angle == 90.0:
-                    self.create_object('box', x, z + 0.12, angle)
+                    self.create_object('box', x, z + 0.12, angle, msg.header.stamp)
                 else:
-                    self.create_object('box', x, z + 0.08, angle)
+                    self.create_object('box', x, z + 0.08, angle, msg.header.stamp)
 
-            elif self.is_plushie(cluster_points):
-                self.get_logger().info(f'🧸 Cluster {cluster_label} is a plushie!')
-                centroid = np.mean(cluster_points, axis=0)
-                x, y, z = centroid
-                self.create_object('plushie', x + 0.01, z, 0.0)
             else:
                 self.get_logger().info(f'Cluster {cluster_label} is NOT a recognized object.')
 
@@ -349,15 +371,11 @@ class ExamineImage(Node):
         elif 0.17 < length < 0.25:
             angle_deg = 0.0
         
-        #self.get_logger().info(f"angle: {angle_deg}")
+        self.get_logger().info(f"angle: {angle_deg}")
 
         return angle_deg
 
     def is_box(self, cluster_points):
-        """
-        Accurate box detection with explicit vertical/horizontal separation.
-        Height is always Z-axis, length/width from horizontal PCA.
-        """
         # Expected box dimensions (meters)
         EXPECTED_LENGTH = 0.24
         EXPECTED_WIDTH = 0.16
@@ -404,28 +422,19 @@ class ExamineImage(Node):
 
 
     def is_plushie(self, cluster_points):
-        """
-        Accurate box detection with explicit vertical/horizontal separation.
-        Height is always Z-axis, length/width from horizontal PCA.
-        """
+
         # Expected box dimensions (meters)
         EXPECTED_LENGTH = 0.09
         EXPECTED_WIDTH = 0.045
-        EXPECTED_HEIGHT = 0.06
-        TOLERANCE = 0.035  # 3cm tolerance
+        TOLERANCE = 0.04  # 3cm tolerance
 
-        # 1. Calculate TRUE VERTICAL HEIGHT (Y-axis)
-        y_values = cluster_points[:, 1]
-        height = np.max(y_values) - np.min(y_values)
-        height_ok = abs(height - EXPECTED_HEIGHT) < TOLERANCE
-
-        # 2. Calculate HORIZONTAL DIMENSIONS (X-Z plane)
-        xz_points = cluster_points[:, [0, 2]]  # This extracts x and z coordinates
+        # 2. Calculate HORIZONTAL DIMENSIONS (X-Y plane)
+        xy_points = cluster_points[:, [0, 1]]  # This extracts x and y coordinates
         pca = PCA(n_components=2)
-        pca.fit(xz_points)
+        pca.fit(xy_points)
         
         # Project points onto horizontal principal axes
-        projected = xz_points @ pca.components_.T
+        projected = xy_points @ pca.components_.T
         h_length = np.ptp(projected[:, 0])  # Primary horizontal dimension
         h_width = np.ptp(projected[:, 1])   # Secondary horizontal dimension
 
@@ -435,20 +444,15 @@ class ExamineImage(Node):
             (abs(h_width - EXPECTED_WIDTH) < TOLERANCE)
         )
 
-        # 4. Aspect ratio validation
-        expected_aspect_1 = EXPECTED_LENGTH / EXPECTED_HEIGHT  
-        actual_aspect = h_length / height
-        aspect_ok = abs(actual_aspect - expected_aspect_1) < 0.2
-
         # Debug output
-        #self.get_logger().info(
-            #f"📏 Vertical Height (Z): {height:.3f}m | {'✅' if height_ok else '❌'}\n"
-            #f"📐 Horizontal Dimensions: L={h_length:.3f}m, W={h_width:.3f}m\n"
-            #f"🎯 Expected: L={EXPECTED_LENGTH}m, W={EXPECTED_WIDTH}m\n"
-            #f"🔍 Dim Match: {dim_match} | Aspect Ratio: {actual_aspect:.2f} ({aspect_ok})"
-        #)
-
-        return height_ok and (dim_match or aspect_ok)
+        """         self.get_logger().info(
+            f"📏 Vertical Height (Z): {height:.3f}m | {'✅' if height_ok else '❌'}\n"
+            f"📐 Horizontal Dimensions: L={h_length:.3f}m, W={h_width:.3f}m\n"
+            f"🎯 Expected: L={EXPECTED_LENGTH}m, W={EXPECTED_WIDTH}m\n"
+            f"🔍 Dim Match: {dim_match} | Aspect Ratio: {actual_aspect:.2f} ({aspect_ok})"
+        )
+        """
+        return dim_match
 
     def classify_based_on_floor_contact(self, cluster_points, middle_layer_range = 0.02,top_layer_range=0.005):
         cluster_points = np.array(cluster_points)
@@ -476,13 +480,13 @@ class ExamineImage(Node):
 
         ratio = num_middle_layer_points / num_highest_layer_points
 
-        """          # Log the results for debugging
-        self.get_logger().info(
+        # Log the results for debugging
+        """         self.get_logger().info(
             f"Middle Layer: {num_middle_layer_points}, "
             f"Highest Layer: {num_highest_layer_points}, "
             f"Ratio: {ratio:.2f}"
-        )
-         """
+        ) """
+         
         # Classification based on the ratio
         if 1 < ratio <= 6:  # Cube: ratio is approximately 1
             return "cube"
@@ -545,7 +549,7 @@ class ExamineImage(Node):
         # Publish the clusters
         self.cluster_publisher.publish(cluster_msg)
 
-    def create_object(self, type, x, z, angle):
+    def create_object(self, type, x, z, angle, stamp):
         # Map object type to a label
         if type == 'cube':
             L = 1
@@ -561,7 +565,7 @@ class ExamineImage(Node):
         # Create a PointStamped message for the input coordinates
         point_in = PointStamped()
         point_in.header.frame_id = 'camera_depth_optical_frame'  # Input frame
-        point_in.header.stamp = self.get_clock().now().to_msg()  # Current time
+        point_in.header.stamp = stamp  # Timestamp of the original point cloud
         point_in.point = Point(x=x, y=0.09, z=z)  # Set the point coordinates
 
         try:
@@ -584,16 +588,9 @@ class ExamineImage(Node):
             # Format the new object entry with transformed coordinates
             new_entry = f"{L} {x_transformed:.2f} {y_transformed:.2f} {angle:.1f}\n"
 
-            # Check if the file exists and read its content
-            if os.path.exists(self.file_path):
-                with open(self.file_path, 'r') as file:
-                    existing_entries = file.readlines()
-            else:
-                existing_entries = []
-
             # Check if the new entry is a duplicate based on proximity
             is_duplicate = False
-            for entry in existing_entries:
+            for entry in self.existing_entries:
                 parts = entry.strip().split()
                 if len(parts) < 4:
                     continue
@@ -614,15 +611,13 @@ class ExamineImage(Node):
             if not is_duplicate:
                 with open(self.file_path, 'a') as file:
                     file.write(new_entry)
+                self.existing_entries.append(new_entry)
                 #self.get_logger().info(f"Created object: {L} at position: ({x_transformed:.2f}, {y_transformed:.2f})")
             #else:
                 #self.get_logger().info(f"Object already exists near position: ({x_transformed:.2f}, {y_transformed:.2f})")
 
         except TransformException as e:
-            self.get_logger().error(f"Failed to transform coordinates: {e}")
-
-
-       
+            self.get_logger().error(f"Failed to transform coordinates: {e}")     
 
         return None
 
@@ -743,6 +738,7 @@ class ExamineImage(Node):
         self.marker_publisher.publish(marker_array)
 
 
+    
 def main(args=None):
     rclpy.init(args=args)
 
