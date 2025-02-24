@@ -5,7 +5,7 @@ from ament_index_python.packages import get_package_share_directory
 
 def generate_launch_description():
     # Path to URDF file
-    urdf_file = os.path.join(get_package_share_directory('pick_up'), 'urdf', 'Hiwonder.urdf')
+    urdf_file = os.path.join(get_package_share_directory('pick_up'), 'urdf', 'Arm.urdf')
 
     with open(urdf_file, 'r') as file:
         urdf_content = file.read()

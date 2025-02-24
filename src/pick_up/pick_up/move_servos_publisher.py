@@ -19,6 +19,12 @@ from builtin_interfaces.msg import Time
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Header
 
+import geometry_msgs.msg
+from tf2_ros import TransformBroadcaster
+
+from visualization_msgs.msg import Marker
+from visualization_msgs.msg import MarkerArray
+
 class MultiServoPublisher(Node):
     def __init__(self):
         super().__init__("multi_servo_publisher")
@@ -32,7 +38,15 @@ class MultiServoPublisher(Node):
         
         # self.server = ActionServer(self,PickupAction,'PickupCube',self.pickup_callback)
 
-        
+        self.position = Point()
+        self.position.x = 0.15
+        self.position.y = 0.0
+        self.position.z = 0.0
+
+        self.publisher_marker = self.create_publisher(Marker, '/visualization_marker', 10)
+
+        self.timer = self.create_timer(1.0, self.publish_object_marker)
+                
 
         self.clock = self.get_clock()
 
@@ -115,8 +129,9 @@ class MultiServoPublisher(Node):
 
     def publish_pose_sim(self): #Test function (not the actual function)
         self.get_logger().info(f"Simulating!")
+
         
-        joint_names = ['xarm_6_joint', 'xarm_5_joint', 'xarm_4_joint', 'xarm_3_joint', 'xarm_2_joint']
+        joint_names = ['joint1', 'joint2', 'joint3', 'joint4', 'joint5']
 
         move_time = 2000 #arm speed (milliseconds)
 
@@ -127,21 +142,24 @@ class MultiServoPublisher(Node):
 
         self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
 
-        
-        position = Point()
-        position.x = 0.1
-        position.y = 0.1
-        position.z = 0.1
+
 
         # TODO: Calculate the arm parameters to "hawk" over the object's position
         # First calculate the base rotation
-        base_rotation_angle = (math.atan2(position.y,position.x))
+        base_rotation_angle = (math.atan2(self.position.y,self.position.x)) + (math.pi/2)
 
-        distance = self.distance_calc(0,0,position.x,position.y)
+        distance = self.distance_calc(0,0,self.position.x,self.position.y)
+        self.get_logger().info(f"Distance: {distance}!")
 
-        alpha,beta = self.CalcKinematics(distance,position.z)
+        alpha,beta = self.CalcKinematics(distance,self.position.z-0.065)
 
-        self.publish_JointStates(joint_names,[base_rotation_angle,0.6,0.6,0.0,0.0])
+        self.get_logger().info(f"Alpha: {alpha} Beta: {beta}")
+
+        self.publish_JointStates(joint_names,[base_rotation_angle,(1.570-alpha),(2.090-beta),0.0,0.0])
+
+        # self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
+
+        # self.publish_JointStates(joint_names,[0,0,0,0.0,0.0])
 
 
         self.get_logger().info("Done!")
@@ -231,21 +249,25 @@ class MultiServoPublisher(Node):
 
     def CalcKinematics(self,x,y): #Servos 5 & 4
         self.get_logger().info(f'Position: {x},{y}')
-        l1 = 0.1
-        l2 = 0.1
+        l1 = 0.101
+        l2 = 0.095
 
+        l3 = (x**2 + y**2)
 
-        c2 = (x**2 + y**2 - l1**2 - l2**2) / (2*l1*l2)
+        c2 = (l1**2 + l2**2 - l3) / (2*l1*l2)
         v2 = math.acos(c2)
 
-        alpha = math.atan2(y,x)
+        c1 = (l1**2 + l3 - l2**2) / (2*l1*math.sqrt(l3))
+        v1 = math.acos(c1)
 
-        beta = math.acos((x**2 + y**2 + l1**2 - l2**2)/(2*l1*math.sqrt(x**2 + y**2)))
+        # alpha = math.atan2(y,x)
 
-        v1 = alpha - beta 
+        # beta = math.acos((x**2 + y**2 + l1**2 - l2**2)/(2*l1*math.sqrt(x**2 + y**2)))
+
+        # v1 = alpha - beta 
         
 
-        return v1, v2
+        return v1,v2
     
     def publish_JointStates(self, names, states):
         self.get_logger().info("*** Publishing!***")
@@ -264,6 +286,29 @@ class MultiServoPublisher(Node):
 
     def distance_calc(self, x1, y1, x2, y2):
         return math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
+
+
+    def publish_object_marker(self):
+        # Create the marker
+        marker = Marker()
+        marker.header.frame_id = "xarm_base_link"  # This is the robot's base frame
+        marker.header.stamp = self.get_clock().now().to_msg()
+        marker.ns = "object_namespace"
+        marker.id = 0
+        marker.type = Marker.SPHERE  # You can also use CUBE, ARROW, etc.
+        marker.action = Marker.ADD
+        marker.pose.position.x = self.position.x  # Position of the object (relative to the base)
+        marker.pose.position.y = self.position.y
+        marker.pose.position.z = self.position.z + 0.065
+        marker.scale.x = 0.05  # Scale of the sphere (radius)
+        marker.scale.y = 0.05
+        marker.scale.z = 0.05
+        marker.color.a = 1.0  # Fully opaque
+        marker.color.r = 1.0  # Red color
+
+        # Publish the marker
+        self.publisher_marker.publish(marker)
+        self.get_logger().info("Publishing object marker")
 
         
 
