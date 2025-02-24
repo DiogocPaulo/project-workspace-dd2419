@@ -19,6 +19,11 @@ def generate_launch_description():
         ),
         Node(
             package="navigation",
+            executable="mapping",
+            name="robot_mapping",
+        ),
+        Node(
+            package="navigation",
             executable="pathing",
             name="robot_pathing",
         ),

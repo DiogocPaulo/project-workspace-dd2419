@@ -77,7 +77,7 @@ class Pathing(Node):
     def __init__(self):
         super().__init__("pathing")
 
-        self.create_subscription(OccupancyGrid, "/map", self.map_callback, 10)
+        self.create_subscription(OccupancyGrid, "/inflated_map", self.map_callback, 10)
         self.path_publisher = self.create_publisher(Path, "/custom_path", 10)
 
         # Parameters

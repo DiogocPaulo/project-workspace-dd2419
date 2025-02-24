@@ -27,6 +27,8 @@ class Map:
         world_y = self.origin_y + y * self.resolution
         return world_x, world_y
 
+    def distance_in_world(self, distance):
+        return int((distance / self.resolution))
 
 class Mapping(Node):
 
@@ -34,9 +36,11 @@ class Mapping(Node):
         super().__init__("mapping")
 
         self.map_publisher = self.create_publisher(OccupancyGrid, "/map", 10)
+        self.inflated_map_publisher = self.create_publisher(OccupancyGrid, "/inflated_map", 10)
         self.marker_publisher = self.create_publisher(Marker, "/workspace", 10)
 
         self.create_timer(0.5, self.update_map)
+        self.create_timer(0.5, self.update_inflated_map)
         self.create_timer(0.5, self.update_marker)
 
         # Parameters
@@ -45,6 +49,7 @@ class Mapping(Node):
         self.height = 400       # 200 cells in height
         self.origin_x = -10.0     # Map origin x
         self.origin_y = -10.0     # Map origin y
+        self.base = 0.6
         self.map = Map(self.resolution, self.origin_x, self.origin_y)
 
         # Exploration workspace
@@ -68,6 +73,7 @@ class Mapping(Node):
         # ]
 
         self.grid = np.full((self.height, self.width), -1, dtype=np.int8)
+        self.inflated_grid = np.full((self.height, self.width), -1, dtype=np.int8)
         self.define_workspace(self.width, self.height, self.workspace_vertices)
 
     def update_marker(self):
@@ -159,6 +165,18 @@ class Mapping(Node):
             j = i
         return inside
         
+    def inflate_map(self):
+        """Inflates occupied cells by a given radius."""
+        offset = self.map.distance_in_world(self.base / 2)
+        self.inflated_grid = np.copy(self.grid)
+        for y in range(self.height):
+            for x in range(self.width):
+                if self.grid[y, x]:
+                    for dy in range(-offset, offset + 1):
+                        for dx in range(-offset, offset + 1):
+                            nx, ny = x + dx, y + dy
+                            if 0 <= nx < self.width and 0 <= ny < self.height:
+                                self.inflated_grid[ny, nx] = 100
 
     def update_map(self):
         map_msg = OccupancyGrid()
@@ -181,6 +199,29 @@ class Mapping(Node):
 
         self.map_publisher.publish(map_msg)
         self.get_logger().info("Published occupancy map grid")
+
+    def update_inflated_map(self):
+        map_msg = OccupancyGrid()
+        map_msg.header.stamp = self.get_clock().now().to_msg()
+        map_msg.header.frame_id = "map"
+
+        map_msg.info.resolution = self.resolution
+        map_msg.info.width = self.width
+        map_msg.info.height = self.height
+        map_msg.info.origin.position.x = self.origin_x
+        map_msg.info.origin.position.y = self.origin_y
+        map_msg.info.origin.position.z = 0.0
+        map_msg.info.origin.orientation.x = 0.0
+        map_msg.info.origin.orientation.y = 0.0
+        map_msg.info.origin.orientation.z = 0.0
+        map_msg.info.origin.orientation.w = 1.0
+
+        # Flatting grid into a row-major list
+        self.inflate_map()
+        map_msg.data = self.inflated_grid.flatten().tolist()
+
+        self.inflated_map_publisher.publish(map_msg)
+        self.get_logger().info("Published inflated occupancy map grid")
 
 def main():
     rclpy.init()
