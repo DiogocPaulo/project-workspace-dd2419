@@ -72,7 +72,7 @@ class ExamineImage(Node):
 
         # Publisher for markers
         self.marker_publisher = self.create_publisher(MarkerArray, '/map_objects', 10)
-        self.timer = self.create_timer(0.5, self.publish_map_objects)  # Update every 2 seconds
+        self.timer = self.create_timer(0.05, self.publish_map_objects)  # Update every 2 seconds
 
         # Timer to periodically write to map.txt
         self.write_timer = self.create_timer(5.0, self.write_to_file)  # Write every 5 seconds

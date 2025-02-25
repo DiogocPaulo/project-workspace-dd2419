@@ -33,7 +33,7 @@ class Pathing(Node):
         self.adaptive_h = {}
         self.map = None
 
-        self.timer = self.create_timer(0.5, self.publish_astar_path)
+        self.timer = self.create_timer(0.05, self.publish_astar_path)
         # self.timer = self.create_timer(2.0, self.publish_straight_path)
         # self.timer = self.create_timer(2.0, self.publish_curved_path)
 

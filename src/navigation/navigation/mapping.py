@@ -22,11 +22,22 @@ class Mapping(Node):
         self.inflated_map_publisher = self.create_publisher(OccupancyGrid, "/inflated_map", 10)
         self.marker_publisher = self.create_publisher(Marker, "/workspace", 10)
 
-        self.create_subscription(MarkerArray, "/map_objects", self.objects_callback, 10)
+        qos_profile = QoSProfile(
+            depth=1,
+            history=HistoryPolicy.KEEP_LAST,
+            reliability=ReliabilityPolicy.BEST_EFFORT
+        )
+
+        self.create_subscription(
+            MarkerArray,
+            "/map_objects",
+            self.objects_callback,
+            qos_profile
+        )
 
         self.create_timer(0.5, self.update_map)
-        self.create_timer(0.5, self.update_inflated_map)
-        self.create_timer(0.5, self.update_marker)
+        self.create_timer(0.05, self.update_inflated_map)
+        # self.create_timer(0.5, self.update_marker)
 
         # Parameters
         self.resolution = 0.05  # 5 cm per cell
