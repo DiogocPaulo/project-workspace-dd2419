@@ -11,24 +11,7 @@ from nav_msgs.msg import OccupancyGrid
 from visualization_msgs.msg import Marker, MarkerArray
 from geometry_msgs.msg import Point, Pose, Quaternion, Vector3
 
-class Map:
-    def __init__(self, resolution, origin_x, origin_y):
-        self.resolution = resolution
-        self.origin_x = origin_x
-        self.origin_y = origin_y
-
-    def world_to_grid(self, x, y):
-        grid_x = int((x - self.origin_x) / self.resolution)
-        grid_y = int((y - self.origin_y) / self.resolution)
-        return grid_x, grid_y
-
-    def grid_to_world(self, x, y):
-        world_x = self.origin_x + x * self.resolution
-        world_y = self.origin_y + y * self.resolution
-        return world_x, world_y
-
-    def distance_in_world(self, distance):
-        return int((distance / self.resolution))
+from navigation.grid_map2 import Map
 
 class Mapping(Node):
 
@@ -49,8 +32,8 @@ class Mapping(Node):
         self.height = 400       # 200 cells in height
         self.origin_x = -10.0     # Map origin x
         self.origin_y = -10.0     # Map origin y
-        self.base = 0.6
-        self.map = Map(self.resolution, self.origin_x, self.origin_y)
+        self.base = 0.3
+        self.map = Map(self.resolution, self.origin_x, self.origin_y, 20, 20)
 
         # Exploration workspace
         self.workspace_vertices = [
@@ -71,6 +54,9 @@ class Mapping(Node):
         #     (2.20, 1.30),
         #     (-2.20, 1.30),
         # ]
+
+        self.map.initialize_map()
+        self.map.set_workspace_vertices(self.workspace_vertices)
 
         self.grid = np.full((self.height, self.width), -1, dtype=np.int8)
         self.inflated_grid = np.full((self.height, self.width), -1, dtype=np.int8)
@@ -167,7 +153,7 @@ class Mapping(Node):
         
     def inflate_map(self):
         """Inflates occupied cells by a given radius."""
-        offset = self.map.distance_in_world(self.base / 2)
+        offset = self.map.distance_to_units(self.base / 2)
         self.inflated_grid = np.copy(self.grid)
         for y in range(self.height):
             for x in range(self.width):
@@ -195,7 +181,9 @@ class Mapping(Node):
         map_msg.info.origin.orientation.w = 1.0
 
         # Flatting grid into a row-major list
-        map_msg.data = self.grid.flatten().tolist()
+        map_msg.data = self.map.grid.flatten().tolist()
+
+        #map_msg.data = self.grid.flatten().tolist()
 
         self.map_publisher.publish(map_msg)
         self.get_logger().info("Published occupancy map grid")
@@ -217,8 +205,12 @@ class Mapping(Node):
         map_msg.info.origin.orientation.w = 1.0
 
         # Flatting grid into a row-major list
-        self.inflate_map()
-        map_msg.data = self.inflated_grid.flatten().tolist()
+        self.map.inflate_map(self.base)
+        map_msg.data = self.map.inflated_grid.flatten().tolist()
+
+
+        #self.inflate_map()
+        #map_msg.data = self.inflated_grid.flatten().tolist()
 
         self.inflated_map_publisher.publish(map_msg)
         self.get_logger().info("Published inflated occupancy map grid")
