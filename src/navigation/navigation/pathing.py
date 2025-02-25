@@ -26,7 +26,7 @@ class Pathing(Node):
 
         # Parameters
         self.start_point = (0, 0)
-        self.end_point = (1.8, -0.5)
+        self.end_point = (0, 0.5)
         self.amplitude = 0.5
         self.cycles = 1.0
         self.map_grid = None
