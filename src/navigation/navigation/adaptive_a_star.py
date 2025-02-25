@@ -64,7 +64,6 @@ class AdaptiveAStar:
                 heapq.heappush(open_set, (f_score, tentative_g, neighbour))
         return None  # No path found
 
-
 if __name__ == "__main__":
     from grid_map2 import Map
 

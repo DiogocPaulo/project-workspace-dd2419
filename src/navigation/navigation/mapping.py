@@ -58,10 +58,6 @@ class Mapping(Node):
         self.map.initialize_map()
         self.map.set_workspace_vertices(self.workspace_vertices)
 
-        self.grid = np.full((self.height, self.width), -1, dtype=np.int8)
-        self.inflated_grid = np.full((self.height, self.width), -1, dtype=np.int8)
-        self.define_workspace(self.width, self.height, self.workspace_vertices)
-
     def update_marker(self):
         marker = Marker()
         marker.header.frame_id = "map"  # Ensure this frame exists in your TF tree
@@ -97,72 +93,6 @@ class Mapping(Node):
 
         # Publish the marker
         self.marker_publisher.publish(marker)
-
-    def define_workspace(self, width, height, vertices):
-        for i in range(width):
-            for j in range(height):
-                x, y = self.map.grid_to_world(j, i)
-
-                if self.is_workspace_point(x, y, self.workspace_vertices):
-                    self.grid[i, j] = 0
-                else:
-                    self.grid[i, j] = 100
-
-    def is_workspace_point(self, x, y, vertices):
-        inside = False
-        j = len(vertices) - 1
-        for i in range(len(vertices)):
-            ax, ay = vertices[i]
-            bx, by = vertices[j]
-            if ay > by:
-                ax, bx = bx, ax
-                ay, by = by, ay
-
-            # Make sure point is not at same height as vertex
-            if y == ay or y == by:
-                y += 0.00001
-
-            if (y > by or y < ay or x > max(ax, bx)):
-                # The horizontal ray does not intersect with the edge
-                j = i
-                continue
-
-            if x < min(ax, bx): # The ray intersects with the edge
-                inside = not inside
-                j = i
-                continue
-
-            try:
-                m_edge = (by - ay) / (bx - ax)
-            except ZeroDivisionError:
-                m_edge = sys.float_info.max
-
-            try:
-                m_point = (y - ay) / (x - ax)
-            except ZeroDivisionError:
-                m_point = sys.float_info.max
-
-            if m_point >= m_edge:
-                # The ray intersects with the edge
-                inside = not inside
-                j = i
-                continue
-
-            j = i
-        return inside
-        
-    def inflate_map(self):
-        """Inflates occupied cells by a given radius."""
-        offset = self.map.distance_to_units(self.base / 2)
-        self.inflated_grid = np.copy(self.grid)
-        for y in range(self.height):
-            for x in range(self.width):
-                if self.grid[y, x]:
-                    for dy in range(-offset, offset + 1):
-                        for dx in range(-offset, offset + 1):
-                            nx, ny = x + dx, y + dy
-                            if 0 <= nx < self.width and 0 <= ny < self.height:
-                                self.inflated_grid[ny, nx] = 100
 
     def update_map(self):
         map_msg = OccupancyGrid()
@@ -207,10 +137,6 @@ class Mapping(Node):
         # Flatting grid into a row-major list
         self.map.inflate_map(self.base)
         map_msg.data = self.map.inflated_grid.flatten().tolist()
-
-
-        #self.inflate_map()
-        #map_msg.data = self.inflated_grid.flatten().tolist()
 
         self.inflated_map_publisher.publish(map_msg)
         self.get_logger().info("Published inflated occupancy map grid")
