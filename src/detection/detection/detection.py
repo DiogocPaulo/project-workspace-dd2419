@@ -546,8 +546,8 @@ class ExamineImage(Node):
                 marker.color.b = 0.0
             elif obj['type'] == 2:  # Sphere (using SPHERE type, but we keep z = 0)
                 marker.type = Marker.SPHERE
-                marker.scale.x = 0.04  # Diameter of the circle
-                marker.scale.y = 0.04  # Diameter of the circle
+                marker.scale.x = 0.05  # Diameter of the circle
+                marker.scale.y = 0.05  # Diameter of the circle
                 marker.scale.z = 0.01  # Minimal height (so it looks like a 2D object)
                 marker.color.r = 1.0
                 marker.color.g = 1.0
@@ -562,8 +562,8 @@ class ExamineImage(Node):
                 marker.color.b = 0.0
             elif obj['type'] == 'B':  # Box (using CUBE type, just as a 2D object)
                 marker.type = Marker.CUBE
-                marker.scale.x = 0.16  # Width of the box
-                marker.scale.y = 0.24  # Length of the box
+                marker.scale.x = 0.20  # Width of the box
+                marker.scale.y = 0.30  # Length of the box
                 marker.scale.z = 0.01  # Minimal height (so it looks like a 2D object)
                 marker.color.r = 0.0
                 marker.color.g = 1.0

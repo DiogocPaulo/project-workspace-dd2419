@@ -43,6 +43,10 @@ class Map:
             # self.get_logger().debug("Grid not defined")
             return
 
+        if (x == 0 and y == 0):
+            # self.get_logger().info("Object alreay in map")
+            return
+
         grid_x, grid_y = self.world_to_grid(x, y)
         grid_half_width = self.distance_to_units(width) / 2
         grid_half_height = self.distance_to_units(height) / 2
@@ -76,6 +80,8 @@ class Map:
         max_x = int(np.max(object_vertices[:, 0]))
         min_y = int(np.min(object_vertices[:, 1]))
         max_y = int(np.max(object_vertices[:, 1]))
+
+        self.grid[grid_y, grid_x] = 100
 
         for j in range(min_y, max_y):
             for i in range(min_x, max_x):

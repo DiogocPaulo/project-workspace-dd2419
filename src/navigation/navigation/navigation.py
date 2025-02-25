@@ -19,7 +19,7 @@ base = 0.3                  # Wheelbase of the vehicle
 lookahead_gain = 0.1        # Look-ahead distance gain
 lookahead_min = 0.3         # Minimum look-ahead distance
 distance_threshold = 0.2    # Stop distance threshold
-target_velocity = 0.3       # Robot's target velocity
+target_velocity = 0.16       # Robot's target velocity
 
 class RobotState:
     """Using odometry message to update the current state of the robot"""
