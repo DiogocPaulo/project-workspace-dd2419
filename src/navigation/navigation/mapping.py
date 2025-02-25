@@ -22,6 +22,8 @@ class Mapping(Node):
         self.inflated_map_publisher = self.create_publisher(OccupancyGrid, "/inflated_map", 10)
         self.marker_publisher = self.create_publisher(Marker, "/workspace", 10)
 
+        self.create_subscription(MarkerArray, "/map_objects", self.objects_callback, 10)
+
         self.create_timer(0.5, self.update_map)
         self.create_timer(0.5, self.update_inflated_map)
         self.create_timer(0.5, self.update_marker)
@@ -33,6 +35,7 @@ class Mapping(Node):
         self.origin_x = -10.0     # Map origin x
         self.origin_y = -10.0     # Map origin y
         self.base = 0.3
+        self.objects = None
         self.map = Map(self.resolution, self.origin_x, self.origin_y, 20, 20)
 
         # Exploration workspace
@@ -57,6 +60,14 @@ class Mapping(Node):
 
         self.map.initialize_map()
         self.map.set_workspace_vertices(self.workspace_vertices)
+
+    def objects_callback(self, msg):
+        for marker in msg.markers:
+           x = marker.pose.position.x
+           y = marker.pose.position.y
+           width = marker.scale.x
+           height = marker.scale.y
+           self.map.add_object(x, y, width, height)
 
     def update_marker(self):
         marker = Marker()

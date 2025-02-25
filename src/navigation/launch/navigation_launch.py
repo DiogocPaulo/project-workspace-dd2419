@@ -27,4 +27,9 @@ def generate_launch_description():
             executable="pathing",
             name="robot_pathing",
         ),
+        Node(
+            package='detection',
+            executable='detection',
+            name='robot_detection',
+        ),
     ])

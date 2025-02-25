@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.ndimage import maximum_filter
+from scipy.ndimage import maximum_filter, rotate
 
 class Map:
     """
@@ -38,6 +38,47 @@ class Map:
         else:
             raise IndexError("Grid coordinates out of bounds.")
 
+    def add_object(self, x, y, width, height, angle=None):
+        if self.grid is None:
+            self.get_logger().debug("Grid not defined")
+            return
+
+        grid_x, grid_y = self.world_to_grid(x, y);
+        grid_half_width = self.distance_to_units(width) / 2;
+        grid_half_height = self.distance_to_units(height) / 2;
+
+        if (self.grid[grid_y, grid_x] == 100):
+            self.get_logger().info("Object alreay in map")
+            return
+
+        object_vertices = np.array([
+            [grid_half_width, grid_half_height],
+            [grid_half_width, -grid_half_height],
+            [-grid_half_width, -grid_half_height],
+            [-grid_half_width, grid_half_height]
+        ]);
+
+        if angle is not None:
+            angle_cos = np.cos(angle)
+            angle_sin = np.sin(angle)
+
+            rotation_matrix = np.array([[cos_angle, -sin_angle],
+                                        [sin_angle,  cos_angle]])
+            object_vertices = (rotation_matrix @ object_vertices.T).T
+
+        object_vertices += np.array([grid_x, grid_y])
+
+        min_x = np.min(vertices[:, 0])
+        max_x = np.max(vertices[:, 0])
+        min_y = np.min(vertices[:, 1])
+        max_y = np.max(vertices[:, 1])
+
+        for j in range(min_y, max_y):
+            for i in range(min_x, max_x):
+                if self.winding_number(i, j, object_vertices):
+                    self.grid[j, i] = 100;
+
+
     def set_workspace_vertices(self, vertices):
         """Sets the workspace boundary as a list of (x, y) vertices and marks grid units outside the workspace."""
         self.workspace_vertices = vertices
@@ -57,17 +98,14 @@ class Map:
                 return True
         return False
 
-    def winding_number(self, x, y):
+    def winding_number(self, x, y, vertices):
         """Calculate the winding number for a point (x, y) to determine if it is inside the polygon."""
-        if not self.workspace_vertices:
-            raise ValueError("Workspace vertices are not set.")
-
         wn = 0  # Winding number counter
-        n = len(self.workspace_vertices)
+        n = len(vertices)
 
         for i in range(n):
-            x1, y1 = self.workspace_vertices[i]
-            x2, y2 = self.workspace_vertices[(i + 1) % n]
+            x1, y1 = vertices[i]
+            x2, y2 = vertices[(i + 1) % n]
 
             # Check if point is on the boundary (on the line segment)
             if self.is_on_line(x, y, x1, y1, x2, y2):
@@ -85,7 +123,7 @@ class Map:
 
     def is_within_workspace(self, x, y):
         """Checks if a point (x, y) is inside the workspace or on its boundary."""
-        return self.winding_number(x, y)
+        return self.winding_number(x, y, self.workspace_vertices)
 
     def is_free(self, x, y, value_threshold):
         # Check if a grid cell is free based on a value threshold using the inflated grid

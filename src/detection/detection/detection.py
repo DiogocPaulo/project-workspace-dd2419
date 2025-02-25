@@ -70,7 +70,7 @@ class ExamineImage(Node):
 
         self.cluster_publisher = self.create_publisher(PointCloud2, 'clusters', 10)
 
-        self.marker_publisher = self.create_publisher(MarkerArray, 'map_objects', 10)
+        self.marker_publisher = self.create_publisher(MarkerArray, '/map_objects', 10)
         self.timer = self.create_timer(2.0, self.publish_map_objects)  # Update every 2 seconds
 
         # Publisher for the workspace perimeter marker

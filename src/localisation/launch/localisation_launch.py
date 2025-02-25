@@ -11,12 +11,18 @@ import os
 from launch_ros.actions import Node
 
 def generate_launch_description():
-    lidar_launch_file = os.path.join(
-        get_package_share_directory("robp_launch"), "launch", "lidar_launch.yaml"
+    frames_launch_file = os.path.join(
+        get_package_share_directory("robp_launch"), "launch", "frames_launch.xml"
     ) 
     return LaunchDescription([
         IncludeLaunchDescription(
-            launch_description_source=AnyLaunchDescriptionSource(lidar_launch_file),
+            launch_description_source=AnyLaunchDescriptionSource(frames_launch_file),
+        ),
+        Node(
+            package="tf2_ros",
+            executable="static_transform_publisher",
+            arguments=["0", "0", "0", "0", "0", "0", "1", "map", "odom"],
+            output="screen",
         ),
         Node(
             package="localisation",
