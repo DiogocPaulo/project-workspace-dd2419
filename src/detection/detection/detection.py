@@ -226,7 +226,7 @@ class ExamineImage(Node):
                 pure_red = True
             elif green_ratio > 0.001 and red_ratio == 0.0 and blue_ratio == 0.0 and brown_ratio == 0.0:
                 pure_green = True
-            elif blue_ratio > 0.001 and red_ratio == 0.0 and green_ratio == 0.0 and brown_ratio < 0.0001:
+            elif blue_ratio > 0.001 and red_ratio == 0.0 and green_ratio == 0.0 and brown_ratio < 0.01:
                 pure_blue = True
             elif brown_ratio > 0.001 and red_ratio == 0.0 and green_ratio == 0.0 and blue_ratio == 0.0:
                 pure_brown = True
@@ -234,18 +234,15 @@ class ExamineImage(Node):
             # Classify based on floor contact points for the current cluster
             object_type = self.classify_based_on_floor_contact(cluster_points)
 
-            if pure_brown:
-                centroid = np.mean(cluster_points, axis=0)
-                x, y, z = centroid
+            centroid = np.mean(cluster_points, axis=0)
+            x, y, z = centroid
 
+            if pure_brown:
                 if object_type == "cube":
                     self.get_logger().info(f'🟫 Cluster {cluster_label} is a cube!')
                     self.create_object('cube', x, z + 0.02, 0.0, msg.header.stamp)
 
             if pure_red or pure_green or pure_blue:
-                centroid = np.mean(cluster_points, axis=0)
-                x, y, z = centroid
-
                 if object_type == "sphere":
                     if pure_red:
                         emoji = "🔴"  # Red circle emoji
@@ -269,8 +266,6 @@ class ExamineImage(Node):
 
             elif self.is_plushie(cluster_points):
                 self.get_logger().info(f'🧸 Cluster {cluster_label} is a plushie!')
-                centroid = np.mean(cluster_points, axis=0)
-                x, y, z = centroid
                 self.create_object('plushie', x + 0.01, z, 0.0, msg.header.stamp)
 
             elif self.is_box(cluster_points):  # If detected object is a box
@@ -280,8 +275,7 @@ class ExamineImage(Node):
                 angle = self.estimate_box_orientation(cluster_points)
                 
                 # Store box with angle information
-                centroid = np.mean(cluster_points, axis=0)
-                x, y, z = centroid
+                
                 if angle == 0.0:
                     self.create_object('box', x, z + 0.08, angle, msg.header.stamp)
                 elif angle == 90.0:
@@ -290,7 +284,10 @@ class ExamineImage(Node):
                     self.create_object('box', x, z + 0.08, angle, msg.header.stamp)
 
             else:
-                self.get_logger().info(f'Cluster {cluster_label} is NOT a recognized object.')
+                if pure_brown:
+                    continue
+                else:
+                    self.get_logger().info(f'Cluster {cluster_label} is NOT a recognized object.')
 
             # ------------ TIMER FOR EFFICIENCY CHECK (move where desired) ------------
             end_time = time.time()
@@ -377,10 +374,10 @@ class ExamineImage(Node):
 
     def is_box(self, cluster_points):
         # Expected box dimensions (meters)
-        EXPECTED_LENGTH = 0.24
+        EXPECTED_LENGTH = 0.26
         EXPECTED_WIDTH = 0.16
         EXPECTED_HEIGHT = 0.10
-        TOLERANCE = 0.03  # 3cm tolerance
+        TOLERANCE = 0.035  # 3cm tolerance
 
         # 1. Calculate TRUE VERTICAL HEIGHT (Z-axis)
         z_values = cluster_points[:, 1]
@@ -410,14 +407,14 @@ class ExamineImage(Node):
         actual_aspect = h_length / height
         aspect_ok = abs(actual_aspect - expected_aspect_1) < 0.2 or abs(actual_aspect - expected_aspect_2) < 0.2
 
-        # Debug output
-        """self.get_logger().info(
+        """         # Debug output
+        self.get_logger().info(
             f"📏 Vertical Height (Z): {height:.3f}m | {'✅' if height_ok else '❌'}\n"
             f"📐 Horizontal Dimensions: L={h_length:.3f}m, W={h_width:.3f}m\n"
             f"🎯 Expected: L={EXPECTED_LENGTH}m, W={EXPECTED_WIDTH}m\n"
             f"🔍 Dim Match: {dim_match} | Aspect Ratio: {actual_aspect:.2f} ({aspect_ok})"
-        )"""
-
+        )
+         """
         return height_ok and (dim_match or aspect_ok)
 
 
@@ -485,12 +482,12 @@ class ExamineImage(Node):
             f"Middle Layer: {num_middle_layer_points}, "
             f"Highest Layer: {num_highest_layer_points}, "
             f"Ratio: {ratio:.2f}"
-        ) """
-         
+        )
+          """
         # Classification based on the ratio
-        if 1 < ratio <= 6:  # Cube: ratio is approximately 1
+        if 1 < ratio <= 6.5:  # Cube: ratio is approximately 1
             return "cube"
-        elif 14 > ratio > 6:  # Sphere: middle layer has significantly more points
+        elif 14 > ratio > 6.5:  # Sphere: middle layer has significantly more points
             return "sphere"
         else:
             return "unknown"  # Undefined object
@@ -631,20 +628,13 @@ class ExamineImage(Node):
         with open(self.file_path, 'r') as file:
             lines = file.readlines()
 
-        # Get the number of new lines added since the last read
-        new_line_count = len(lines) - self.last_line_count
-
-        # If no new lines, return
-        if new_line_count <= 0:
-            return
-
         # Clear all previous markers
         clear_marker = Marker()
         clear_marker.action = Marker.DELETEALL
         marker_array.markers.append(clear_marker)
 
-        # Process only the new lines
-        for idx, line in enumerate(lines[-new_line_count:]):
+        # Process every line in the file
+        for idx, line in enumerate(lines):
             parts = line.strip().split()
             if len(parts) < 4:
                 continue
@@ -659,10 +649,10 @@ class ExamineImage(Node):
             marker.header.stamp = self.get_clock().now().to_msg()
 
             # Unique ID for each marker
-            marker.id = self.last_line_count + idx  # Ensure unique IDs
+            marker.id = idx  # Use index as unique ID for each line
 
             # Set a unique namespace to avoid duplication in the same MarkerArray
-            marker.ns = "object_{}".format(self.last_line_count + idx)
+            marker.ns = "object_{}".format(idx)
 
             # Default to CUBE (for 2D square)
             marker.type = Marker.CUBE
@@ -731,12 +721,8 @@ class ExamineImage(Node):
 
             marker_array.markers.append(marker)
 
-        # Update the last line count
-        self.last_line_count = len(lines)
-
         # Publish the markers
         self.marker_publisher.publish(marker_array)
-
 
     
 def main(args=None):
