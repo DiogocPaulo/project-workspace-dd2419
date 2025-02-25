@@ -21,13 +21,19 @@ def generate_launch_description():
         IncludeLaunchDescription(
             launch_description_source=AnyLaunchDescriptionSource(frames_launch_file),
         ),
-        IncludeLaunchDescription(
-            launch_description_source=PythonLaunchDescriptionSource(camera_launch_file),
+        #IncludeLaunchDescription(
+        #    launch_description_source=PythonLaunchDescriptionSource(camera_launch_file),
+        #),
+        Node(
+            package="tf2_ros",
+            executable="static_transform_publisher",
+            arguments=["0", "0", "0", "0", "0", "0", "1", "map", "odom"],
+            output="screen",
         ),
         Node(
             package="tf2_ros",
             executable="static_transform_publisher",
-            arguments=["0", "0", "0", "0", "0", "0", "1", "map", "base_link"],
+            arguments=["0", "0", "0", "0", "0", "0", "1", "odom", "base_link"],
             output="screen",
         ),
         Node(

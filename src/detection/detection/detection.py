@@ -1,57 +1,33 @@
 #!/usr/bin/env python3
 
-# Copyright 2021 Evan Flynn, Lucas Walter
-#
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted provided that the following conditions are met:
-#
-#    * Redistributions of source code must retain the above copyright
-#      notice, this list of conditions and the following disclaimer.
-#
-#    * Redistributions in binary form must reproduce the above copyright
-#      notice, this list of conditions and the following disclaimer in the
-#      documentation and/or other materials provided with the distribution.
-#
-#    * Neither the name of the Evan Flynn nor the names of its
-#      contributors may be used to endorse or promote products derived from
-#      this software without specific prior written permission.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-# POSSIBILITY OF SUCH DAMAGE.
-
-
 import cv2
 import numpy as np
-
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, HistoryPolicy, ReliabilityPolicy
 from sensor_msgs.msg import Image
-
-
 from sensor_msgs.msg import PointCloud2, PointField
 import sensor_msgs_py.point_cloud2 as pc2
-
 import ctypes
 import struct
-
 import tf2_ros
-
 from tf2_ros import TransformException
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
 import tf2_geometry_msgs
 from tf2_geometry_msgs import do_transform_point
 from geometry_msgs.msg import PointStamped
-
+import os
+from scipy.spatial import cKDTree
+from sklearn.cluster import DBSCAN
+from visualization_msgs.msg import Marker, MarkerArray
+from geometry_msgs.msg import Point, Pose, Quaternion, Vector3
+from sklearn.decomposition import PCA
+from itertools import permutations
+from sensor_msgs_py.point_cloud2 import create_cloud # Convert colors to a single float value representing RGB
+import time
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
 class ExamineImage(Node):
 
@@ -63,164 +39,692 @@ class ExamineImage(Node):
         self.get_logger().info(f"Init detection")
 
         self.tfBuffer = tf2_ros.Buffer()
-        self.listener = tf2_ros.TransformListener(self.tfBuffer,self)
+        self.listener = tf2_ros.TransformListener(self.tfBuffer, self)
 
-        self.sub = self.create_subscription(
-            Image,
-            '/camera/camera/color/image_raw',
-            self.image_callback,
-            100)
-        
+        qos_profile = QoSProfile(
+            depth=1,
+            history=HistoryPolicy.KEEP_LAST,
+            reliability=ReliabilityPolicy.BEST_EFFORT
+        )
+
         self.sub2 = self.create_subscription(
             PointCloud2,
             '/camera/camera/depth/color/points',
             self.cloud_callback,
-            100)
-        
-        self.pub = self.create_publisher(PointCloud2,'camera/camera_depth/color/points_transformed',100)
-
-    def image_callback(self, msg):
-        sz = (msg.height, msg.width)
-        if False:
-            print('{encoding} {width} {height} {step} {data_size}'.format(
-                encoding=msg.encoding, width=msg.width, height=msg.height,
-                step=msg.step, data_size=len(msg.data)))
-        if msg.step * msg.height != len(msg.data):
-            print('bad step/height/data size')
-            return
-
-        if msg.encoding == 'rgb8':
-            dirty = (self.mat is None or msg.width != self.mat.shape[1] or
-                     msg.height != self.mat.shape[0] or len(self.mat.shape) < 2 or
-                     self.mat.shape[2] != 3)
-            if dirty:
-                self.mat = np.zeros([msg.height, msg.width, 3], dtype=np.uint8)
-            self.mat[:, :, 2] = np.array(msg.data[0::3]).reshape(sz)
-            self.mat[:, :, 1] = np.array(msg.data[1::3]).reshape(sz)
-            self.mat[:, :, 0] = np.array(msg.data[2::3]).reshape(sz)
-        elif msg.encoding == 'mono8':
-            self.mat = np.array(msg.data).reshape(sz)
-        else:
-            print('unsupported encoding {}'.format(msg.encoding))
-            return
-        if self.mat is not None:
-            cv2.imshow('image', self.mat)
-            cv2.waitKey(5)
-
-        # self.get_logger().info(f"Detection message")
-
-    def cloud_callback(self, msg: PointCloud2):
-        # Convert ROS -> NumPy
-
-        gen = pc2.read_points_numpy(msg, skip_nans=True)
-        points = gen[:, :3]
-        colors = np.empty(points.shape, dtype=np.uint32)
-
-        for idx, x in enumerate(gen):
-            c = x[3]
-            s = struct.pack('>f', c)
-            i = struct.unpack('>l', s)[0]
-            pack = ctypes.c_uint32(i).value
-            colors[idx, 0] = np.asarray((pack >> 16) & 255, dtype=np.uint8)
-            colors[idx, 1] = np.asarray((pack >> 8) & 255, dtype=np.uint8)
-            colors[idx, 2] = np.asarray(pack & 255, dtype=np.uint8)
-
-        colors = colors.astype(np.float32) / 255
-
-        max_dist = 0.9
-        distance = np.linalg.norm(points,axis=1)
-        mask = (distance < max_dist) & (points[:,2] >= 0)
-        points = points[mask] 
-        colors = colors[mask]
-
-        r, g, b = colors[:,0], colors[:,1], colors[:,2]
-        red_f = (r > 0.7) & (g < 0.4) & (b < 0.4)
-        green_f = (r < 0.3) & (g > 0.6) & (b < 0.75)
-
-        red_points = points[red_f]
-        green_points = points[green_f]
-
-        if len(red_points):
-            self.get_logger().info(f"Red points detected")
-        if len(green_points):
-            self.get_logger().info(f"Green points detected")
-
-        frame_id = msg.header.frame_id
-        time_stamp = msg.header.stamp
-
-        tf_future = self.tfBuffer.wait_for_transform_async(
-            target_frame = 'map',
-            source_frame = frame_id,
-            time = time_stamp
+            qos_profile
         )
 
-        rclpy.spin_until_future_complete(self,tf_future, timeout_sec=1)
+        self.pub = self.create_publisher(PointCloud2, '/depth_points_filtered', 100)
 
-        try:
-            t = self.tfBuffer.lookup_transform(
-                'map',
-                frame_id,
-                time_stamp)
-        except TransformException as ex:
-            self.get_logger().info(
-                f'Could not transform {frame_id} to map: {ex}'
-            )
+        folder_path = os.path.join(os.getcwd(), 'maps') # current directory + /maps
+        
+        # Create the 'maps' folder if it doesn't exist
+        if not os.path.exists(folder_path):
+            os.makedirs(folder_path)
 
-        cloud_msg_red = PointCloud2()
-        cloud_msg_red.header.stamp = time_stamp
-        cloud_msg_red.header.frame_id = 'map'
-        cloud_msg_red.height = 1
-        cloud_msg_red.width = len(red_points) + len(green_points)
-        cloud_msg_red.fields = [
+        file_name = 'Map.txt'
+        self.file_path = os.path.join(folder_path, file_name)
+
+        with open(self.file_path, 'w') as file:
+            file.write(f"")
+
+        self.cluster_publisher = self.create_publisher(PointCloud2, 'clusters', 10)
+
+        self.marker_publisher = self.create_publisher(MarkerArray, 'map_objects', 10)
+        self.timer = self.create_timer(2.0, self.publish_map_objects)  # Update every 2 seconds
+
+        # Publisher for the workspace perimeter marker
+        self.workspace_publisher = self.create_publisher(Marker, 'workspace_perimeter', 10)
+
+        # Define workspace vertices (in centimeters, converted to meters)
+        self.workspace_vertices = [
+            (-220 / 100, -130 / 100),
+            (220 / 100, -130 / 100),
+            (450 / 100, 66 / 100),
+            (700 / 100, 66 / 100),
+            (700 / 100, 284 / 100),
+            (546 / 100, 284 / 100),
+            (546 / 100, 130 / 100),
+            (-220 / 100, 130 / 100)
+        ]
+
+        # Publish the workspace perimeter
+        self.workspace_timer = self.create_timer(2.0, self.publish_workspace_perimeter)
+
+        # Add a counter to track the number of messages received
+        self.message_counter = 0
+        self.last_line_count = 0
+        self.existing_entries = []
+        
+
+    def cloud_callback(self, msg: PointCloud2):
+        # Increment the message counter
+        self.message_counter += 1
+        # Only process every 5th message
+        if self.message_counter % 2 != 0:
+            return
+        # Reset the counter to avoid overflow
+        self.message_counter = 0
+
+        start_time = time.time() # DEBUGGING EFFICIENCY
+
+        # Read point cloud data from the message
+        points_data = pc2.read_points_numpy(msg, skip_nans=True)  
+
+        # Extract XYZ coordinates from the point cloud
+        points = points_data[:, :3]  # Shape (N, 3)
+
+        # Set distance threshold for filtering
+        max_dist = 0.9 # Maximum distance from the sensor (in meters)
+        
+        # Compute Euclidean distance of each point from the origin
+        distances = np.linalg.norm(points, axis=1)
+
+        # Create a boolean mask to filter points:
+        # - Points within max_dist from the sensor
+        # - Points above the floor (y < 0.09) (y-axis points downwards)
+        mask = (distances < max_dist) & (points[:, 1] < 0.085) & (0.01 < points[:, 1])
+        
+        # Apply the mask to filter points before processing colors
+        points = points[mask]
+
+         # The color is stored as a floating-point number in the 4th column
+        color_floats = points_data[mask, 3].view(np.uint32)  # Convert float to uint32 directly
+
+        # Extract RGB channels using bitwise operations
+        red = (color_floats >> 16) & 255
+        green = (color_floats >> 8) & 255
+        blue = color_floats & 255
+        # Normalize colors to the range [0, 1] for consistency
+        colors = np.stack((red, green, blue), axis=1).astype(np.float32) / 255  
+
+
+        # v ----------------- CAN BE COMMENTED OUT AFTER TESTING ----------------- v
+        # Convert RGB values to packed 32-bit float format (used by ROS)
+        # | 31-24 | 23-16 | 15-8 | 7-0  |
+        # | Alpha |  Red  | Green | Blue |
+        # The packed format stores colors as a single float value
+        rgb_colors = (red << 16 | green << 8 | blue).astype(np.uint32).view(np.float32).reshape(-1, 1)
+        
+        # Combine filtered points with their corresponding colors
+        points_with_colors = np.hstack((points, rgb_colors))  # Shape (N, 4)
+
+        # Define the PointCloud2 message fields
+        # Each point consists of (x, y, z, rgb) with FLOAT32 data type
+        fields = [
             PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
             PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1),
             PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1),
             PointField(name='rgb', offset=12, datatype=PointField.FLOAT32, count=1)
         ]
-        cloud_msg_red.is_bigendian=False
-        cloud_msg_red.point_step = 16
-        cloud_msg_red.row_step = cloud_msg_red.point_step * (len(red_points) + len(green_points))
-        cloud_msg_red.is_dense = True
+
+        # Create a new PointCloud2 message with the filtered points and colors
+        filtered_cloud_msg = create_cloud(msg.header, fields, points_with_colors)
+
+        # Publish the filtered point cloud
+        self.pub.publish(filtered_cloud_msg)
+        # ----------------------------------------------------------------- 
+
+        # Perform spatial clustering using DBSCAN
+        clusters, labels = self.dbscan(points, eps=0.05, min_samples=300) # CHECK
+        
+        # Publish clusters using the original header
+        self.publish_clusters(points, labels, msg.header) # CAN BE COMMENTED OUT AFTER TESTING
+
+        valid_labels = labels[labels != -1] # Filter out noise points (label = -1)
+        unique_labels = np.unique(valid_labels)
+
+         # Define HSV [Hue (0-179), Saturation(0-255), Value(0-255)] ranges for filtering color ranges for red, green, and blue
+        lower_red, upper_red = np.array([2, 230, 95]), np.array([2, 240, 100])
+        lower_green1, upper_green1 = np.array([81, 100, 44]), np.array([84, 255, 105])
+        lower_green2, upper_green2 = np.array([73, 210, 90]), np.array([74, 240, 120])
+        lower_blue, upper_blue = np.array([99, 254, 75]), np.array([99, 255, 80])
+        lower_brown, upper_brown =np.array([15, 68, 137]), np.array([17, 76, 134])
+
+         # Iterate over each cluster
+        for cluster_label in unique_labels: 
+            if cluster_label == -1:
+                continue  # Skip noise points (label = -1)
+
+            # Extract points and colors for the current cluster
+            cluster_mask = (labels == cluster_label)
+            cluster_points = points[cluster_mask]
+            cluster_colors = colors[cluster_mask]
+
+            # Convert RGB to HSV for the current cluster
+            rgb_colors = cluster_colors * 255  # Scale back to 0-255
+            hsv_colors = cv2.cvtColor(rgb_colors.reshape(1, -1, 3).astype(np.uint8), cv2.COLOR_RGB2HSV).reshape(-1, 3)
+
+            # Create masks for the current cluster
+            red_mask = ((hsv_colors[:, 0] >= lower_red[0]) & (hsv_colors[:, 0] <= upper_red[0]))
+            green_mask = (hsv_colors[:, 0] >= lower_green1[0]) & (hsv_colors[:, 0] <= upper_green1[0]) | \
+                        ((hsv_colors[:, 0] >= lower_green2[0]) & (hsv_colors[:, 0] <= upper_green2[0]))
+            blue_mask = (hsv_colors[:, 0] >= lower_blue[0]) & (hsv_colors[:, 0] <= upper_blue[0])
+            brown_mask = (hsv_colors[:, 0] >= lower_brown[0]) & (hsv_colors[:, 0] <= upper_brown[0])
+
+            # Apply masks for the current cluster
+            red_points = cluster_points[red_mask]
+            green_points = cluster_points[green_mask]
+            blue_points = cluster_points[blue_mask]
+            brown_points = cluster_points[brown_mask]
+
+            # Calculate the total number of points in the cluster
+            total_points = len(cluster_points)
+
+            # Calculate the ratio of red, green, and blue points
+            red_ratio = len(red_points) / total_points
+            green_ratio = len(green_points) / total_points
+            blue_ratio = len(blue_points) / total_points
+            brown_ratio = len(brown_points) / total_points
+
+            #self.get_logger().info(f'RED: {red_ratio} and GREEN: {green_ratio} and BLUE: {blue_ratio} and BROWN: {brown_ratio}')
+
+            pure_red = pure_green = pure_blue = pure_brown = False
+
+            # Check if the cluster is predominantly red, green, or blue
+            if red_ratio > 0.001 and green_ratio == 0.0 and blue_ratio == 0.0:
+                pure_red = True
+            elif green_ratio > 0.001 and red_ratio == 0.0 and blue_ratio == 0.0 and brown_ratio == 0.0:
+                pure_green = True
+            elif blue_ratio > 0.001 and red_ratio == 0.0 and green_ratio == 0.0 and brown_ratio < 0.01:
+                pure_blue = True
+            elif brown_ratio > 0.001 and red_ratio == 0.0 and green_ratio == 0.0 and blue_ratio == 0.0:
+                pure_brown = True
+
+            # Classify based on floor contact points for the current cluster
+            object_type = self.classify_based_on_floor_contact(cluster_points)
+
+            centroid = np.mean(cluster_points, axis=0)
+            x, y, z = centroid
+
+            if pure_brown:
+                if object_type == "cube":
+                    self.get_logger().info(f'🟫 Cluster {cluster_label} is a cube!')
+                    self.create_object('cube', x, z + 0.02, 0.0, msg.header.stamp)
+
+            if pure_red or pure_green or pure_blue:
+                if object_type == "sphere":
+                    if pure_red:
+                        emoji = "🔴"  # Red circle emoji
+                    elif pure_green:
+                        emoji = "🟢"  # Green circle emoji
+                    elif pure_blue:
+                        emoji = "🔵"  # Blue circle emoji
+                    self.get_logger().info(f'{emoji} Cluster {cluster_label} is a sphere!')
+                    self.create_object('sphere', x, z + 0.02, 0.0, msg.header.stamp)
+                elif object_type == "cube":
+                    if pure_red:
+                        emoji = "🟥"  # Red square emoji
+                    elif pure_green:
+                        emoji = "🟩"  # Green square emoji
+                    elif pure_blue:
+                        emoji = "🟦"  # Blue square emoji
+                    self.get_logger().info(f'{emoji} Cluster {cluster_label} is a cube!')
+                    self.create_object('cube', x, z + 0.02, 0.0, msg.header.stamp)
+                elif object_type == "unknown":
+                    self.get_logger().info(f'Object not identified :(!')
+
+            elif self.is_plushie(cluster_points):
+                self.get_logger().info(f'🧸 Cluster {cluster_label} is a plushie!')
+                self.create_object('plushie', x + 0.01, z, 0.0, msg.header.stamp)
+
+            elif self.is_box(cluster_points):  # If detected object is a box
+                self.get_logger().info(f'📦 Cluster {cluster_label} is a box!')
+
+                # Compute the orientation angle of the box
+                angle = self.estimate_box_orientation(cluster_points)
+                
+                # Store box with angle information
+                
+                if angle == 0.0:
+                    self.create_object('box', x, z + 0.08, angle, msg.header.stamp)
+                elif angle == 90.0:
+                    self.create_object('box', x, z + 0.12, angle, msg.header.stamp)
+                else:
+                    self.create_object('box', x, z + 0.08, angle, msg.header.stamp)
+
+            else:
+                if pure_brown:
+                    continue
+                else:
+                    self.get_logger().info(f'Cluster {cluster_label} is NOT a recognized object.')
+
+            # ------------ TIMER FOR EFFICIENCY CHECK (move where desired) ------------
+            end_time = time.time()
+            #self.get_logger().info(f"Processing time: {end_time - start_time:.4f} seconds")
+            # ------------------------------------------------------------------------
+
+    def publish_workspace_perimeter(self):
+        """
+        Publish the workspace perimeter as a LINE_STRIP marker in RViz2.
+        """
+        marker = Marker()
+        marker.header.frame_id = "map"  # Ensure this frame exists in your TF tree
+        marker.header.stamp = self.get_clock().now().to_msg()  # Ensure current timestamp
+        marker.ns = "workspace"
+        marker.id = 0
+        marker.type = Marker.LINE_STRIP
+        marker.action = Marker.ADD
+
+        # Set the scale of the lines (thickness)
+        marker.scale.x = 0.05  # Increased line thickness for better visibility
+
+        # Set the color of the lines (e.g., green)
+        marker.color.r = 0.0
+        marker.color.g = 1.0
+        marker.color.b = 0.0
+        marker.color.a = 1.0  # Fully opaque
+
+        # Add the vertices of the workspace polygon
+        for x, y in self.workspace_vertices:
+            point = Point()
+            point.x = x  # Already in meters
+            point.y = y  # Already in meters
+            point.z = 0.0  # Workspace is on the ground (z = 0)
+            marker.points.append(point)
+
+        # Close the polygon by adding the first vertex again
+        first_point = Point()
+        first_point.x = self.workspace_vertices[0][0]
+        first_point.y = self.workspace_vertices[0][1]
+        first_point.z = 0.0
+        marker.points.append(first_point)
+
+        # Publish the marker
+        self.workspace_publisher.publish(marker)
+
+    def estimate_box_orientation(self, cluster_points):
+        # Find the point with the lowest Z-coordinate
+        lowest_z_point = cluster_points[np.argmin(cluster_points[:, 2])]
+        
+        # Find the point with the highest Z-coordinate
+        highest_z_point = cluster_points[np.argmax(cluster_points[:, 2])]
+        
+        # Calculate the vector between the highest and lowest Z-points
+        box_vector = highest_z_point - lowest_z_point
+        
+        # Normalize the vector
+        box_vector_normalized = box_vector / np.linalg.norm(box_vector)
+        
+        # Fixed x-axis in the reference frame
+        x_axis = np.array([1, 0, 0])
+        
+        # Compute the dot product and magnitude to calculate the angle
+        dot_product = np.dot(x_axis, box_vector_normalized)
+        angle = np.arccos(np.clip(dot_product, -1.0, 1.0))  # Clip to handle floating-point precision
+        
+        # Convert to degrees
+        angle_deg = np.degrees(angle)
+        
+        # Compute the dimensions of the box
+        min_coords = np.min(cluster_points, axis=0)
+        max_coords = np.max(cluster_points, axis=0)
+        dimensions = max_coords - min_coords
+        length, width, height = sorted(dimensions, reverse=True)
+        
+        # Check if the box is aligned with the X-axis
+        if length < 0.17:  # Tolerance for floating-point comparison
+            angle_deg = 90.0  # Rotate by 90 degrees to align with the long edge
+        elif 0.17 < length < 0.25:
+            angle_deg = 0.0
+        
+        self.get_logger().info(f"angle: {angle_deg}")
+
+        return angle_deg
+
+    def is_box(self, cluster_points):
+        # Expected box dimensions (meters)
+        EXPECTED_LENGTH = 0.26
+        EXPECTED_WIDTH = 0.16
+        EXPECTED_HEIGHT = 0.10
+        TOLERANCE = 0.035  # 3cm tolerance
+
+        # 1. Calculate TRUE VERTICAL HEIGHT (Z-axis)
+        z_values = cluster_points[:, 1]
+        height = np.max(z_values) - np.min(z_values)
+        height_ok = abs(height - EXPECTED_HEIGHT) < TOLERANCE
+
+        # 2. Calculate HORIZONTAL DIMENSIONS (X-Y plane)
+        xy_points = cluster_points[:, [0,2]]
+        pca = PCA(n_components=2)
+        pca.fit(xy_points)
+        
+        # Project points onto horizontal principal axes
+        projected = xy_points @ pca.components_.T
+        h_length = np.ptp(projected[:, 0])  # Primary horizontal dimension
+        h_width = np.ptp(projected[:, 1])   # Secondary horizontal dimension
+
+        # 3. Match dimensions to expected length/width
+        dim_match = (
+            (abs(h_length - EXPECTED_LENGTH) < TOLERANCE) or
+            (abs(h_length - EXPECTED_WIDTH) < TOLERANCE) or
+            (abs(h_width - EXPECTED_WIDTH) < TOLERANCE)
+        )
+
+        # 4. Aspect ratio validation
+        expected_aspect_1 = EXPECTED_LENGTH / EXPECTED_HEIGHT 
+        expected_aspect_2 = EXPECTED_WIDTH / EXPECTED_HEIGHT 
+        actual_aspect = h_length / height
+        aspect_ok = abs(actual_aspect - expected_aspect_1) < 0.2 or abs(actual_aspect - expected_aspect_2) < 0.2
+
+        """         # Debug output
+        self.get_logger().info(
+            f"📏 Vertical Height (Z): {height:.3f}m | {'✅' if height_ok else '❌'}\n"
+            f"📐 Horizontal Dimensions: L={h_length:.3f}m, W={h_width:.3f}m\n"
+            f"🎯 Expected: L={EXPECTED_LENGTH}m, W={EXPECTED_WIDTH}m\n"
+            f"🔍 Dim Match: {dim_match} | Aspect Ratio: {actual_aspect:.2f} ({aspect_ok})"
+        )
+         """
+        return height_ok and (dim_match or aspect_ok)
 
 
+    def is_plushie(self, cluster_points):
+
+        # Expected box dimensions (meters)
+        EXPECTED_LENGTH = 0.09
+        EXPECTED_WIDTH = 0.045
+        TOLERANCE = 0.04  # 3cm tolerance
+
+        # 2. Calculate HORIZONTAL DIMENSIONS (X-Y plane)
+        xy_points = cluster_points[:, [0, 1]]  # This extracts x and y coordinates
+        pca = PCA(n_components=2)
+        pca.fit(xy_points)
+        
+        # Project points onto horizontal principal axes
+        projected = xy_points @ pca.components_.T
+        h_length = np.ptp(projected[:, 0])  # Primary horizontal dimension
+        h_width = np.ptp(projected[:, 1])   # Secondary horizontal dimension
+
+        # 3. Match dimensions to expected length/width
+        dim_match = (
+            (abs(h_length - EXPECTED_LENGTH) < TOLERANCE) and
+            (abs(h_width - EXPECTED_WIDTH) < TOLERANCE)
+        )
+
+        # Debug output
+        """         self.get_logger().info(
+            f"📏 Vertical Height (Z): {height:.3f}m | {'✅' if height_ok else '❌'}\n"
+            f"📐 Horizontal Dimensions: L={h_length:.3f}m, W={h_width:.3f}m\n"
+            f"🎯 Expected: L={EXPECTED_LENGTH}m, W={EXPECTED_WIDTH}m\n"
+            f"🔍 Dim Match: {dim_match} | Aspect Ratio: {actual_aspect:.2f} ({aspect_ok})"
+        )
+        """
+        return dim_match
+
+    def classify_based_on_floor_contact(self, cluster_points, middle_layer_range = 0.02,top_layer_range=0.005):
+        cluster_points = np.array(cluster_points)
+
+        # Dynamically calculate the middle layer of the cluster
+        # The middle layer is defined as points within a small range around the median height of the cluster
+        median_height = np.median(cluster_points[:, 1])  # Median height of the cluster
+        middle_layer_points = cluster_points[
+            (cluster_points[:, 1] >= median_height - middle_layer_range) &
+            (cluster_points[:, 1] <= median_height + middle_layer_range)
+        ]
+        num_middle_layer_points = len(middle_layer_points)
+
+        # Dynamically calculate the highest layer of the cluster
+        min_height = np.min(cluster_points[:, 1])  # Maximum height of the cluster
+        highest_layer_points = cluster_points[
+            (cluster_points[:, 1] >= min_height) &
+            (cluster_points[:, 1] <= min_height + top_layer_range) 
+        ]
+        num_highest_layer_points = len(highest_layer_points)
+
+        # Calculate the ratio of middle layer points to highest layer points
+        if num_highest_layer_points == 0:
+            return "unknown"  # Avoid division by zero
+
+        ratio = num_middle_layer_points / num_highest_layer_points
+
+        # Log the results for debugging
+        """         self.get_logger().info(
+            f"Middle Layer: {num_middle_layer_points}, "
+            f"Highest Layer: {num_highest_layer_points}, "
+            f"Ratio: {ratio:.2f}"
+        )
+          """
+        # Classification based on the ratio
+        if 1 < ratio <= 6.5:  # Cube: ratio is approximately 1
+            return "cube"
+        elif 14 > ratio > 6.5:  # Sphere: middle layer has significantly more points
+            return "sphere"
+        else:
+            return "unknown"  # Undefined object
+
+
+    def dbscan(self, points, eps=0.05, min_samples=200):
+        if len(points) == 0:
+            return [], np.array([])
+
+        db = DBSCAN(eps=eps, min_samples=min_samples).fit(points)
+        labels = db.labels_
+        clusters = [points[labels == i] for i in np.unique(labels) if i != -1]
+        return clusters, labels
+
+    def publish_clusters(self, points, labels, original_header):
+        if len(points) == 0:
+            return
+    
+        # Filter out noise points (labels == -1)
+        valid_mask = labels != -1
+        filtered_points = points[valid_mask]
+        filtered_labels = labels[valid_mask]
+    
+        # Return if no valid points
+        if len(filtered_points) == 0:
+            return
+    
+        # Assign a unique color to each cluster
+        unique_colors = [
+            (255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (255, 0, 255),
+            (0, 255, 255), (128, 0, 0), (0, 128, 0), (0, 0, 128)
+        ]
+    
+        # Prepare data for PointCloud2
         cloud_data = []
-        for p in red_points:
+        for i, (x, y, z) in enumerate(filtered_points):
+            cluster_id = filtered_labels[i]
+            color = unique_colors[int(cluster_id) % len(unique_colors)]
+    
+            r, g, b = color
+            rgb = struct.unpack('f', struct.pack('BBBB', b, g, r, 0))[0]  # Pack into float
+    
+            cloud_data.append((x, y, z, rgb))
+    
+        # Define the PointCloud2 message fields
+        fields = [
+            PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
+            PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1),
+            PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1),
+            PointField(name='rgb', offset=12, datatype=PointField.FLOAT32, count=1)
+        ]
+    
+        # Create a new PointCloud2 message with the filtered points and colors
+        cluster_msg = create_cloud(original_header, fields, cloud_data)
+    
+        # Publish the clusters
+        self.cluster_publisher.publish(cluster_msg)
 
-            point_stamped = PointStamped()
-            point_stamped.header.frame_id = 'map'
-            point_stamped.header.stamp = time_stamp
-            point_stamped.point.x = p[0]
-            point_stamped.point.y = p[1]
-            point_stamped.point.z = p[2]
-            transformed_point = do_transform_point(point_stamped,t)
-            r,g,b = 255,0,0
-            rgb = struct.unpack('I',struct.pack('BBBB',int(r),int(g),int(b),0))[0]
-            cloud_data.append(struct.pack('ffff',transformed_point.point.x,transformed_point.point.y,transformed_point.point.z,rgb))
+    def create_object(self, type, x, z, angle, stamp):
+        # Map object type to a label
+        if type == 'cube':
+            L = 1
+        elif type == 'sphere':
+            L = 2
+        elif type == 'plushie':
+            L = 3
+        elif type == 'box':
+            L = 'B'
+        else:
+            L = 'Undefined'
 
-        for p in green_points:
-            point_stamped = PointStamped()
-            point_stamped.header.frame_id = 'map'
-            point_stamped.header.stamp = time_stamp
-            point_stamped.point.x = p[0]
-            point_stamped.point.y = p[1]
-            point_stamped.point.z = p[2]
-            transformed_point = do_transform_point(point_stamped,t)
-            r,g,b = 50,255,150
-            rgb = struct.unpack('I',struct.pack('BBBB',int(r),int(g),int(b),0))[0]
-            cloud_data.append(struct.pack('ffff',transformed_point.point.x,transformed_point.point.y,transformed_point.point.z,rgb))
+        # Create a PointStamped message for the input coordinates
+        point_in = PointStamped()
+        point_in.header.frame_id = 'camera_depth_optical_frame'  # Input frame
+        point_in.header.stamp = stamp  # Timestamp of the original point cloud
+        point_in.point = Point(x=x, y=0.09, z=z)  # Set the point coordinates
 
-        cloud_msg_red.data = b''.join(cloud_data)
+        try:
+            # Lookup the transform from camera_depth_optical_frame to map
+            transform = self.tfBuffer.lookup_transform(
+                'map',  # Target frame
+                point_in.header.frame_id,  # Source frame
+                point_in.header.stamp,  # Time of the transform
+                rclpy.duration.Duration(seconds=1.0)  # Timeout
+            )
 
-        self.pub.publish(cloud_msg_red)
+            # Transform the point to the map frame
+            point_out = do_transform_point(point_in, transform)
 
+            # Extract the transformed coordinates
+            x_transformed = point_out.point.x
+            y_transformed = point_out.point.y
+            z_transformed = point_out.point.z
 
+            # Format the new object entry with transformed coordinates
+            new_entry = f"{L} {x_transformed:.2f} {y_transformed:.2f} {angle:.1f}\n"
 
-        # self.get_logger().info(f"Cloud message")
+            # Check if the new entry is a duplicate based on proximity
+            is_duplicate = False
+            for entry in self.existing_entries:
+                parts = entry.strip().split()
+                if len(parts) < 4:
+                    continue
 
+                # Extract coordinates from the existing entry
+                existing_x = float(parts[1])
+                existing_y = float(parts[2])
 
+                # Calculate Euclidean distance between the new and existing coordinates
+                distance = np.sqrt((x_transformed - existing_x)**2 + (y_transformed - existing_y)**2)
 
+                # If the distance is less than 0.01, consider it a duplicate
+                if distance < 0.01:
+                    is_duplicate = True
+                    break
 
+            # If not a duplicate, append the new entry to the file
+            if not is_duplicate:
+                with open(self.file_path, 'a') as file:
+                    file.write(new_entry)
+                self.existing_entries.append(new_entry)
+                #self.get_logger().info(f"Created object: {L} at position: ({x_transformed:.2f}, {y_transformed:.2f})")
+            #else:
+                #self.get_logger().info(f"Object already exists near position: ({x_transformed:.2f}, {y_transformed:.2f})")
 
+        except TransformException as e:
+            self.get_logger().error(f"Failed to transform coordinates: {e}")     
+
+        return None
+
+    def publish_map_objects(self):
+        marker_array = MarkerArray()
+
+        # Read the Map.txt file
+        if not os.path.exists(self.file_path):
+            return
+
+        with open(self.file_path, 'r') as file:
+            lines = file.readlines()
+
+        # Clear all previous markers
+        clear_marker = Marker()
+        clear_marker.action = Marker.DELETEALL
+        marker_array.markers.append(clear_marker)
+
+        # Process every line in the file
+        for idx, line in enumerate(lines):
+            parts = line.strip().split()
+            if len(parts) < 4:
+                continue
+
+            obj_type = parts[0]
+            x = float(parts[1])
+            y = float(parts[2])
+            angle = float(parts[3])
+
+            marker = Marker()
+            marker.header.frame_id = "map"  # Map frame for 2D visualization
+            marker.header.stamp = self.get_clock().now().to_msg()
+
+            # Unique ID for each marker
+            marker.id = idx  # Use index as unique ID for each line
+
+            # Set a unique namespace to avoid duplication in the same MarkerArray
+            marker.ns = "object_{}".format(idx)
+
+            # Default to CUBE (for 2D square)
+            marker.type = Marker.CUBE
+            marker.action = Marker.ADD
+            marker.pose.position.x = x
+            marker.pose.position.y = y
+            marker.pose.position.z = 0.0  # z is always 0 for 2D
+
+            # Set the orientation based on the angle
+            q = Quaternion()
+            q.z = np.sin(np.radians(angle) / 2.0)
+            q.w = np.cos(np.radians(angle) / 2.0)
+            marker.pose.orientation = q
+
+            if obj_type == '1':  # Cube (using CUBE type with adjusted scale)
+                marker.type = Marker.CUBE
+                marker.scale.x = 0.04  # Width of the square
+                marker.scale.y = 0.04  # Height of the square
+                marker.scale.z = 0.01  # Minimal height (so it looks like a 2D object)
+                marker.color.r = 0.0
+                marker.color.g = 1.0
+                marker.color.b = 0.0
+            elif obj_type == '2':  # Sphere (using SPHERE type, but we keep z = 0)
+                marker.type = Marker.SPHERE
+                marker.scale.x = 0.04  # Diameter of the circle
+                marker.scale.y = 0.04  # Diameter of the circle
+                marker.scale.z = 0.01  # Minimal height (so it looks like a 2D object)
+                marker.color.r = 1.0
+                marker.color.g = 1.0
+                marker.color.b = 0.0
+            elif obj_type == '3':  # Plushie (using CUBE type, but we keep z = 0)
+                marker.type = Marker.CUBE
+                marker.scale.x = 0.06  # Width of the square
+                marker.scale.y = 0.08  # Height of the square
+                marker.scale.z = 0.01  # Minimal height (so it looks like a 2D object)
+                marker.color.r = 0.0
+                marker.color.g = 1.0
+                marker.color.b = 0.0
+            elif obj_type == 'B':  # Box (using CUBE type, just as a 2D object)
+                # Original dimensions of the box
+                original_width = 0.16
+                original_length = 0.24
+
+                # Set the scale of the marker to the original dimensions
+                marker.scale.x = original_width  # Width of the box
+                marker.scale.y = original_length  # Length of the box
+                marker.scale.z = 0.01  # Minimal height (so it looks like a 2D object)
+
+                # Convert the angle from degrees to radians
+                angle_rad = np.radians(angle)
+
+                # Set the orientation based on the angle
+                q = Quaternion()
+                q.z = np.sin(angle_rad / 2.0)  # Rotation around the Z-axis
+                q.w = np.cos(angle_rad / 2.0)  # Quaternion scalar component
+                marker.pose.orientation = q
+
+                # Set the color
+                marker.color.r = 0.0
+                marker.color.g = 1.0
+                marker.color.b = 1.0
+                marker.color.a = 1.0  # Fully opaque
+
+            marker.color.a = 1.0  # Alpha (opacity)
+            marker.lifetime.sec = 2  # Persist for 2 seconds
+
+            marker_array.markers.append(marker)
+
+        # Publish the markers
+        self.marker_publisher.publish(marker_array)
+
+    
 def main(args=None):
     rclpy.init(args=args)
 
