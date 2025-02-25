@@ -5,6 +5,7 @@ import sys
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, HistoryPolicy, ReliabilityPolicy
 
 from tf2_ros import TransformBroadcaster
 from nav_msgs.msg import OccupancyGrid
