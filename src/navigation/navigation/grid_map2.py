@@ -72,10 +72,10 @@ class Map:
 
         object_vertices += np.array([grid_x, grid_y])
 
-        min_x = np.min(vertices[:, 0])
-        max_x = np.max(vertices[:, 0])
-        min_y = np.min(vertices[:, 1])
-        max_y = np.max(vertices[:, 1])
+        min_x = np.min(object_vertices[:, 0])
+        max_x = np.max(object_vertices[:, 0])
+        min_y = np.min(object_vertices[:, 1])
+        max_y = np.max(object_vertices[:, 1])
 
         for j in range(min_y, max_y):
             for i in range(min_x, max_x):
