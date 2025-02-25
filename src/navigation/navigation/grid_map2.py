@@ -51,6 +51,10 @@ class Map:
             self.get_logger().info("Object alreay in map")
             return
 
+        if not (0 <= grid_x < self.grid_width and 0 <= grid_y < self.grid_height):
+            self.get_logger().debug("Grid coordinates out of bounds")
+            return
+
         object_vertices = np.array([
             [grid_half_width, grid_half_height],
             [grid_half_width, -grid_half_height],
@@ -59,8 +63,8 @@ class Map:
         ]);
 
         if angle is not None:
-            angle_cos = np.cos(angle)
-            angle_sin = np.sin(angle)
+            cos_angle = np.cos(angle)
+            sin_angle = np.sin(angle)
 
             rotation_matrix = np.array([[cos_angle, -sin_angle],
                                         [sin_angle,  cos_angle]])
