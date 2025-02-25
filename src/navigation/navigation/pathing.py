@@ -13,64 +13,8 @@ from geometry_msgs.msg import PoseStamped
 
 from example_interfaces.srv import Trigger
 
-from navigation.mapping import Map
-
-class AdaptiveAStar:
-    def __init__(self, grid, adaptive_h=None):
-        self.grid = grid
-        self.rows, self.columns = grid.shape
-        self.adaptive_h = adaptive_h if adaptive_h is not None else {}
-
-    def heuristic(self, node, end_node):
-        if node in self.adaptive_h:
-            return self.adaptive_h[node]
-        # If no adaptive heuristic defaults to manhattan distance
-        return abs(node[0] - end_node[0]) + abs(node[1] - end_node[1])
-
-    def get_neighbours(self, node):
-        (x, y) = node
-        neighbours = []
-        for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
-            next_x, next_y = x + dx, y + dy
-            if 0 <= next_x < self.rows and 0 <= next_y < self.columns:
-                if self.grid[next_x, next_y] == 0:  # Check if free cell
-                    neighbours.append((next_x, next_y))
-        return neighbours
-
-    def plan_path(self, start_node, end_node):
-        open_set = []
-        heapq.heappush(open_set, (self.heuristic(start_node, end_node), 0, start_node))
-        came_from = {}
-        g_score = {start_node: 0}
-        closed_set = set()
-
-        while open_set:
-            f, current_g, current = heapq.heappop(open_set)
-            if current == end_node:
-                # Reconstruct the path
-                path = []
-                while current in came_from:
-                    path.append(current)
-                    current = came_from[current]
-                path.append(start_node)
-                path.reverse()
-
-                # Update adaptive heuristic for all expanded nodes
-                for node in closed_set:
-                    if node in g_score:
-                        self.adaptive_h[node] = g_score[end_node] - g_score[node]
-                return path
-
-            closed_set.add(current)
-            for neighbour in self.get_neighbours(current):
-                tentative_g = g_score[current] + 1  # Uniform cost
-                if neighbour in g_score and tentative_g >= g_score[neighbour]:
-                    continue  # Not a better path
-                came_from[neighbour] = current
-                g_score[neighbour] = tentative_g
-                f_score = tentative_g + self.heuristic(neighbour, end_node)
-                heapq.heappush(open_set, (f_score, tentative_g, neighbour))
-        return None  # No path found
+from navigation.grid_map2 import Map
+from navigation.adaptive_a_star import AdaptiveAStar
 
 class Pathing(Node):
     
@@ -101,6 +45,7 @@ class Pathing(Node):
         origin_x = msg.info.origin.position.x
         origin_y = msg.info.origin.position.y
         self.map = Map(resolution, origin_x, origin_y)
+
         self.map_grid = np.array(msg.data, dtype=np.int8).reshape((height, width))
 
     def publish_astar_path(self):
