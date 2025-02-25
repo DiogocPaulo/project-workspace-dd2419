@@ -40,7 +40,7 @@ class Map:
 
     def add_object(self, x, y, width, height, angle=None):
         if self.grid is None:
-            self.get_logger().debug("Grid not defined")
+            # self.get_logger().debug("Grid not defined")
             return
 
         grid_x, grid_y = self.world_to_grid(x, y)
@@ -48,11 +48,11 @@ class Map:
         grid_half_height = self.distance_to_units(height) / 2
 
         if (self.grid[grid_y, grid_x] == 100):
-            self.get_logger().info("Object alreay in map")
+            # self.get_logger().info("Object alreay in map")
             return
 
         if not (0 <= grid_x < self.grid_width and 0 <= grid_y < self.grid_height):
-            self.get_logger().debug("Grid coordinates out of bounds")
+            # self.get_logger().debug("Grid coordinates out of bounds")
             return
 
         object_vertices = np.array([

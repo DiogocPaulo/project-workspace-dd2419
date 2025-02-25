@@ -39,24 +39,24 @@ class Mapping(Node):
         self.map = Map(self.resolution, self.origin_x, self.origin_y, 20, 20)
 
         # Exploration workspace
-        self.workspace_vertices = [
-            (-2.20, -1.30),
-            (2.20, -1.30),
-            (4.50, 0.66),
-            (7.00, 0.66),
-            (7.00, 2.84),
-            (5.46, 2.84),
-            (5.46, 1.30),
-            (-2.20, 1.30)
-        ]
-
-        # Collection workspace
         # self.workspace_vertices = [
         #     (-2.20, -1.30),
         #     (2.20, -1.30),
-        #     (2.20, 1.30),
-        #     (-2.20, 1.30),
+        #     (4.50, 0.66),
+        #     (7.00, 0.66),
+        #     (7.00, 2.84),
+        #     (5.46, 2.84),
+        #     (5.46, 1.30),
+        #     (-2.20, 1.30)
         # ]
+
+        # Collection workspace
+        self.workspace_vertices = [
+            (-2.20, -1.30),
+            (2.20, -1.30),
+            (2.20, 1.30),
+            (-2.20, 1.30),
+        ]
 
         self.map.initialize_map()
         self.map.set_workspace_vertices(self.workspace_vertices)
