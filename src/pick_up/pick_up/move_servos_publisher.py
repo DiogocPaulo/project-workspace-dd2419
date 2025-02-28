@@ -35,26 +35,25 @@ class MultiServoPublisher(Node):
 
         self.tfBuffer = tf2_ros.Buffer()
         self.listener = tf2_ros.TransformListener(self.tfBuffer,self)
+        self.clock = self.get_clock()
         
         # self.server = ActionServer(self,PickupAction,'PickupCube',self.pickup_callback)
 
         self.position = Point()
-        self.position.x = 0.0
-        self.position.y = 0.15   
-        self.position.z = -0.22  
+        self.position.x = 0.13
+        self.position.y = 0.13   
+        self.position.z = -0.2
         self.desired_grip_angle = math.pi/2
 
         self.publisher_marker = self.create_publisher(Marker, '/visualization_marker', 10)
 
-        self.timer = self.create_timer(0.1, self.publish_object_marker)
+        self.timer = self.create_timer(1.0, self.publish_object_marker)
                 
-
-        self.clock = self.get_clock()
 
         self.publish_pose_sim()
 
     def publish_pose(self): #Test function (not the actual function)
-        self.get_logger().info(f"Lets go!--------------------------------------------------------------------------")
+        self.get_logger().info(f"Applying to the real world")
         msg = Int16MultiArray()
         msg.layout = MultiArrayLayout(dim=[MultiArrayDimension(label="", size=12, stride=12)], data_offset=0)
         move_time = 2000 #arm speed (milliseconds)
@@ -64,6 +63,8 @@ class MultiServoPublisher(Node):
         pose = [3000,12000,12000,12000,12000,12000,move_time,move_time,move_time,move_time,move_time,move_time]
         msg.data = pose
         self.publisher.publish(msg)
+
+
         zero_time = Time()
         zero_time.sec = 0
         zero_time.nanosec = 0
@@ -89,15 +90,15 @@ class MultiServoPublisher(Node):
                 f'Could not transform map to arm_base: {ex}'
             )
 
-        #rclpy.sleep(1.5) #Give arm time to do its thing
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=2)) #Give arm time to do its thing
 
         # TODO: Get position of object in map frame (SOLVED)
 
         
         world_position = Point()
-        world_position.x = 0.1
-        world_position.y = 0.1
-        world_position.z = 0.1
+        world_position.x = 0.13
+        world_position.y = 0.13
+        world_position.z = -0.05
 
 
         self.get_logger().info(f"Received goal: Pickup object at position {world_position} in map frame")
@@ -106,24 +107,25 @@ class MultiServoPublisher(Node):
         position = do_transform_point(world_position,t)
 
         # TODO: Calculate the arm parameters to "hawk" over the object's position
-        # First calculate the base rotation
-        base_rotation_angle = int(math.degrees(math.atan2(position.position.y,position.position.x))*10)
 
-        distance = distance(position.position.x,position.position.y)
+        # perform IK
+        base,v1,v2,v3 = CalcKinematics(position.x,position.y,position.z,math.pi/2)
 
-        alpha,beta = self.CalcKinematics1(distance,position.position.z + 0.2)
-        alpha = int(math.degrees(alpha)*10)
-        beta = int(math.degrees(beta)*10)
+        #Convert angles to robot arm
+        base = 12000 + int(math.degrees(base)*10)
+        v1 = 12000 + int(math.degrees(v1)*10)
+        v2 = 12000 + int(math.degrees(v2)*10)
+        v3 = 12000 + int(math.degrees(v3)*10)
 
+        self.get_logger().info(f"Received parameter: base={base} servo5={v1} servo4={v1}")
 
-        self.get_logger().info(f"Received parameter: base={base_rotation_angle} servo5={alpha} servo4={beta}")
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=10))
+        
+        pose = [3000,12000,12000,12000,12000,base,move_time,move_time,move_time,move_time,move_time,move_time]
+        msg.data = pose
+        self.publisher.publish(msg)
 
-        # TODO: transform angle from radians to arm parameters
-
-        # placeholder
-        # pose = [12000,12000,8000,20000,6700,6000,move_time,move_time,move_time,move_time,move_time,move_time]
-        # msg.data = pose
-        # self.publisher.publish(msg)
+        self.get_logger().info(f"Done")
 
 
 
@@ -141,24 +143,28 @@ class MultiServoPublisher(Node):
         
         self.publish_JointStates(joint_names,[0.0,0.0,0.0,0.0,0.0,0.0])
 
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=1))
 
 
 
         # TODO: Calculate the arm parameters to "hawk" over the object's position
         # First calculate the base rotation
-        base_rotation_angle = (math.atan2(self.position.y,self.position.x)) + (math.pi/2)
 
-        distance = self.distance_calc(0,0,self.position.x,self.position.y)
-        self.get_logger().info(f"Distance: {distance}!")
+        
+        base,v1,v2,v3 = self.CalcKinematics(self.position.x,self.position.y,self.position.z,self.desired_grip_angle)
 
-        alpha,beta,charlie = self.CalcKinematics(distance,self.position.z,self.desired_grip_angle)
+        #Convert angles to robot arm
+        base_arm = 12000 - int(math.degrees(base)*100)
+        v1_arm = 12000 - int(math.degrees(v1)*100)
+        v2_arm = 12000 - int(math.degrees(v2)*100)
+        v3_arm = 12000 - int(math.degrees(v3)*100)
 
-        self.get_logger().info(f"Alpha: {alpha} Beta: {beta}")
+        self.get_logger().info(f"Received parameter: base={base_arm} servo5={v1_arm} servo4={v2_arm} servo3={v3_arm}")
 
-        self.publish_JointStates(joint_names,[base_rotation_angle,(alpha),(beta),charlie,0.0,0.0])
-
+        self.publish_JointStates(joint_names,[base,v1,v2,v3,0.0,0.0])
         self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
+
+
 
         self.publish_JointStates(joint_names,[0,0,0,0.0,0.0,0.0])
 
@@ -248,15 +254,18 @@ class MultiServoPublisher(Node):
     #     # TODO: Done
 
 
-    def CalcKinematics(self,x,y,desired_grip_angle): #Servos 5 & 4
+    def CalcKinematics(self,x,y,z,desired_grip_angle): #Servos 5 & 4
         self.get_logger().info(f'Position: {x},{y}')
         l1 = 0.101
         l2 = 0.095
         l4 = 0.168
 
+        base_rotation_angle = (math.atan2(y,x))
+        d = self.distance_calc(0,0,x,y)
+
         #Calc gripper
-        py = math.sin(desired_grip_angle)*l4 + y
-        px = x - math.cos(desired_grip_angle)*l4
+        py = math.sin(desired_grip_angle)*l4 + z
+        px = d - math.cos(desired_grip_angle)*l4
 
         # Calc joint 1-3
         l3 = math.sqrt(px**2 + py**2)
@@ -271,10 +280,10 @@ class MultiServoPublisher(Node):
 
         v3 = (math.pi/2 - base_angle) + (math.pi - v1 - v2) + (math.pi/2 - desired_grip_angle) - math.pi
 
-        return (math.pi/2) - v1 - base_angle,math.pi - v2, -v3
+        return base_rotation_angle,(math.pi/2) - v1 - base_angle,math.pi - v2, -v3
     
     def publish_JointStates(self, names, states):
-        self.get_logger().info("*** Publishing!***")
+        self.get_logger().info("***Publishing!***")
         msg = JointState()
         msg.header = Header()
         msg.header.stamp = self.get_clock().now().to_msg()
