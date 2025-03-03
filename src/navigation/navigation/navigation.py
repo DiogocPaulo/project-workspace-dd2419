@@ -18,8 +18,8 @@ base = 0.3                  # Wheelbase of the vehicle
 lookahead_gain = 0.1        # Look-ahead distance gain
 lookahead_min = 0.3         # Minimum look-ahead distance
 distance_threshold = 0.2    # Stop distance threshold
-yaw_threshold = 0.2         # Stop yaw threshold
-target_velocity = 0.16      # Robot's target velocity
+yaw_threshold = 0.3         # Stop yaw threshold
+target_velocity = 0.18      # Robot's target velocity
 
 class RobotState:
     """Using odometry message to update the current state of the robot"""
@@ -185,7 +185,6 @@ class Navigation(Node):
         else:
             self.get_logger().info("Trigger service failed")
 
-
     def control_loop(self):
         if not self.target_path.x_points:
             self.get_logger().info("No target path")
@@ -214,16 +213,16 @@ class Navigation(Node):
             left_wheel = left_wheel / max_value
             right_wheel = right_wheel / max_value
 
-        min_value = 0.1
-
-        if left_wheel > 0:
-            left_wheel = max(left_wheel, min_value)
-        else
-            left_wheel = min(left_wheel, -min_value)
-        if right_wheel > 0:
-            right_wheel = max(right_wheel, min_value)
-        else
-            right_wheel = min(right_wheel, -min_value)
+        # min_value = 0.05
+        #
+        # if left_wheel > 0:
+        #     left_wheel = max(left_wheel, min_value)
+        # else:
+        #     left_wheel = min(left_wheel, -min_value)
+        # if right_wheel > 0:
+        #     right_wheel = max(right_wheel, min_value)
+        # else:
+        #     right_wheel = min(right_wheel, -min_value)
 
         dutyCycles = DutyCycles()
         dutyCycles.header.frame_id = "base_link"
