@@ -67,7 +67,7 @@ class TargetPath:
         self.x_points = [pose.pose.position.x for pose in path_msg.poses]
         self.y_points = [pose.pose.position.y for pose in path_msg.poses]
 
-        self.target_yaw = path_msg.poses[-1].orientation.w
+        self.target_yaw = path_msg.poses[-1].pose.orientation.w
         
         self.old_nearest_point_index = None
 
@@ -128,7 +128,7 @@ def pure_pursuit_control(state, target_path):
 
     return omega, alpha, index
 
-def calculate_angular_velocity(state_yaw, target_yaw):
+def calculate_angular_velocity(state, state_yaw, target_yaw):
     state_yaw = (state_yaw + 180) % 360 - 180
     target_yaw = (target_yaw + 180) % 360 - 180
 
@@ -141,7 +141,7 @@ def calculate_angular_velocity(state_yaw, target_yaw):
     alpha = math.atan2(math.sin(error), math.cos(error))
     kappa = 2.0 * math.sin(alpha) / 0.3
     omega = state.velocity * kappa
-
+    return omega
 
 class Navigation(Node):
 
@@ -195,19 +195,17 @@ class Navigation(Node):
             return
 
         omega, alpha, self.previous_index = pure_pursuit_control(self.state, self.target_path)
-        #self.get_logger().info(f"Velocity: {self.state.velocity}, Steering Angle: {omega:.2f}, Target Index: {self.previous_index}")
+        command_velocity = self.state.velocity * np.exp(-2 * np.abs(alpha))
 
         if self.previous_index >= len(self.target_path.x_points) - 1:
             distance = np.hypot(self.state.x - self.target_path.x_points[-1], self.state.y - self.target_path.y_points[-1])
             if distance <= distance_threshold:
-                if self.target_path.compare_to_target_yaw(self.state.yaw)
+                if self.target_path.compare_to_target_yaw(self.state.yaw, 0.09):
                     self.get_logger().info(f"Message - Reached destination")
                     return
                 else:
-                    command_velocity = 0
-                    omega = calculate_angular_velocity(self.state.yaw. self.target_path.target_yaw)
-        else:
-            command_velocity = self.state.velocity * np.exp(-2 * np.abs(alpha))
+                    command_velocity = 0.0
+                    omega = calculate_angular_velocity(self.state, self.state.yaw, self.target_path.target_yaw)
 
         left_wheel = command_velocity - (base/2) * omega
         right_wheel = command_velocity + (base/2) * omega
