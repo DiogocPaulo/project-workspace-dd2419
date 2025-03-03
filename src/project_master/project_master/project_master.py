@@ -12,7 +12,7 @@ class ProjectMaster(Node):
         while not self.point_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().debug("GoToPoint service not yet avaliable, waiting ...")
 
-        self.send_end_point(-1.5, 0.5, 0)
+        self.send_end_point(-1.5, 0.5, 0.0)
 
     def reached_destination_callback(self, request, response):
         self.get_logger().info("Master - Reached destination")

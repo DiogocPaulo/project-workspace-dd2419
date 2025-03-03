@@ -18,7 +18,7 @@ base = 0.3                  # Wheelbase of the vehicle
 lookahead_gain = 0.1        # Look-ahead distance gain
 lookahead_min = 0.3         # Minimum look-ahead distance
 distance_threshold = 0.2    # Stop distance threshold
-yaw_threshold = 0.3         # Stop yaw threshold
+yaw_threshold = 0.2         # Stop yaw threshold
 target_velocity = 0.18      # Robot's target velocity
 
 class RobotState:
@@ -195,12 +195,15 @@ class Navigation(Node):
         if self.previous_index >= len(self.target_path.x_points) - 1:
             distance = np.hypot(self.state.x - self.target_path.x_points[-1], self.state.y - self.target_path.y_points[-1])
             if distance <= distance_threshold:
-                if self.target_path.compare_to_target_yaw(self.state.yaw, yaw_threshold):
-                    self.get_logger().info(f"Reached destination")
-                    self.send_reached_destination()
-                    return
-                else:
-                    omega, alpha = calculate_angular_velocity(self.state, self.state.yaw, self.target_path.target_yaw)
+                self.get_logger().info(f"Reached destination")
+                self.send_reached_destination()
+                return
+                # if self.target_path.compare_to_target_yaw(self.state.yaw, yaw_threshold):
+                #     self.get_logger().info(f"Reached destination")
+                #     self.send_reached_destination()
+                #     return
+                # else:
+                #     omega, alpha = calculate_angular_velocity(self.state, self.state.yaw, self.target_path.target_yaw)
 
         command_velocity = self.state.velocity * np.exp(-2 * np.abs(alpha))
         left_wheel = command_velocity - (base/2) * omega
@@ -213,8 +216,8 @@ class Navigation(Node):
             left_wheel = left_wheel / max_value
             right_wheel = right_wheel / max_value
 
-        # min_value = 0.05
-        #
+        min_value = 0.08
+
         # if left_wheel > 0:
         #     left_wheel = max(left_wheel, min_value)
         # else:
