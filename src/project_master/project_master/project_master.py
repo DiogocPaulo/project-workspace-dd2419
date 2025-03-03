@@ -21,7 +21,6 @@ class ProjectMaster(Node):
         response.message = "Received reached destination trigger"
         return response
 
-
     def send_end_point(self, x, y, yaw):
         request = GoToPoint.Request()
         request.x = x
@@ -32,12 +31,9 @@ class ProjectMaster(Node):
         rclpy.spin_until_future_complete(self, self.point_future)
         if self.point_future.result() is not None:
             response = self.point_future.result()
-            self.get_logger().debug(f"GoToPoint Response: {response.message}")
+            self.get_logger().info(f"GoToPoint Response: {response.message}")
         else:
-            self.get_logger().warn("GoToPoint service failed")
-
-        
-
+            self.get_logger().info("GoToPoint service failed")
 
 def main():
     rclpy.init()
