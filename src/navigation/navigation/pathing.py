@@ -29,6 +29,7 @@ class Pathing(Node):
         # Parameters
         self.start_point = (0, 0)
         self.end_point = (-1, -1)
+        self.target_yaw = 0
         self.amplitude = 0.5
         self.cycles = 1.0
         self.grid = None
@@ -52,6 +53,7 @@ class Pathing(Node):
 
     def set_end_point(self, request, response):
         self.end_point = (request.x, request.y)
+        self.target_yaw = request.yaw
 
         response.success = True
         response.message = "End point set"
@@ -88,7 +90,7 @@ class Pathing(Node):
             pose.pose.position.x = x
             pose.pose.position.y = y
             pose.pose.position.z = 0.0
-            pose.pose.orientation.w = 1.0
+            pose.pose.orientation.w = self.target_yaw
             path_msg.poses.append(pose)
 
         self.path_publisher.publish(path_msg)

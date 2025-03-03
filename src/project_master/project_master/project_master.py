@@ -12,9 +12,10 @@ class ProjectMaster(Node):
             self.get_logger().info("GoToPoint service not yet avaliable, waiting ...")
         self.point_request = GoToPoint.Request()
 
-    def send_end_point(self, x, y):
+    def send_end_point(self, x, y, yaw):
         self.point_request.x = x
         self.point_request.y = y
+        self.point_request.yaw = yaw
 
         self.point_future = self.point_client.call_async(self.point_request)
         rclpy.spin_until_future_complete(self, self.point_future)
@@ -31,7 +32,7 @@ def main():
     rclpy.init()
     node = ProjectMaster()
 
-    node.send_end_point(-1.5, 0.5)
+    node.send_end_point(-1.5, 0.5, 1.5)
 
     try:
         rclpy.spin(node)
