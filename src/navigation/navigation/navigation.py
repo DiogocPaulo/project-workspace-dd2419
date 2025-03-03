@@ -213,6 +213,17 @@ class Navigation(Node):
             left_wheel = left_wheel / max_value
             right_wheel = right_wheel / max_value
 
+        min_value = 0.1
+
+        if left_wheel > 0:
+            left_wheel = max(left_wheel, min_value)
+        else
+            left_wheel = min(left_wheel, -min_value)
+        if right_wheel > 0:
+            right_wheel = max(right_wheel, min_value)
+        else
+            right_wheel = min(right_wheel, -min_value)
+
         dutyCycles = DutyCycles()
         dutyCycles.header.frame_id = "base_link"
         dutyCycles.header.stamp = self.get_clock().now().to_msg()
