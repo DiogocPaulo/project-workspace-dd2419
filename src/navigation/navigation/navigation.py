@@ -124,12 +124,12 @@ class Navigation(Node):
 
         self.create_subscription(
                 Odometry,
-                "odom",
+                "/odom",
                 self.odom_callback,
                 10)
         self.create_subscription(
                 Path,
-                "custom_path",
+                "/custom_path",
                 self.path_callback,
                 10)
         self.motor_publisher = self.create_publisher(DutyCycles, "/motor/duty_cycles", 10)

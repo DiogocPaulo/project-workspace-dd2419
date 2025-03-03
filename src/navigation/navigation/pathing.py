@@ -8,10 +8,10 @@ import heapq
 import rclpy
 from rclpy.node import Node
 
-from nav_msgs.msg import Path, OccupancyGrid
+from nav_msgs.msg import Path, OccupancyGrid, Odometry
 from geometry_msgs.msg import PoseStamped
 
-from example_interfaces.srv import Trigger
+from project_interfaces.srv import GoToPoint
 
 from navigation.grid_map2 import Map
 from navigation.adaptive_a_star import AdaptiveAStar
@@ -21,22 +21,26 @@ class Pathing(Node):
     def __init__(self):
         super().__init__("pathing")
 
+        self.create_subscription(Odometry, "/odom", self.odom_callback, 10)
         self.create_subscription(OccupancyGrid, "/inflated_map", self.map_callback, 10)
         self.path_publisher = self.create_publisher(Path, "/custom_path", 10)
+        self.point_service = self.create_service(GoToPoint, "/navigation_point", self.set_end_point)
 
         # Parameters
         self.start_point = (0, 0)
-        self.end_point = (6.5, 2.5)
+        self.end_point = (-1, -1)
         self.amplitude = 0.5
         self.cycles = 1.0
-        self.map_grid = None
+        self.grid = None
         self.adaptive_h = {}
         self.map = None
-
+        self.path_planner = AdaptiveAStar(self.grid, self.adaptive_h)
+        
         self.timer = self.create_timer(0.05, self.publish_astar_path)
-        # self.timer = self.create_timer(2.0, self.publish_straight_path)
-        # self.timer = self.create_timer(2.0, self.publish_curved_path)
 
+    def odom_callback(self, msg: Odometry):
+        self.start_point[0] = odom_msg.pose.pose.position.x
+        self.start_point[1] = odom_msg.pose.pose.position.y
 
     def map_callback(self, msg):
         width = msg.info.width
@@ -46,17 +50,30 @@ class Pathing(Node):
         origin_y = msg.info.origin.position.y
         self.map = Map(resolution, origin_x, origin_y)
 
-        self.map_grid = np.array(msg.data, dtype=np.int8).reshape((height, width))
+        self.grid = np.array(msg.data, dtype=np.int8).reshape((height, width))
+        self.path_planner.update_grid(self.grid)
+
+    def set_end_point(self, request, response):
+        self.end_point[0] = request.x
+        self.end_point[1] = request.y
+
+        response.success = True
+        response.message = "End point set"
+        return response
+
 
     def publish_astar_path(self):
-        if self.map_grid is None or self.map is None:
+        if self.end_point[0] == -1 or self.end_point[1] == -1:
+            self.get_logger().info("No end point received")
+            return
+
+        if self.grid is None or self.map is None:
             self.get_logger().info("Occupancy map grid not received")
             return
 
         start_x, start_y = self.map.world_to_grid(self.start_point[0], self.start_point[1])
         end_x, end_y = self.map.world_to_grid(self.end_point[0], self.end_point[1])
 
-        path_planner = AdaptiveAStar(self.map_grid, self.adaptive_h)
         path = path_planner.plan_path((start_y, start_x), (end_y, end_x))
 
         if path is None:

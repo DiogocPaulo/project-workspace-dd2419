@@ -7,6 +7,9 @@ class AdaptiveAStar:
         self.rows, self.columns = grid.shape  # (height, width)
         self.adaptive_h = adaptive_h if adaptive_h is not None else {}
 
+    def update_grid(self, grid):
+        self.grid = grid
+
     def heuristic(self, node, end_node):
         if node in self.adaptive_h:
             return self.adaptive_h[node]
