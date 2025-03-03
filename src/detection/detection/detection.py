@@ -54,7 +54,9 @@ class ExamineImage(Node):
             qos_profile
         )
 
-        self.pub = self.create_publisher(PointCloud2, '/depth_points_filtered', 100)
+        folder_path = '/home/sneezy/Repos/project-workspace-dd2419/Maps'
+        file_name = 'Map.txt'
+        self.file_path = os.path.join(folder_path, file_name)
 
         # Create the 'maps' folder if it doesn't exist
         folder_path = os.path.join(os.getcwd(), 'maps')
@@ -108,8 +110,13 @@ class ExamineImage(Node):
         # - Points above the floor (y < 0.09) (y-axis points downwards)
         mask = (distances < max_dist) & (points[:, 1] < 0.085) & (0.01 < points[:, 1])
 
-        # Apply the mask to filter points before processing colors
-        points = points[mask]
+        colors = colors.astype(np.float32) / 255
+        
+        max_dist = 0.9
+        distance = np.linalg.norm(transformed_points, axis=1)
+        mask = (distance < max_dist) & (transformed_points[:,2] >= 0.015) & (transformed_points[:,2] <= 0.1)
+        points = transformed_points[mask] 
+        colors = colors[mask]
 
         # The color is stored as a floating-point number in the 4th column
         color_floats = points_data[mask, 3].view(np.uint32)  # Convert float to uint32 directly
@@ -592,5 +599,5 @@ def main(args=None):
     rclpy.shutdown()
 
 
-if __name__ == '__main__':
+if __name__ == '_main_':
     main()
