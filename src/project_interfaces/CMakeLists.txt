@@ -16,6 +16,7 @@ find_package(geometry_msgs REQUIRED)
 
 set(srv_files
 	"srv/GoToPoint.srv"
+	"srv/Trigger.srv"
 	)
 
 rosidl_generate_interfaces(${PROJECT_NAME}

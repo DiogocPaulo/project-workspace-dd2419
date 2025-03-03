@@ -163,7 +163,7 @@ class Navigation(Node):
                 10)
         self.motor_publisher = self.create_publisher(DutyCycles, "/motor/duty_cycles", 10)
         self.reached_destination_client = self.create_client(Trigger, "/reached_destination")
-        while not self.point_client.wait_for_service(timeout_sec=1.0):
+        while not self.reached_destination_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info("Reached destination service not yet avaliable, waiting ...")
 
         self.create_timer(0.05, self.control_loop)
@@ -176,7 +176,7 @@ class Navigation(Node):
 
     def send_reached_destination(self):
         request = Trigger.Request()
-        future = self.reached_destination_client(request)
+        future = self.reached_destination_client.call_async(request)
         rclpy.spin_until_future_complete(self, future)
         if self.future.result() is not None:
             response = self.point_future.result()
@@ -197,7 +197,7 @@ class Navigation(Node):
             if distance <= distance_threshold:
                 if self.target_path.compare_to_target_yaw(self.state.yaw, 0.09):
                     self.get_logger().debug(f"Reached destination")
-                    send_reached_destination()
+                    self.send_reached_destination()
                     return
                 else:
                     omega, alpha = calculate_angular_velocity(self.state, self.state.yaw, self.target_path.target_yaw)

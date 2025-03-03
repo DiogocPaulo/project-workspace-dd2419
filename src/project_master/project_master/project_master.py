@@ -12,10 +12,15 @@ class ProjectMaster(Node):
         while not self.point_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().debug("GoToPoint service not yet avaliable, waiting ...")
 
-        send_end_point(-1.5, 0.5, 1.5)
+        self.send_end_point(-1.5, 0.5, 1.5)
 
-    def reached_destination(self):
-        send_end_point(1.5, 0.5, 1.5)
+    def reached_destination(self, request, response):
+        self.send_end_point(1.5, 0.5, 1.5)
+
+        response.success = True
+        response.message = "Received reached destination trigger"
+        return response
+
 
     def send_end_point(self, x, y, yaw):
         request = GoToPoint.Request()
