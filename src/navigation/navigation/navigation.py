@@ -18,7 +18,8 @@ base = 0.3                  # Wheelbase of the vehicle
 lookahead_gain = 0.1        # Look-ahead distance gain
 lookahead_min = 0.3         # Minimum look-ahead distance
 distance_threshold = 0.2    # Stop distance threshold
-target_velocity = 0.16       # Robot's target velocity
+yaw_threshold = 0.2         # Stop yaw threshold
+target_velocity = 0.16      # Robot's target velocity
 
 class RobotState:
     """Using odometry message to update the current state of the robot"""
@@ -178,16 +179,16 @@ class Navigation(Node):
         request = Trigger.Request()
         future = self.reached_destination_client.call_async(request)
         rclpy.spin_until_future_complete(self, future)
-        if self.future.result() is not None:
-            response = self.point_future.result()
-            self.get_logger().debug(f"Trigger Response: {response.message}")
+        if future.result() is not None:
+            response = future.result()
+            self.get_logger().info(f"Trigger Response: {response.message}")
         else:
-            self.get_logger().warn("Trigger service failed")
+            self.get_logger().info("Trigger service failed")
 
 
     def control_loop(self):
         if not self.target_path.x_points:
-            self.get_logger().warn("No target path")
+            self.get_logger().info("No target path")
             return
 
         omega, alpha, self.previous_index = pure_pursuit_control(self.state, self.target_path)
@@ -195,8 +196,8 @@ class Navigation(Node):
         if self.previous_index >= len(self.target_path.x_points) - 1:
             distance = np.hypot(self.state.x - self.target_path.x_points[-1], self.state.y - self.target_path.y_points[-1])
             if distance <= distance_threshold:
-                if self.target_path.compare_to_target_yaw(self.state.yaw, 0.09):
-                    self.get_logger().debug(f"Reached destination")
+                if self.target_path.compare_to_target_yaw(self.state.yaw, yaw_threshold):
+                    self.get_logger().info(f"Reached destination")
                     self.send_reached_destination()
                     return
                 else:
