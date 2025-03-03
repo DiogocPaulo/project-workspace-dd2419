@@ -12,7 +12,7 @@ def ProjectMaster(Node):
             self.get_logger().info("GoToPoint service not yet avaliable, waiting ...")
         self.point_request = GoToPoint.Request()
 
-    def send_end_point(self, x, y)
+    def send_end_point(self, x, y):
         self.point_request.x = x
         self.point_request.y = y
 
@@ -21,7 +21,7 @@ def ProjectMaster(Node):
         if self.point_future.result() is not None:
             response = self.point_future.result()
             self.get_logger().info(f"GoToPoint Response: {response.message}")
-        else
+        else:
             self.get_logger().info("GoToPoint service failed")
 
         
