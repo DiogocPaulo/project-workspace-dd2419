@@ -1,8 +1,5 @@
-# GoToPoint Service
-# Request
-int x
-int y
+int32 x
+int32 y
 ---
-# Response
 bool success
 string message
