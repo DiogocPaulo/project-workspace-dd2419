@@ -34,7 +34,6 @@ class Pathing(Node):
         self.grid = None
         self.adaptive_h = {}
         self.map = None
-        self.path_planner = AdaptiveAStar(self.grid, self.adaptive_h)
         
         self.timer = self.create_timer(0.05, self.publish_astar_path)
 
@@ -51,7 +50,6 @@ class Pathing(Node):
         self.map = Map(resolution, origin_x, origin_y)
 
         self.grid = np.array(msg.data, dtype=np.int8).reshape((height, width))
-        self.path_planner.update_grid(self.grid)
 
     def set_end_point(self, request, response):
         self.end_point[0] = request.x
@@ -74,6 +72,7 @@ class Pathing(Node):
         start_x, start_y = self.map.world_to_grid(self.start_point[0], self.start_point[1])
         end_x, end_y = self.map.world_to_grid(self.end_point[0], self.end_point[1])
 
+        path_planner = AdaptiveAStar(self.grid, self.adaptive_h)
         path = path_planner.plan_path((start_y, start_x), (end_y, end_x))
 
         if path is None:
