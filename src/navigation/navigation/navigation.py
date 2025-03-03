@@ -11,8 +11,7 @@ from nav_msgs.msg import Path
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PoseStamped
 from robp_interfaces.msg import DutyCycles
-
-from example_interfaces.srv import Trigger
+from project_interfaces.srv import Trigger
 
 # Robot parameters
 base = 0.3                  # Wheelbase of the vehicle
@@ -141,7 +140,7 @@ def calculate_angular_velocity(state, state_yaw, target_yaw):
     alpha = math.atan2(math.sin(error), math.cos(error))
     kappa = 2.0 * math.sin(alpha) / 0.3
     omega = state.velocity * kappa
-    return omega
+    return omega, alpha
 
 class Navigation(Node):
 
@@ -163,13 +162,11 @@ class Navigation(Node):
                 self.path_callback,
                 10)
         self.motor_publisher = self.create_publisher(DutyCycles, "/motor/duty_cycles", 10)
-        #self.new_path_client = self.create_client(Trigger, "new_path")
-        # while not self.new_path_client.wait_for_service(timeout_sec=2.0):
-        #     self.get_logger().info('Waiting for service...')
-        #self.new_path_request()
+        self.reached_destination_client = self.create_client(Trigger, "/reached_destination")
+        while not self.point_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info("Reached destination service not yet avaliable, waiting ...")
 
         self.create_timer(0.05, self.control_loop)
-
 
     def odom_callback(self, msg: Odometry):
         self.state.update_state(msg)
@@ -177,36 +174,35 @@ class Navigation(Node):
     def path_callback(self, msg: Path):
         self.target_path.update_path(msg)
 
-    # def new_path_request(self):
-    #     request = Trigger.Request()
-    #     future = self.new_path_client.call_async(request)
-    #     future.add_done_callback(self.new_path_callback)
+    def send_reached_destination(self):
+        request = Trigger.Request()
+        future = self.reached_destination_client(request)
+        rclpy.spin_until_future_complete(self, future)
+        if self.future.result() is not None:
+            response = self.point_future.result()
+            self.get_logger().debug(f"Trigger Response: {response.message}")
+        else:
+            self.get_logger().warn("Trigger service failed")
 
-    # def new_path_callback(self, future):
-    #     response = future.result()
-    #     if response:
-    #         self.get_logger().info(f"Response: {response.message}")
-    #     else:
-    #         self.get_logger().error("Error - Failed to receive response.")
 
     def control_loop(self):
         if not self.target_path.x_points:
-            self.get_logger().info(f"Error - No target path")
+            self.get_logger().warn("No target path")
             return
 
         omega, alpha, self.previous_index = pure_pursuit_control(self.state, self.target_path)
-        command_velocity = self.state.velocity * np.exp(-2 * np.abs(alpha))
 
         if self.previous_index >= len(self.target_path.x_points) - 1:
             distance = np.hypot(self.state.x - self.target_path.x_points[-1], self.state.y - self.target_path.y_points[-1])
             if distance <= distance_threshold:
                 if self.target_path.compare_to_target_yaw(self.state.yaw, 0.09):
-                    self.get_logger().info(f"Message - Reached destination")
+                    self.get_logger().debug(f"Reached destination")
+                    send_reached_destination()
                     return
                 else:
-                    command_velocity = 0.0
-                    omega = calculate_angular_velocity(self.state, self.state.yaw, self.target_path.target_yaw)
+                    omega, alpha = calculate_angular_velocity(self.state, self.state.yaw, self.target_path.target_yaw)
 
+        command_velocity = self.state.velocity * np.exp(-2 * np.abs(alpha))
         left_wheel = command_velocity - (base/2) * omega
         right_wheel = command_velocity + (base/2) * omega
         self.get_logger().info(f"Velocity: {command_velocity}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
