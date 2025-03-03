@@ -138,7 +138,7 @@ def calculate_angular_velocity(state, state_yaw, target_yaw):
         error += 360
 
     alpha = math.atan2(math.sin(error), math.cos(error))
-    kappa = 2.0 * math.sin(alpha) / 0.3
+    kappa = 2.0 * math.sin(alpha)
     omega = state.velocity * kappa
     return omega, alpha
 
