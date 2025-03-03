@@ -1,0 +1,8 @@
+# GoToPoint Service
+# Request
+int x
+int y
+---
+# Response
+bool success
+string message
