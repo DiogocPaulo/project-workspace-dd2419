@@ -38,8 +38,7 @@ class Pathing(Node):
         self.timer = self.create_timer(0.05, self.publish_astar_path)
 
     def odom_callback(self, msg: Odometry):
-        self.start_point[0] = odom_msg.pose.pose.position.x
-        self.start_point[1] = odom_msg.pose.pose.position.y
+        self.start_point = (msg.pose.pose.position.x, msg.pose.pose.position.y)
 
     def map_callback(self, msg):
         width = msg.info.width
@@ -52,8 +51,7 @@ class Pathing(Node):
         self.grid = np.array(msg.data, dtype=np.int8).reshape((height, width))
 
     def set_end_point(self, request, response):
-        self.end_point[0] = request.x
-        self.end_point[1] = request.y
+        self.end_point = (request.x, request.y)
 
         response.success = True
         response.message = "End point set"
