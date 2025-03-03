@@ -155,7 +155,7 @@ class GridMap:
         plt.grid(True)
         plt.show()
 
-if __name__ is "__main__":
+if __name__ == "__main__":
     # Example usage
     grid_map = GridMap(10, 5)
     grid_map.batch_update([(3, 2), (6, 4)])
