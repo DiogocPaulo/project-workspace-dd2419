@@ -25,6 +25,11 @@ from tf2_ros import TransformBroadcaster
 from visualization_msgs.msg import Marker
 from visualization_msgs.msg import MarkerArray
 
+from project_interfaces.srv import PickObject
+from project_interfaces.action import PickUpObject
+
+from rclpy.action import ActionClient
+
 class MultiServoPublisher(Node):
     def __init__(self):
         super().__init__("multi_servo_publisher")
@@ -33,105 +38,106 @@ class MultiServoPublisher(Node):
         self.publisher_sim = self.create_publisher(JointState, '/joint_states', 10)
         self.i = 0
 
+        self.task_subscription = self.create_subscription(
+            Point,           # Message type
+            '/Arm_Pickup',        # Topic name
+            self.pickup_callback_sim,  # Callback function
+            10                # Queue size
+        )
+        self.task_subscription
+
+        self.task_publisher = self.create_publisher(Point, "/Arm_Pickup", 10)
+
         self.tfBuffer = tf2_ros.Buffer()
         self.listener = tf2_ros.TransformListener(self.tfBuffer,self)
         self.clock = self.get_clock()
         
-        # self.server = ActionServer(self,PickupAction,'PickupCube',self.pickup_callback)
+        # self.service = self.create_service(PickObject, 'PickObject', self.pickup_callback_sim)
+        # self.client = self.create_client(PickObject, 'PickObject')
+
+
+        # self._action_server = ActionServer(
+        #     self,
+        #     PickUpObject,
+        #     'PickUpObject',
+        #     self.pickup_callback_sim
+        # )
+        # self._action_client = ActionClient(self, PickUpObject, 'PickUpObject')
 
         self.position = Point()
-        self.position.x = 0.15
-        self.position.y = 0.15
-        self.position.z = -0.16
-        self.desired_grip_angle = math.pi/3
+        self.position.x = 0.2
+        self.position.y = 0.2
+        self.position.z = 0.0
 
-        self.publisher_marker = self.create_publisher(Marker, '/visualization_marker', 10)
+        # self.publisher_marker = self.create_publisher(Marker, '/visualization_marker', 10)
 
-        self.timer = self.create_timer(1.0, self.publish_object_marker)
-                
+        # self.timer = self.create_timer(1.0, self.publish_object_marker)
 
-        self.publish_pose_sim()
+        # request = PickObject.Request()
+        # request.target_position = self.position
+        # future = self.client.call_async(request)
+        # self.get_logger().info(f"RESPONSE: {future}")
 
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
+        # goal_msg = PickUpObject.Goal()
+        # goal_msg.target_position = self.position
+        # self._action_client.send_goal_async(goal_msg, feedback_callback=self.feedback_callback).add_done_callback(self.result_callback)
+
+        self.task_publisher.publish(self.position)
+
+        
 
 
-        self.publish_pose()
 
-    def publish_pose(self): #Test function (not the actual function)
-        self.get_logger().info(f"Applying to the real world")
+    def pickup_callback(self, request, response):
+        self.get_logger().info(f'Received pickup request at {request.target_position}')
         msg = Int16MultiArray()
         msg.layout = MultiArrayLayout(dim=[MultiArrayDimension(label="", size=12, stride=12)], data_offset=0)
         move_time = 2000 #arm speed (milliseconds)
-
-        # pose publish
-        # If not already in the base pose, go to it:
-        pose = [3000,12000,12000,12000,12000,12000,move_time,move_time,move_time,move_time,move_time,move_time]
-        msg.data = pose
-        self.publisher.publish(msg)
-
 
         zero_time = Time()
         zero_time.sec = 0
         zero_time.nanosec = 0
 
+        pose = [3000,12000,12000,12000,12000,12000,move_time,move_time,move_time,move_time,move_time,move_time]
+        msg.data = pose
+        self.publisher.publish(msg)
 
-        # TODO: Get transform between arm base and map (SOLVED)
-        # tf_future = self.tfBuffer.wait_for_transform_async(
-        #     target_frame = 'arm_base',
-        #     source_frame = 'map',
-        #     time = zero_time # Get latest transform instead of timestamped, since we want to pickup when the robot is standing still
-        # )
+        # Transform ---------------------------------------
+        tf_future = self.tfBuffer.wait_for_transform_async(
+            target_frame = 'arm_base',
+            source_frame = 'map',
+            time = zero_time # Get latest transform instead of timestamped, since we want to pickup when the robot is standing still
+        )
 
-        # rclpy.spin_until_future_complete(self,tf_future, timeout_sec=1)
+        rclpy.spin_until_future_complete(self,tf_future, timeout_sec=1)
 
-        # try:
-        #     t = self.tfBuffer.lookup_transform(
-        #         'arm_base',
-        #         'map',
-        #         zero_time
-        # )
-        # except TransformException as ex:
-        #     self.get_logger().info(
-        #         f'Could not transform map to arm_base: {ex}'
-        #     )
+        try:
+            t = self.tfBuffer.lookup_transform(
+                'arm_base',
+                'map',
+                zero_time
+        )
+        except TransformException as ex:
+            self.get_logger().info(
+                f'Could not transform map to arm_base: {ex}'
+            )
+        # Transform ---------------------------------------
 
         self.clock.sleep_for(rclpy.duration.Duration(seconds=2)) #Give arm time to do its thing
-
-        # TODO: Get position of object in map frame (SOLVED)
-
-        
-        world_position = Point()
-        world_position.x = 0.2
-        world_position.y = 0.2
-        world_position.z = 0
+        position = do_transform_point(request.target_position,t)
+        base_arm,v1_arm,v2_arm,v3_arm = self.FindKinematics(position.x,position.y,position.z)
 
 
-        self.get_logger().info(f"Received goal: Pickup object at position {world_position} in map frame")
-
-        # TODO: Transform the object into the arm base frame (SOLVED)
-        # position = do_transform_point(world_position,t)
-        position = world_position
+        if base_arm == -1:
+            self.get_logger().info(f'COULD NOT FIND KINEMATIC SOLUTION FOR POSITION: {request.target_position}')
+            response.result = 1
 
 
-        # TODO: Calculate the arm parameters to "hawk" over the object's position
 
-        # perform IK
-        base_arm,v1_arm,v2_arm,v3_arm = self.FindKinematics(self.position.x,self.position.y,self.position.z)
+        self.get_logger().info(f"APPLYING SERVO ANGLES: BASE={base_arm} SERVO5={v1_arm} SERVO4={v2_arm} SERVO3={v3_arm}")
+        self.get_logger().info(f"PICKUP INITIATED")
 
-        # #Convert angles to robot arm
-        # base_arm = 12000 - int(math.degrees(base)*100)
-        # v1_arm = 12000 - int(math.degrees(v1)*100)
-        # v2_arm = 12000 + int(math.degrees(v2)*100)
-        # v3_arm = 12000 - int(math.degrees(v3)*100)
-
-        # if(base_arm < 0 or base_arm > 24000): return
-        # if(v1_arm < 6000 or v1_arm > 18000): return
-        # if(v2_arm < 3000 or v2_arm > 21000): return
-        # if(v3_arm < 3000 or v3_arm > 21000): return
-
-        self.get_logger().info(f"Received parameter: base={base_arm} servo5={v1_arm} servo4={v2_arm} servo3={v3_arm}")
-
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=1))
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
         
         pose = [3000,12000,v3_arm,v2_arm,v1_arm,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
         msg.data = pose
@@ -143,145 +149,71 @@ class MultiServoPublisher(Node):
         msg.data = pose
         self.publisher.publish(msg)
 
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
 
         pose = [12000,12000,12000,12000,12000,12000,move_time,move_time,move_time,move_time,move_time,move_time]
         msg.data = pose
         self.publisher.publish(msg)
 
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
+        self.get_logger().info(f"PICKUP COMPLETE")
 
-        pose = [3000,12000,12000,12000,12000,12000,move_time,move_time,move_time,move_time,move_time,move_time]
-        msg.data = pose
-        self.publisher.publish(msg)
-
-        self.get_logger().info(f"Done")
+        response.result = 0
 
 
 
-
-    def publish_pose_sim(self): #Test function (not the actual function)
-        self.get_logger().info(f"Simulating!")
-
+    def pickup_callback_sim(self, msg):
+        self.get_logger().info(f'Received pickup request at {msg}')
+        position = msg
         
         joint_names = ['joint1', 'joint2', 'joint3', 'joint4', 'joint5','r_joint']
 
-        move_time = 2000 #arm speed (milliseconds)
 
-        # pose publish
-        # If not already in the base pose, go to it:
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=2)) #Give arm time to do its thing
+        base_arm,v1_arm,v2_arm,v3_arm = self.FindKinematics2(position.x,position.y,position.z)
+
+
+        if base_arm == -1:
+            self.get_logger().info(f'COULD NOT FIND KINEMATIC SOLUTION FOR POSITION: {position}')
+            result.status = 'IK failure'
+            return result 
+
+
+
+        self.get_logger().info(f"APPLYING SERVO ANGLES: BASE={base_arm} SERVO5={v1_arm} SERVO4={v2_arm} SERVO3={v3_arm}")
+        self.get_logger().info(f"PICKUP INITIATED")
+
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
         
-        self.publish_JointStates(joint_names,[0.0,0.0,0.0,0.0,0.0,0.0])
+        self.publish_JointStates(joint_names,[base_arm,v1_arm,v2_arm,v3_arm,0.0,1.0])
 
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=1))
-
-
-
-        # TODO: Calculate the arm parameters to "hawk" over the object's position
-        # First calculate the base rotation
-
-        
-        base,v1,v2,v3 = self.CalcKinematics(self.position.x,self.position.y,self.position.z,self.desired_grip_angle)
-
-        base_arm,v1_arm,v2_arm,v3_arm = self.FindKinematics2(self.position.x,self.position.y,self.position.z)
-
-
-
-        self.get_logger().info(f"Received parameter: base={base_arm} servo5={v1_arm} servo4={v2_arm} servo3={v3_arm}")
-
-        
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
         
         self.publish_JointStates(joint_names,[base_arm,v1_arm,v2_arm,v3_arm,0.0,0.0])
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
+
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
+
+        self.publish_JointStates(joint_names,[0.0,0.0,0.0,0.0,0.0,0.0])
+
+        self.get_logger().info(f"PICKUP COMPLETE")
+        return result
+
+    def feedback_callback(self, feedback):
+        self.get_logger().info(f'Feedback: {feedback.message}')
+
+    def result_callback(self, future):
+        # This is called once the result of the action is available
+        result = future.result()
+        
+        # Check the result's status and print it
+        if result:
+            self.get_logger().info(f'Result received: Status = {result.status}')
+        else:
+            self.get_logger().error('Action failed!')
 
 
 
-        self.publish_JointStates(joint_names,[0,0,0,0.0,0.0,0.0])
+        
 
-
-        self.get_logger().info("Done!")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    # def pickup_callback(self,goal_handle):
-    #     msg = Int16MultiArray()
-    #     msg.layout = MultiArrayLayout(dim=[MultiArrayDimension(label="", size=12, stride=12)], data_offset=0)
-    #     move_time = 1000 #arm speed (milliseconds)
-
-    #     # pose publish
-    #     # If not already in the base pose, go to it:
-    #     pose = [3000,12000,12000,12000,12000,12000,move_time,move_time,move_time,move_time,move_time,move_time]
-    #     msg.data = pose
-    #     self.publisher.publish(msg)
-
-    #     # TODO: Get transform between arm base and map (SOLVED)
-    #     tf_future = self.tf_buffer.wait_for_transform_async(
-    #         target_frame = 'arm_base',
-    #         source_frame = 'map',
-    #         time = 0 # Get latest transform instead of timestamped, since we want to pickup when the robot is standing still
-    #     )
-
-    #     rclpy.spin_until_future_complete(self,tf_future, timeout_sec=1)
-
-    #     try:
-    #         t = self.tf_buffer.lookup_transform(
-    #             'arm_base',
-    #             'map',
-    #             0)
-    #     except TransformException as ex:
-    #         self.get_logger().info(
-    #             f'Could not transform map to arm_base: {ex}'
-    #         )
-
-    #     rclpy.sleep(1.5) #Give arm time to do its thing
-
-    #     # TODO: Get position of object in map frame (SOLVED)
-    #     world_position = goal_handle.request.position
-    #     self.get_logger().info(f"Received goal: Pickup object at position {world_position} in map frame")
-
-    #     # TODO: Transform the object into the arm base frame (SOLVED)
-    #     position = do_transform_point(world_position,t)
-
-    #     # TODO: Calculate the arm parameters to "hawk" over the object's position
-    #     # First calculate the base rotation
-    #     base_rotation_angle = math.atan2(position)
-
-
-    #     # TODO: transform angle from radians to arm parameters
-
-    #     # TODO: Publish said pose to the arm
-    #     # placeholder
-    #     pose = [12000,12000,8000,20000,6700,base_rotation_angle,move_time,move_time,move_time,move_time,move_time,move_time]
-    #     msg.data = pose
-    #     self.publisher.publish(msg)
-
-    #     # TODO: See and confirm the object is in the right position (using the arm camera)
-
-    #     # TODO: If yes (the object is there and in correct position) then calculate and publish a movement to move into pre pickup pose
-    #     # TODO: Close gripper
-    #     # TODO: Move arm back to base position
-    #     # TODO: Confirm object is in gripper using arm camera
-
-    #     # TODO: If no (the object is not there or in incorrect position)
-    #     # TODO: Go back to base position
-    #     # TODO: If found recalculate the new postion, move to it and try again
-
-    #     # TODO: Done
 
 
     def CalcKinematics(self,x,y,z,desired_grip_angle): #Servos 5 & 4
@@ -313,7 +245,7 @@ class MultiServoPublisher(Node):
 
             return base_rotation_angle,(math.pi/2) - v1 - base_angle,math.pi - v2, -v3
         except ValueError as e:
-            return -100,-100,-100,-100
+            return -1,-1,-1,-1
 
     def FindKinematics(self,x,y,z):
 
@@ -340,7 +272,7 @@ class MultiServoPublisher(Node):
 
 
         self.get_logger().info("No configuration found!")
-        return 12000,12000,12000,12000
+        return -1,-1,-1,-1
 
     def FindKinematics2(self,x,y,z):
 
@@ -366,7 +298,7 @@ class MultiServoPublisher(Node):
             return base,v1,v2,v3
 
         self.get_logger().info("No configuration found!")
-        return 12000,12000,12000,12000
+        return -1,-1,-1,-1
 
 
     

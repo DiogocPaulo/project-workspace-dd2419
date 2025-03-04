@@ -1,0 +1,3 @@
+geometry_msgs/Point target_position  # The target pose of the object to pick up
+---
+int8 result  # 0 = success, 1 = IK failure, 2 = object not picked up

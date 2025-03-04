@@ -3,8 +3,5 @@ geometry_msgs/Point target_position
 
 ---
 # Result: Success or failure of the pickup
-bool success
-
+string status
 ---
-# Feedback: A string to provide progress feedback
-string feedback

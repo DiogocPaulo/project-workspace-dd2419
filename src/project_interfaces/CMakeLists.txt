@@ -16,10 +16,16 @@ find_package(geometry_msgs REQUIRED)
 
 set(srv_files
 	"srv/GoToPoint.srv"
+  "srv/PickObject.srv"
+	)
+
+set(action_files
+	"action/PickUpObject.action"
 	)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
 	${srv_files}
+  ${action_files}
 	DEPENDENCIES geometry_msgs
 	)
 
