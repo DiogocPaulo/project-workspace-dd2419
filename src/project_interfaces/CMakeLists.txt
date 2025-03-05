@@ -23,9 +23,14 @@ set(action_files
 	"action/PickUpObject.action"
 	)
 
+set(msg_files
+	"msg/ArmTaskMessage.msg"
+	)
+
 rosidl_generate_interfaces(${PROJECT_NAME}
 	${srv_files}
   ${action_files}
+  ${msg_files}
 	DEPENDENCIES geometry_msgs
 	)
 
