@@ -12,10 +12,20 @@ class ProjectMaster(Node):
     def __init__(self):
         super().__init__("project_master")
 
-        self.point_client = self.create_client(GoToPoint, "/navigation_point")
-        self.reached_destination_service = self.create_service(Trigger, "/reached_destination", self.reached_destination_callback)
-        while not self.point_client.wait_for_service(timeout_sec=1.0):
-            self.get_logger().debug("GoToPoint service not yet avaliable, waiting ...")
+
+        self.clock = self.get_clock()
+
+        self.arm_publisher = self.create_publisher(ArmTaskMessage, "/Arm_Task", 10)
+
+        
+        # self.send_arm_task(0.2,0.2,0.0,"PICKUP")
+
+        # self.point_client = self.create_client(GoToPoint, "/navigation_point")
+        # self.reached_destination_service = self.create_service(Trigger, "/reached_destination", self.reached_destination_callback)
+        # while not self.point_client.wait_for_service(timeout_sec=1.0):
+        #     self.get_logger().debug("GoToPoint service not yet avaliable, waiting ...")
+
+        self.get_logger().info("ARMTASK!!!!!!!!!!!!!!!!!!!!!!!!!!")
 
         self.end_points = [
             (0.5, 0.0, 0.0),
@@ -83,7 +93,7 @@ class ProjectMaster(Node):
         
         self.arm_publisher.publish(arm_msg)
 
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=15))
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
 
         
 
@@ -95,8 +105,14 @@ def main():
     node = ProjectMaster()
 
     # node.send_end_point(-1.5, 0.5)
-    node.send_arm_task(0.2,0.2,0.0,"PICKUP")
-    node.send_arm_task(0.2,0.2,0.0,"DROPOFF")
+    node.send_arm_task(0.0,0.2,-0.17,"PICKUP")
+    node.send_arm_task(0.26,-0.1,0.0,"DROPOFF")
+
+    node.send_arm_task(0.13,0.13,-0.17,"PICKUP")
+    node.send_arm_task(0.26,-0.1,0.0,"DROPOFF")
+
+    node.send_arm_task(0.1,0.19,-0.15,"PICKUP")
+    node.send_arm_task(0.26,-0.1,0.0,"DROPOFF")
 
     try:
         rclpy.spin(node)
