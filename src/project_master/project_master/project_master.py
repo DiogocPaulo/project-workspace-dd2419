@@ -22,21 +22,22 @@ class ProjectMaster(Node):
         go_to_point_request.x = 1.5
         go_to_point_request.y = 0.5
         go_to_point_request.yaw = 1.5
+
+        # Send new point async
         future = self.point_client.call_async(go_to_point_request)
+        future.add_done_callback(sell.go_to_point_response_callback)
 
-        rclpy.spin_until_future_complete(self, future)
-
-        if future is not None:
-            go_to_point_response = future.result()
-            self.get_logger().info(f"GoToPoint response: {go_to_point_response.success}, {go_to_point_response.message}")
-            response.success = go_to_point_response.success
-            response.message = go_to_point_response.message
-        else:
-            self.get_logger().warn("Service call failed")
-            response.success = False
-            response.message = "Failed to call GoToPoint service"
-
+        response.success = True
+        response.message = "Sending new end point"
         return response
+
+    def go_to_point_response_callback(self, future):
+        try:
+            response = future.result()
+            self.get_logger().info(f"GoToPoint response: {response.success}, {response.message}")
+        except Exception as e:
+            self.get_logger().warn(f"Service call failed: {e}")
+            
 
     def send_end_point(self, x, y, yaw):
         request = GoToPoint.Request()
