@@ -47,7 +47,7 @@ class MultiServoPublisher(Node):
         )
         self.task_subscription
 
-        self.task_publisher = self.create_publisher(ArmTaskMessage, "/Arm_Task", 10)
+        # self.task_publisher = self.create_publisher(ArmTaskMessage, "/Arm_Task", 10)
 
         self.tfBuffer = tf2_ros.Buffer()
         self.listener = tf2_ros.TransformListener(self.tfBuffer,self)
@@ -88,7 +88,7 @@ class MultiServoPublisher(Node):
         # goal_msg.target_position = self.position
         # self._action_client.send_goal_async(goal_msg, feedback_callback=self.feedback_callback).add_done_callback(self.result_callback)
 
-        self.task_publisher.publish(arm_msg)
+        # self.task_publisher.publish(arm_msg)
 
     def task_callback(self,msg):
         if msg.description == "PICKUP":

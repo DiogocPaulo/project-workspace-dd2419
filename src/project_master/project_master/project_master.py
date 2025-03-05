@@ -1,6 +1,9 @@
 import rclpy
 from rclpy.node import Node
+import rclpy.time
 from project_interfaces.srv import GoToPoint
+from std_msgs.msg import Header
+from project_interfaces.msg import ArmTaskMessage
 
 def ProjectMaster(Node):
 
@@ -11,6 +14,11 @@ def ProjectMaster(Node):
         while not self.client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info("GoToPoint service not yet avaliable, waiting ...")
         self.point_request = GoToPoint.Request()
+
+        self.arm_publisher = self.create_publisher(ArmTaskMessage, "/Arm_Task", 10)
+
+        self.clock = self.get_clock()
+
 
     def send_end_point(self, x, y):
         self.point_request.x = x
@@ -24,6 +32,25 @@ def ProjectMaster(Node):
         else:
             self.get_logger().info("GoToPoint service failed")
 
+    def send_arm_task(self, x, y, z, task):
+        arm_msg = ArmTaskMessage()
+        arm_msg.header = Header()
+        arm_msg.header.stamp = self.get_clock().now().to_msg()
+        arm_msg.header.frame_id = "map"
+        arm_msg.point = Point()
+        arm_msg.point.x = x
+        arm_msg.point.y = y
+        arm_msg.point.z = z
+        arm_msg.description = task
+
+        
+        
+        self.arm_publisher.publish(arm_msg)
+
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=20))
+
+        
+
         
 
 
@@ -32,6 +59,7 @@ def main():
     node = ProjectMaster()
 
     node.send_end_point(-1.5, 0.5)
+    node.send_arm_task(0.2,0.2,0.0,"PICKUP")
 
     try:
         rclpy.spin(node)
