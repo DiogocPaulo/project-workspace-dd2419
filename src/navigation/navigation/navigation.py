@@ -168,6 +168,7 @@ class Navigation(Node):
             self.get_logger().info("Reached destination service not yet avaliable, waiting ...")
 
         self.create_timer(0.05, self.control_loop)
+        self.send_reached_destination()
 
     def odom_callback(self, msg: Odometry):
         self.state.update_state(msg)

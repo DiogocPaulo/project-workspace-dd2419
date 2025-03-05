@@ -18,8 +18,7 @@ class ProjectMaster(Node):
             (1.5, -0.5, 0.0),
             (1.5, 0.5, 0.0)
         ]
-        self.i = 1
-        self.send_end_point(-1.5, 0.5, 0.0)
+        self.i = 0
 
     def reached_destination_callback(self, request, response):
         self.get_logger().info("Master - Reached destination")
@@ -34,6 +33,7 @@ class ProjectMaster(Node):
         # Send new point async
         future = self.point_client.call_async(go_to_point_request)
         future.add_done_callback(self.go_to_point_response_callback)
+
 
         response.success = True
         response.message = "Sending new end point"
