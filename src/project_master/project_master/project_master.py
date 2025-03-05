@@ -15,6 +15,7 @@ class ProjectMaster(Node):
         self.end_points = [
             (0.5, 0.0, 0.0),
             (0.5, -0.5, 0.0),
+            (-0.5, -0.5, 0.0),
             (-0.5, 0.0, 0.0),
         ]
         self.i = 0
@@ -27,7 +28,7 @@ class ProjectMaster(Node):
         go_to_point_request.x = self.end_points[self.i][0]
         go_to_point_request.y = self.end_points[self.i][1]
         go_to_point_request.yaw = self.end_points[self.i][2]
-        self.i = (self.i + 1) % 3
+        self.i = (self.i + 1) % 4
 
         # Send new point async
         future = self.point_client.call_async(go_to_point_request)
