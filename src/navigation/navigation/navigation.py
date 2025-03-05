@@ -178,12 +178,14 @@ class Navigation(Node):
     def send_reached_destination(self):
         request = Trigger.Request()
         future = self.reached_destination_client.call_async(request)
-        rclpy.spin_until_future_complete(self, future)
-        if future.result() is not None:
+        future.add_done_callback(self.reached_destination_response_callback)
+
+    def reached_destination_response_callback(self, future):
+        try:
             response = future.result()
-            self.get_logger().info(f"Trigger Response: {response.message}")
-        else:
-            self.get_logger().info("Trigger service failed")
+            self.get_logger().info(f"Trigger response: {response.success}, {response.message}")
+        except Exception as e:
+            self.get_logger().warn(f"Service call failed: {e}")
 
     def control_loop(self):
         if not self.target_path.x_points:
