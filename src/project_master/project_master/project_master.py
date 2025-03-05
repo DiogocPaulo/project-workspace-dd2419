@@ -12,6 +12,13 @@ class ProjectMaster(Node):
         while not self.point_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().debug("GoToPoint service not yet avaliable, waiting ...")
 
+        self.end_points = [
+            (-1.5, 0.5, 0.0),
+            (-1.5, -0.5, 0.0),
+            (1.5, -0.5, 0.0),
+            (1.5, 0.5, 0.0)
+        ]
+        self.i = 1
         self.send_end_point(-1.5, 0.5, 0.0)
 
     def reached_destination_callback(self, request, response):
@@ -19,9 +26,10 @@ class ProjectMaster(Node):
 
         # Send new end point
         go_to_point_request = GoToPoint.Request()
-        go_to_point_request.x = 1.5
-        go_to_point_request.y = 0.5
-        go_to_point_request.yaw = 1.5
+        go_to_point_request.x = self.end_points[i][0]
+        go_to_point_request.y = self.end_points[i][1]
+        go_to_point_request.yaw = self.end_points[i][2]
+        i = (i + 1) % 4
 
         # Send new point async
         future = self.point_client.call_async(go_to_point_request)
