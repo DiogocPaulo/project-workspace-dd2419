@@ -29,18 +29,17 @@ class Pathing(Node):
         # Parameters
         self.start_point = (0, 0)
         self.end_point = (-1, -1)
+        self.target_yaw = 0
         self.amplitude = 0.5
         self.cycles = 1.0
         self.grid = None
         self.adaptive_h = {}
         self.map = None
-        self.path_planner = AdaptiveAStar(self.grid, self.adaptive_h)
         
         self.timer = self.create_timer(0.05, self.publish_astar_path)
 
     def odom_callback(self, msg: Odometry):
-        self.start_point[0] = odom_msg.pose.pose.position.x
-        self.start_point[1] = odom_msg.pose.pose.position.y
+        self.start_point = (msg.pose.pose.position.x, msg.pose.pose.position.y)
 
     def map_callback(self, msg):
         width = msg.info.width
@@ -51,11 +50,10 @@ class Pathing(Node):
         self.map = Map(resolution, origin_x, origin_y)
 
         self.grid = np.array(msg.data, dtype=np.int8).reshape((height, width))
-        self.path_planner.update_grid(self.grid)
 
     def set_end_point(self, request, response):
-        self.end_point[0] = request.x
-        self.end_point[1] = request.y
+        self.end_point = (request.x, request.y)
+        self.target_yaw = request.yaw
 
         response.success = True
         response.message = "End point set"
@@ -74,6 +72,7 @@ class Pathing(Node):
         start_x, start_y = self.map.world_to_grid(self.start_point[0], self.start_point[1])
         end_x, end_y = self.map.world_to_grid(self.end_point[0], self.end_point[1])
 
+        path_planner = AdaptiveAStar(self.grid, self.adaptive_h)
         path = path_planner.plan_path((start_y, start_x), (end_y, end_x))
 
         if path is None:
@@ -91,7 +90,7 @@ class Pathing(Node):
             pose.pose.position.x = x
             pose.pose.position.y = y
             pose.pose.position.z = 0.0
-            pose.pose.orientation.w = 1.0
+            pose.pose.orientation.w = self.target_yaw
             path_msg.poses.append(pose)
 
         self.path_publisher.publish(path_msg)

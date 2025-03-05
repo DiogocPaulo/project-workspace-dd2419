@@ -17,6 +17,7 @@ find_package(geometry_msgs REQUIRED)
 set(srv_files
 	"srv/GoToPoint.srv"
   "srv/PickObject.srv"
+  "srv/Trigger.srv"
 	)
 
 set(action_files

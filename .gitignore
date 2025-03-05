@@ -5,6 +5,7 @@ install/
 *.gv
 bags/
 *.log
+maps/
 
 
 # Based on github ROS gitignore
