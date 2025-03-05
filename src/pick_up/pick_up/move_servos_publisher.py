@@ -92,9 +92,9 @@ class MultiServoPublisher(Node):
 
     def task_callback(self,msg):
         if msg.description == "PICKUP":
-            self.pickup_callback_sim(msg)
+            self.pickup_callback(msg)
         elif msg.description == "DROPOFF":
-            self.dropoff_callback_sim(msg)
+            self.dropoff_callback(msg)
         else:
             return
 
@@ -116,29 +116,30 @@ class MultiServoPublisher(Node):
         msg.data = pose
         self.publisher.publish(msg)
 
-        # Transform ---------------------------------------
-        tf_future = self.tfBuffer.wait_for_transform_async(
-            target_frame = 'arm_base',
-            source_frame = message.header.frame_id,
-            time = zero_time # Get latest transform instead of timestamped, since we want to pickup when the robot is standing still
-        )
+        # # Transform ---------------------------------------
+        # tf_future = self.tfBuffer.wait_for_transform_async(
+        #     target_frame = 'arm_base',
+        #     source_frame = message.header.frame_id,
+        #     time = zero_time # Get latest transform instead of timestamped, since we want to pickup when the robot is standing still
+        # )
 
-        rclpy.spin_until_future_complete(self,tf_future, timeout_sec=1)
+        # rclpy.spin_until_future_complete(self,tf_future, timeout_sec=1)
 
-        try:
-            t = self.tfBuffer.lookup_transform(
-                'arm_base',
-                message.header.frame_id,
-                zero_time
-        )
-        except TransformException as ex:
-            self.get_logger().info(
-                f'Could not transform map to arm_base: {ex}'
-            )
-        # Transform ---------------------------------------
+        # try:
+        #     t = self.tfBuffer.lookup_transform(
+        #         'arm_base',
+        #         message.header.frame_id,
+        #         zero_time
+        # )
+        # except TransformException as ex:
+        #     self.get_logger().info(
+        #         f'Could not transform map to arm_base: {ex}'
+        #     )
+        # # Transform ---------------------------------------
 
         self.clock.sleep_for(rclpy.duration.Duration(seconds=2)) #Give arm time to do its thing
-        position = do_transform_point(message.point,t)
+        # position = do_transform_point(message.point,t)
+        position = message.point
         base_arm,v1_arm,v2_arm,v3_arm = self.FindKinematics(position.x,position.y,position.z)
 
 
@@ -183,33 +184,34 @@ class MultiServoPublisher(Node):
         zero_time.sec = 0
         zero_time.nanosec = 0
 
-        pose = [3000,12000,12000,12000,12000,12000,move_time,move_time,move_time,move_time,move_time,move_time]
+        pose = [12000,12000,12000,12000,12000,12000,move_time,move_time,move_time,move_time,move_time,move_time]
         msg.data = pose
         self.publisher.publish(msg)
 
-        # Transform ---------------------------------------
-        tf_future = self.tfBuffer.wait_for_transform_async(
-            target_frame = 'arm_base',
-            source_frame = message.header.frame_id,
-            time = zero_time # Get latest transform instead of timestamped, since we want to pickup when the robot is standing still
-        )
+        # # Transform ---------------------------------------
+        # tf_future = self.tfBuffer.wait_for_transform_async(
+        #     target_frame = 'arm_base',
+        #     source_frame = message.header.frame_id,
+        #     time = zero_time # Get latest transform instead of timestamped, since we want to pickup when the robot is standing still
+        # )
 
-        rclpy.spin_until_future_complete(self,tf_future, timeout_sec=1)
+        # rclpy.spin_until_future_complete(self,tf_future, timeout_sec=1)
 
-        try:
-            t = self.tfBuffer.lookup_transform(
-                'arm_base',
-                message.header.frame_id,
-                zero_time
-        )
-        except TransformException as ex:
-            self.get_logger().info(
-                f'Could not transform map to arm_base: {ex}'
-            )
-        # Transform ---------------------------------------
+        # try:
+        #     t = self.tfBuffer.lookup_transform(
+        #         'arm_base',
+        #         message.header.frame_id,
+        #         zero_time
+        # )
+        # except TransformException as ex:
+        #     self.get_logger().info(
+        #         f'Could not transform map to arm_base: {ex}'
+        #     )
+        # # Transform ---------------------------------------
 
         self.clock.sleep_for(rclpy.duration.Duration(seconds=2)) #Give arm time to do its thing
-        position = do_transform_point(message.point,t)
+        # position = do_transform_point(message.point,t)
+        position = message.point
         base_arm,v1_arm,v2_arm,v3_arm = self.FindKinematics(position.x,position.y,position.z)
 
 
