@@ -487,7 +487,7 @@ class ExamineImage(Node):
                 object_list_msg.length = len(self.object_list)
                 self.object_list_publisher.publish(object_list_msg)
 
-                self.get_logger().info(f"Published new object list now includes: \n\t {object_type} at ({x_transformed:.2f}, {y_transformed:.2f})")
+                self.get_logger().info(f"Published new object list now includes: {object_type} at ({x_transformed:.2f}, {y_transformed:.2f})")
 
         except TransformException as e:
             self.get_logger().error(f"Failed coordinate transform for newly detected object: {e}")

@@ -2,6 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.ndimage import maximum_filter, rotate
 
+from project_interfaces.msg import Object, ObjectList
+
 class Map:
     """
     Class provides by default the utility functions such as conversions, but also store the map.
@@ -42,6 +44,19 @@ class Map:
         if self.grid is None:
             # Grid is not yet initalised
             return
+
+        if object_type == Object.CUBE:
+            width = 0.05
+            height = 0.05
+        elif object_type == Object.SPHERE:
+            width = 0.05
+            height = 0.05
+        elif object_type == Object.PLUSHIE:
+            width = 0.05
+            height = 0.10
+        elif object_type == Object.BOX:
+            width = 0.15
+            height = 0.25
 
         grid_x, grid_y = self.world_to_grid(x, y)
         grid_half_width = self.distance_to_units(width) / 2
