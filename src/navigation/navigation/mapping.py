@@ -47,7 +47,7 @@ class Mapping(Node):
         self.height = 400       # 200 cells in height
         self.origin_x = -10.0     # Map origin x
         self.origin_y = -10.0     # Map origin y
-        self.base = 0.3
+        self.base = 0.35
         self.objects = None
         self.map = Map(self.resolution, self.origin_x, self.origin_y, 20, 20)
 

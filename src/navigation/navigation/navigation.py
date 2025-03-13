@@ -19,7 +19,7 @@ lookahead_gain = 0.1        # Look-ahead distance gain
 lookahead_min = 0.3         # Minimum look-ahead distance
 distance_threshold = 0.2    # Stop distance threshold
 yaw_threshold = 0.2         # Stop yaw threshold
-target_velocity = 0.15      # Robot's target velocity
+target_velocity = 0.20      # Robot's target velocity
 
 class RobotState:
     """Using odometry message to update the current state of the robot"""
@@ -197,9 +197,9 @@ class Navigation(Node):
 
         omega, alpha, self.previous_index = pure_pursuit_control(self.state, self.target_path)
 
-        if self.previous_index >= (len(self.target_path.x_points) - 1) and not self.reached_destination:
+        if self.previous_index >= (len(self.target_path.x_points) - 1):
             distance = np.hypot(self.state.x - self.target_path.x_points[-1], self.state.y - self.target_path.y_points[-1])
-            if distance <= distance_thresholda:
+            if distance <= distance_threshold and not self.reached_destination:
                 self.get_logger().info(f"Reached destination")
                 self.reached_destination = True
                 self.send_reached_destination()
@@ -211,10 +211,17 @@ class Navigation(Node):
                 # else:
                 #     omega, alpha = calculate_angular_velocity(self.state, self.state.yaw, self.target_path.target_yaw)
 
-        command_velocity = self.state.velocity * np.exp(-2 * np.abs(alpha))
-        left_wheel = command_velocity - (base/2) * omega
-        right_wheel = command_velocity + (base/2) * omega
-        self.get_logger().info(f"Velocity: {command_velocity}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
+        if abs(alpha) > (math.pi / 2):
+            angular_velocity = 0.15
+            left_wheel = -angular_velocity
+            right_wheel = angular_velocity
+            self.get_logger().info(f"Velocity: {angular_velocity}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
+        else:
+            # angular_scale = 2 * (np.abs(alpha) / np.pi)
+            command_velocity = self.state.velocity * np.exp(-2 * np.abs(alpha))
+            left_wheel = command_velocity - (base/2) * omega
+            right_wheel = command_velocity + (base/2) * omega
+            self.get_logger().info(f"Velocity: {command_velocity}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
 
         max_value = max(abs(left_wheel), abs(right_wheel))
 
