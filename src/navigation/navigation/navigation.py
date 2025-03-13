@@ -151,6 +151,7 @@ class Navigation(Node):
         self.state = RobotState()
         self.target_path = TargetPath()
         self.previous_index = 0
+        self.reached_destination = False
 
         self.create_subscription(
                 Odometry,
@@ -174,6 +175,7 @@ class Navigation(Node):
         self.state.update_state(msg)
 
     def path_callback(self, msg: Path):
+        self.reached_destination = False
         self.target_path.update_path(msg)
 
     def send_reached_destination(self):
@@ -195,10 +197,11 @@ class Navigation(Node):
 
         omega, alpha, self.previous_index = pure_pursuit_control(self.state, self.target_path)
 
-        if self.previous_index >= len(self.target_path.x_points) - 1:
+        if self.previous_index >= (len(self.target_path.x_points) - 1) and not self.reached_destination:
             distance = np.hypot(self.state.x - self.target_path.x_points[-1], self.state.y - self.target_path.y_points[-1])
-            if distance <= distance_threshold:
+            if distance <= distance_thresholda:
                 self.get_logger().info(f"Reached destination")
+                self.reached_destination = True
                 self.send_reached_destination()
                 return
                 # if self.target_path.compare_to_target_yaw(self.state.yaw, yaw_threshold):
