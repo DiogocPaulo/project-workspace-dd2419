@@ -443,7 +443,7 @@ class ExamineImage(Node):
         point_in = PointStamped()
         point_in.header.frame_id = 'camera_depth_optical_frame'  # Input frame
         point_in.header.stamp = stamp  # Timestamp of the original point cloud
-        point_in.point = Point(x=x, y=0.09, z=z)  # Set the point coordinates
+        point_in.point = Point(x=x, y=0.09, z=y)  # Set the point coordinates
 
         try:
             # Lookup the transform from camera_depth_optical_frame to map
