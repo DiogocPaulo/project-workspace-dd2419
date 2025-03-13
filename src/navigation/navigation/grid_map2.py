@@ -38,13 +38,9 @@ class Map:
         else:
             raise IndexError("Grid coordinates out of bounds.")
 
-    def add_object(self, x, y, width, height, angle=None):
+    def add_object(self, x, y, angle, object_type):
         if self.grid is None:
-            # self.get_logger().debug("Grid not defined")
-            return
-
-        if (x == 0 and y == 0):
-            # self.get_logger().info("Object alreay in map")
+            # Grid is not yet initalised
             return
 
         grid_x, grid_y = self.world_to_grid(x, y)
@@ -52,11 +48,11 @@ class Map:
         grid_half_height = self.distance_to_units(height) / 2
 
         if (self.grid[grid_y, grid_x] == 100):
-            # self.get_logger().info("Object alreay in map")
+            # Object already in map
             return
 
         if not (0 <= grid_x < self.grid_width and 0 <= grid_y < self.grid_height):
-            # self.get_logger().debug("Grid coordinates out of bounds")
+            # Grid coordinates out of bounds
             return
 
         object_vertices = np.array([
@@ -66,13 +62,13 @@ class Map:
             [-grid_half_width, grid_half_height]
         ])
 
-        if angle is not None:
-            cos_angle = np.cos(angle)
-            sin_angle = np.sin(angle)
-
-            rotation_matrix = np.array([[cos_angle, -sin_angle],
-                                        [sin_angle,  cos_angle]])
-            object_vertices = (rotation_matrix @ object_vertices.T).T
+        # if angle is not None:
+        #     cos_angle = np.cos(angle)
+        #     sin_angle = np.sin(angle)
+        #
+        #     rotation_matrix = np.array([[cos_angle, -sin_angle],
+        #                                 [sin_angle,  cos_angle]])
+        #     object_vertices = (rotation_matrix @ object_vertices.T).T
 
         object_vertices += np.array([grid_x, grid_y])
 
@@ -87,7 +83,6 @@ class Map:
             for i in range(min_x, max_x):
                 if self.winding_number(i, j, object_vertices):
                     self.grid[j, i] = 100
-
 
     def set_workspace_vertices(self, vertices):
         """Sets the workspace boundary as a list of (x, y) vertices and marks grid units outside the workspace."""

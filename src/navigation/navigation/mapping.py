@@ -9,7 +9,7 @@ from rclpy.qos import QoSProfile, HistoryPolicy, ReliabilityPolicy
 
 from tf2_ros import TransformBroadcaster
 from nav_msgs.msg import OccupancyGrid
-from visualization_msgs.msg import Marker, MarkerArray
+from robp_interfaces.msg import Object, ObjectList
 from geometry_msgs.msg import Point, Pose, Quaternion, Vector3
 
 from navigation.grid_map2 import Map
@@ -30,8 +30,8 @@ class Mapping(Node):
         )
 
         self.create_subscription(
-            MarkerArray,
-            "/map_objects",
+            ObjectList,
+            "/detected_objects",
             self.objects_callback,
             qos_profile
         )
@@ -51,35 +51,35 @@ class Mapping(Node):
         self.map = Map(self.resolution, self.origin_x, self.origin_y, 20, 20)
 
         # Exploration workspace
-        self.workspace_vertices = [
-            (-2.20, -1.30),
-            (2.20, -1.30),
-            (4.50, 0.66),
-            (7.00, 0.66),
-            (7.00, 2.84),
-            (5.46, 2.84),
-            (5.46, 1.30),
-            (-2.20, 1.30)
-        ]
-
-        # Collection workspace
         # self.workspace_vertices = [
         #     (-2.20, -1.30),
         #     (2.20, -1.30),
-        #     (2.20, 1.30),
-        #     (-2.20, 1.30),
+        #     (4.50, 0.66),
+        #     (7.00, 0.66),
+        #     (7.00, 2.84),
+        #     (5.46, 2.84),
+        #     (5.46, 1.30),
+        #     (-2.20, 1.30)
         # ]
+
+        # Collection workspace
+        self.workspace_vertices = [
+            (-2.20, -1.30),
+            (2.20, -1.30),
+            (2.20, 1.30),
+            (-2.20, 1.30),
+        ]
 
         self.map.initialize_map()
         self.map.set_workspace_vertices(self.workspace_vertices)
 
     def objects_callback(self, msg):
-        for marker in msg.markers:
-           x = marker.pose.position.x
-           y = marker.pose.position.y
-           width = marker.scale.x
-           height = marker.scale.y
-           self.map.add_object(x, y, width, height)
+        for object_msg in msg.objects:
+            x = object_msg.x
+            y = object_msg.y
+            angle = object_msg.angle
+            object_type = object_msg.object_type
+            self.map.add_object(x, y, angle, object_type)
 
     def update_marker(self):
         marker = Marker()
