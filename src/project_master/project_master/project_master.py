@@ -34,7 +34,6 @@ class ProjectMaster(Node):
         future = self.point_client.call_async(go_to_point_request)
         future.add_done_callback(self.go_to_point_response_callback)
 
-
         response.success = True
         response.message = "Sending new end point"
         return response
