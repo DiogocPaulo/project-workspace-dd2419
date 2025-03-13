@@ -20,7 +20,6 @@ from geometry_msgs.msg import PointStamped
 import os
 from scipy.spatial import cKDTree
 from sklearn.cluster import DBSCAN
-from visualization_msgs.msg import Marker, MarkerArray
 from geometry_msgs.msg import Point, Pose, Quaternion, Vector3
 from sklearn.decomposition import PCA
 from itertools import permutations
@@ -28,6 +27,7 @@ from sensor_msgs_py.point_cloud2 import create_cloud
 import time
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+from project_interfaces.msg import Object, ObjectList
 
 class ExamineImage(Node):
 
@@ -65,14 +65,10 @@ class ExamineImage(Node):
         self.file_path = os.path.join(folder_path, 'Map.txt')
 
         # Initialize an empty list to store detected objects
-        self.detected_objects = []
+        self.object_list = []
 
         # Publisher for clusters
         self.cluster_publisher = self.create_publisher(PointCloud2, 'clusters', 10)
-
-        # Publisher for markers
-        self.marker_publisher = self.create_publisher(MarkerArray, '/map_objects', 10)
-        self.timer = self.create_timer(0.05, self.publish_map_objects)  # Update every 2 seconds
 
         # Timer to periodically write to map.txt
         self.write_timer = self.create_timer(5.0, self.write_to_file)  # Write every 5 seconds
@@ -194,7 +190,7 @@ class ExamineImage(Node):
             if pure_brown:
                 if object_type == "cube":
                     self.get_logger().info(f'🟫 Cluster {cluster_label} is a cube!')
-                    self.create_object('cube', x, z + 0.02, 0.0, msg.header.stamp)
+                    self.publish_object(x, z + 0.02, 0.0, Object.CUBE, msg.header.stamp)
 
             if pure_red or pure_green or pure_blue:
                 if object_type == "sphere":
@@ -205,7 +201,7 @@ class ExamineImage(Node):
                     elif pure_blue:
                         emoji = "🔵"  # Blue circle emoji
                     self.get_logger().info(f'{emoji} Cluster {cluster_label} is a sphere!')
-                    self.create_object('sphere', x, z + 0.02, 0.0, msg.header.stamp)
+                    self.publish_object(x, z + 0.02, 0.0, Object.SPHERE, msg.header.stamp)
                 elif object_type == "cube":
                     if pure_red:
                         emoji = "🟥"  # Red square emoji
@@ -214,13 +210,13 @@ class ExamineImage(Node):
                     elif pure_blue:
                         emoji = "🟦"  # Blue square emoji
                     self.get_logger().info(f'{emoji} Cluster {cluster_label} is a cube!')
-                    self.create_object('cube', x, z + 0.02, 0.0, msg.header.stamp)
+                    self.publish_object(x, z + 0.02, 0.0, Object.CUBE, msg.header.stamp)
                 elif object_type == "unknown":
                     self.get_logger().info(f'Object not identified :(!')
 
             elif self.is_plushie(cluster_points):
                 self.get_logger().info(f'🧸 Cluster {cluster_label} is a plushie!')
-                self.create_object('plushie', x + 0.01, z, 0.0, msg.header.stamp)
+                self.publish_object(x + 0.01, z, 0.0, Object.PLUSHIE, msg.header.stamp)
 
             elif self.is_box(cluster_points):  # If detected object is a box
                 self.get_logger().info(f'📦 Cluster {cluster_label} is a box!')
@@ -230,11 +226,11 @@ class ExamineImage(Node):
 
                 # Store box with angle information
                 if angle == 0.0:
-                    self.create_object('box', x, z + 0.08, angle, msg.header.stamp)
+                    self.publish_object(x, z + 0.08, angle, Object.BOX, msg.header.stamp)
                 elif angle == 90.0:
-                    self.create_object('box', x, z + 0.12, angle, msg.header.stamp)
+                    self.publish_object(x, z + 0.12, angle, Object.BOX, msg.header.stamp)
                 else:
-                    self.create_object('box', x, z + 0.08, angle, msg.header.stamp)
+                    self.publish_object(x, z + 0.08, angle, Object.BOX, msg.header.stamp)
 
             else:
                 if pure_brown:
@@ -248,13 +244,9 @@ class ExamineImage(Node):
             # ------------------------------------------------------------------------
 
     def write_to_file(self):
-        """
-        Write detected objects to map.txt periodically.
-        """
         with open(self.file_path, 'w') as file:
-            for obj in self.detected_objects:
-                file.write(f"{obj['type']} {obj['x']:.2f} {obj['y']:.2f} {obj['angle']:.1f}\n")
-        #self.get_logger().info("Updated map.txt with detected objects.")
+            for object_msg in self.object_list:
+                file.write(f"{object_msg.object_type} {object_msg.x:.2f} {object_msg.y:.2f} {object_msg.angle:.1f}\n")
 
     def estimate_box_orientation(self, cluster_points):
         # Find the point with the lowest Z-coordinate
@@ -443,19 +435,7 @@ class ExamineImage(Node):
         # Publish the clusters
         self.cluster_publisher.publish(cluster_msg)
 
-    def create_object(self, type, x, z, angle, stamp):
-        # Map object type to a label
-        if type == 'cube':
-            L = 1
-        elif type == 'sphere':
-            L = 2
-        elif type == 'plushie':
-            L = 3
-        elif type == 'box':
-            L = 'B'
-        else:
-            L = 'Undefined'
-
+    def publish_object(self, x, y, angle, object_type, stamp):
         # Create a PointStamped message for the input coordinates
         point_in = PointStamped()
         point_in.header.frame_id = 'camera_depth_optical_frame'  # Input frame
@@ -479,104 +459,35 @@ class ExamineImage(Node):
             y_transformed = point_out.point.y
             z_transformed = point_out.point.z
 
-            # Create a dictionary for the detected object
-            new_object = {
-                'type': L,
-                'x': x_transformed,
-                'y': y_transformed,
-                'angle': angle
-            }
-
             # Check if the new object is a duplicate based on proximity
             is_duplicate = False
-            for obj in self.detected_objects:
-                distance = np.sqrt((x_transformed - obj['x'])**2 + (y_transformed - obj['y'])**2)
+            for obj in self.object_list:
+                distance = np.sqrt((x_transformed - obj.x)**2 + (y_transformed - obj.y)**2)
                 if distance < 0.01:  # If the object is within 1 cm of an existing object
                     is_duplicate = True
                     break
 
             # If not a duplicate, add the new object to the list
             if not is_duplicate:
-                self.detected_objects.append(new_object)
-                self.get_logger().info(f"Created object: {L} at position: ({x_transformed:.2f}, {y_transformed:.2f})")
+                # Create new object message
+                object_msg = Object()
+                object_msg.x = x_transformed
+                object_msg.y = y_transformed
+                object_msg.angle = angle
+                object_msg.object_type = object_type
+
+                self.object_list.append(object_msg)
+
+                object_list_msg = ObjectList()
+                object_list_msg.header.frame_id = "map"
+                object_list_msg.header.stamp = stamp
+                object_list_msg.length = len(self.object_list)
+                self.object_list_publisher.publish(object_list_msg)
+
+                self.get_logger().info(f"Published new object list now includes: \n\t {object_type} at ({x_transformed:.2f}, {y_transformed:.2f})")
 
         except TransformException as e:
-            self.get_logger().error(f"Failed to transform coordinates: {e}")
-
-    def publish_map_objects(self):
-        marker_array = MarkerArray()
-
-        # Clear all previous markers
-        clear_marker = Marker()
-        clear_marker.action = Marker.DELETEALL
-        marker_array.markers.append(clear_marker)
-
-        # Process every detected object
-        for idx, obj in enumerate(self.detected_objects):
-            marker = Marker()
-            marker.header.frame_id = "map"  # Map frame for 2D visualization
-            marker.header.stamp = self.get_clock().now().to_msg()
-
-            # Unique ID for each marker
-            marker.id = idx  # Use index as unique ID for each object
-
-            # Set a unique namespace to avoid duplication in the same MarkerArray
-            marker.ns = "object_{}".format(idx)
-
-            # Default to CUBE (for 2D square)
-            marker.type = Marker.CUBE
-            marker.action = Marker.ADD
-            marker.pose.position.x = obj['x']
-            marker.pose.position.y = obj['y']
-            marker.pose.position.z = 0.0  # z is always 0 for 2D
-
-            # Set the orientation based on the angle
-            q = Quaternion()
-            q.z = np.sin(np.radians(obj['angle']) / 2.0)
-            q.w = np.cos(np.radians(obj['angle']) / 2.0)
-            marker.pose.orientation = q
-
-            if obj['type'] == 1:  # Cube (using CUBE type with adjusted scale)
-                marker.type = Marker.CUBE
-                marker.scale.x = 0.04  # Width of the square
-                marker.scale.y = 0.04  # Height of the square
-                marker.scale.z = 0.01  # Minimal height (so it looks like a 2D object)
-                marker.color.r = 0.0
-                marker.color.g = 1.0
-                marker.color.b = 0.0
-            elif obj['type'] == 2:  # Sphere (using SPHERE type, but we keep z = 0)
-                marker.type = Marker.SPHERE
-                marker.scale.x = 0.05  # Diameter of the circle
-                marker.scale.y = 0.05  # Diameter of the circle
-                marker.scale.z = 0.01  # Minimal height (so it looks like a 2D object)
-                marker.color.r = 1.0
-                marker.color.g = 1.0
-                marker.color.b = 0.0
-            elif obj['type'] == 3:  # Plushie (using CUBE type, but we keep z = 0)
-                marker.type = Marker.CUBE
-                marker.scale.x = 0.06  # Width of the square
-                marker.scale.y = 0.08  # Height of the square
-                marker.scale.z = 0.01  # Minimal height (so it looks like a 2D object)
-                marker.color.r = 0.0
-                marker.color.g = 1.0
-                marker.color.b = 0.0
-            elif obj['type'] == 'B':  # Box (using CUBE type, just as a 2D object)
-                marker.type = Marker.CUBE
-                marker.scale.x = 0.20  # Width of the box
-                marker.scale.y = 0.30  # Length of the box
-                marker.scale.z = 0.01  # Minimal height (so it looks like a 2D object)
-                marker.color.r = 0.0
-                marker.color.g = 1.0
-                marker.color.b = 1.0
-
-            marker.color.a = 1.0  # Alpha (opacity)
-            marker.lifetime.sec = 2  # Persist for 2 seconds
-
-            marker_array.markers.append(marker)
-
-        # Publish the markers
-        self.marker_publisher.publish(marker_array)
-
+            self.get_logger().error(f"Failed coordinate transform for newly detected object: {e}")
 
 def main(args=None):
     rclpy.init(args=args)
