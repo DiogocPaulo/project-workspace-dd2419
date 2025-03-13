@@ -67,8 +67,11 @@ class ExamineImage(Node):
         # Initialize an empty list to store detected objects
         self.object_list = []
 
+        # Publishers for detected objects as a list
+        self.object_list_publisher = self.create_publisher(ObjectList, "/detected_objects", 10)
+
         # Publisher for clusters
-        self.cluster_publisher = self.create_publisher(PointCloud2, 'clusters', 10)
+        self.cluster_publisher = self.create_publisher(PointCloud2, '/clusters', 10)
 
         # Timer to periodically write to map.txt
         self.write_timer = self.create_timer(5.0, self.write_to_file)  # Write every 5 seconds
