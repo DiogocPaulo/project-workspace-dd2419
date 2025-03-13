@@ -14,14 +14,20 @@ find_package(geometry_msgs REQUIRED)
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
 
+set(msg_files
+	"msg/Object.msg"
+	"msg/ObjectList.msg"
+	)
+
 set(srv_files
 	"srv/GoToPoint.srv"
 	"srv/Trigger.srv"
 	)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
+	${msg_files}
 	${srv_files}
-	DEPENDENCIES geometry_msgs
+	DEPENDENCIES std_msgs geometry_msgs
 	)
 
 ament_export_dependencies(rosidl_default_runtime)
