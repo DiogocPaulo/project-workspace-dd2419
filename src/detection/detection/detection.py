@@ -485,6 +485,7 @@ class ExamineImage(Node):
                 object_list_msg.header.frame_id = "map"
                 object_list_msg.header.stamp = stamp
                 object_list_msg.length = len(self.object_list)
+                object_list_msg.objects = self.object_list
                 self.object_list_publisher.publish(object_list_msg)
 
                 self.get_logger().info(f"Published new object list now includes: {object_type} at ({x_transformed:.2f}, {y_transformed:.2f})")
