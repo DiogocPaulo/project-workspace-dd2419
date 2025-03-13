@@ -13,10 +13,10 @@ class ProjectMaster(Node):
             self.get_logger().debug("GoToPoint service not yet avaliable, waiting ...")
 
         self.end_points = [
-            (-1.9, 1.0, 0.0),
-            (-1.9, -1.0, 0.0),
-            (1.9, -1.0, 0.0),
-            (1.9, 1.0, 0.0),
+            (-1.7, 1.0, 0.0),
+            (-1.7, -1.0, 0.0),
+            (1.7, -1.0, 0.0),
+            (1.7, 1.0, 0.0),
         ]
         self.i = 0
 

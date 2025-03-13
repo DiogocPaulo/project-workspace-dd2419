@@ -28,7 +28,7 @@ class Pathing(Node):
 
         # Parameters
         self.start_point = (0, 0)
-        self.end_point = (-1, -1)
+        self.end_point = (None, None)
         self.target_yaw = 0
         self.amplitude = 0.5
         self.cycles = 1.0
@@ -55,13 +55,15 @@ class Pathing(Node):
         self.end_point = (request.x, request.y)
         self.target_yaw = request.yaw
 
+        self.get_logger().info(f"New end point:({self.end_point[0]}, {self.end_point[1]})")
+
         response.success = True
         response.message = "End point set"
         return response
 
 
     def publish_astar_path(self):
-        if self.end_point[0] == -1 or self.end_point[1] == -1:
+        if self.end_point is (None, None):
             self.get_logger().info("No end point received")
             return
 
