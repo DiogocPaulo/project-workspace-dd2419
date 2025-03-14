@@ -1,4 +1,5 @@
 import numpy as np
+import math
 import matplotlib.pyplot as plt
 from scipy.ndimage import maximum_filter, rotate
 
@@ -8,26 +9,52 @@ class Map:
     """
     Class provides by default the utility functions such as conversions, but also store the map.
     """
-    def __init__(self, resolution, origin_x, origin_y, height=None, width=None):
+    def __init__(self, resolution, origin_x=None, origin_y=None, grid_width=None, grid_height=None):
         # Initialize map properties
         self.resolution = resolution
         self.origin_x = origin_x
         self.origin_y = origin_y
-        self.height = height
-        self.width = width
+        self.grid_width = grid_width
+        self.grid_height = grid_height
         self.grid = None
         self.inflated_grid = None
         self.workspace_vertices = None
 
-    def initialize_map(self):
+    def initialize_map(self, width=None, height=None):
         # Compute grid dimensions and create grid maps
-        if self.width != None and self.height != None:
-            self.grid_height = int(self.height / self.resolution)
-            self.grid_width = int(self.width / self.resolution)
-            self.grid = np.full((self.grid_height, self.grid_width), -1, dtype=np.int8)
-            self.inflated_grid = np.full((self.grid_height, self.grid_width), -1, dtype=np.int8)
-        else:
-            raise ValueError("Map was not intialized width height and width.")
+        if self.grid_width is None or self.grid_height is None:
+            if width is None or height is None:
+                raise ValueError("Grid width and height not initialized")
+            self.grid_width = math.ceil(width / self.resolution)
+            self.grid_height = math.ceil(height / self.resolution)
+        if self.origin_x is None or self.grid_height is None:
+            if width is None or height is None:
+                raise ValueError("Grid width and height not initialized")
+            self.origin_x = -(self.units_to_distance(self.grid_width) / 2)
+            self.origin_y = -(self.units_to_distance(self.grid_height) / 2)
+        self.grid = np.full((self.grid_height, self.grid_width), -1, dtype=np.int8)
+        self.inflated_grid = np.full((self.grid_height, self.grid_width), -1, dtype=np.int8)
+
+    def initalise_map_with_workspace(self, workspace_vertices):
+        x_list = [vertex[0] for vertex in workspace_vertices]
+        y_list = [vertex[1] for vertex in workspace_vertices]
+
+        x_min = math.floor(min(x_list) / self.resolution) - 1
+        x_max = math.ceil(max(x_list) / self.resolution) + 1
+        y_min = math.floor(min(y_list) / self.resolution) - 1
+        y_max = math.ceil(max(y_list) / self.resolution) + 1
+
+        self.grid_width = x_max - x_min + 1
+        self.grid_height = y_max - y_min
+        
+        self.origin_x = (x_min) * self.resolution
+        self.origin_y = (y_min) * self.resolution
+
+        self.grid = np.full((self.grid_height, self.grid_width), -1, dtype=np.int8)
+        self.inflated_grid = np.full((self.grid_height, self.grid_width), -1, dtype=np.int8)
+        self.set_workspace_vertices(workspace_vertices)
+
+
 
     def set_grid_value(self, x, y, value):
         # Set a grid cell to a value (0 to 100)

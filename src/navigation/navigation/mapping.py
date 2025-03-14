@@ -43,15 +43,11 @@ class Mapping(Node):
 
         # Parameters
         self.resolution = 0.05  # 5 cm per cell
-        self.width = 400        # 200 cells in width
-        self.height = 400       # 200 cells in height
-        self.origin_x = -10.0     # Map origin x
-        self.origin_y = -10.0     # Map origin y
-        self.base = 0.35
+        self.base = 0.30
         self.objects = None
-        self.map = Map(self.resolution, self.origin_x, self.origin_y, 20, 20)
+        self.map = Map(self.resolution)
 
-        # Exploration workspace
+        # Exploration workspace perimeter
         # self.workspace_vertices = [
         #     (-2.20, -1.30),
         #     (2.20, -1.30),
@@ -63,7 +59,7 @@ class Mapping(Node):
         #     (-2.20, 1.30)
         # ]
 
-        # Collection workspace
+        # Collection workspace perimeter
         self.workspace_vertices = [
             (-2.20, -1.30),
             (2.20, -1.30),
@@ -71,8 +67,8 @@ class Mapping(Node):
             (-2.20, 1.30),
         ]
 
-        self.map.initialize_map()
-        self.map.set_workspace_vertices(self.workspace_vertices)
+        # Initalise map based on workspace perimeter
+        self.map.initalise_map_with_workspace(self.workspace_vertices)
 
     def objects_callback(self, msg):
         for object_msg in msg.objects:
@@ -123,11 +119,11 @@ class Mapping(Node):
         map_msg.header.stamp = self.get_clock().now().to_msg()
         map_msg.header.frame_id = "map"
 
-        map_msg.info.resolution = self.resolution
-        map_msg.info.width = self.width
-        map_msg.info.height = self.height
-        map_msg.info.origin.position.x = self.origin_x
-        map_msg.info.origin.position.y = self.origin_y
+        map_msg.info.resolution = self.map.resolution
+        map_msg.info.width = self.map.grid_width
+        map_msg.info.height = self.map.grid_height
+        map_msg.info.origin.position.x = self.map.origin_x
+        map_msg.info.origin.position.y = self.map.origin_y
         map_msg.info.origin.position.z = 0.0
         map_msg.info.origin.orientation.x = 0.0
         map_msg.info.origin.orientation.y = 0.0
@@ -147,11 +143,11 @@ class Mapping(Node):
         map_msg.header.stamp = self.get_clock().now().to_msg()
         map_msg.header.frame_id = "map"
 
-        map_msg.info.resolution = self.resolution
-        map_msg.info.width = self.width
-        map_msg.info.height = self.height
-        map_msg.info.origin.position.x = self.origin_x
-        map_msg.info.origin.position.y = self.origin_y
+        map_msg.info.resolution = self.map.resolution
+        map_msg.info.width = self.map.grid_width
+        map_msg.info.height = self.map.grid_height
+        map_msg.info.origin.position.x = self.map.origin_x
+        map_msg.info.origin.position.y = self.map.origin_y
         map_msg.info.origin.position.z = 0.0
         map_msg.info.origin.orientation.x = 0.0
         map_msg.info.origin.orientation.y = 0.0
