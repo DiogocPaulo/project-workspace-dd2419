@@ -13,7 +13,7 @@ from geometry_msgs.msg import PoseStamped
 
 from project_interfaces.srv import GoToPoint
 
-from navigation.grid_map2 import Map
+from navigation.map import Map
 from navigation.adaptive_a_star import AdaptiveAStar
 
 class Pathing(Node):

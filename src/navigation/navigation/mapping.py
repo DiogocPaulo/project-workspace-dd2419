@@ -13,7 +13,7 @@ from project_interfaces.msg import Object, ObjectList
 from visualization_msgs.msg import Marker, MarkerArray
 from geometry_msgs.msg import Point, Pose, Quaternion, Vector3
 
-from navigation.grid_map2 import Map
+from navigation.map import Map
 
 class Mapping(Node):
 
