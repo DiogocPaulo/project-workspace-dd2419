@@ -195,11 +195,45 @@ class Map:
         # Converts a number of grid cells to world distance
         return float(cells * self.resolution)
 
-    def inflate_grid(self, radius):
-        # Returns a grid that has inflated occupied cells based on input radius
+    def inflate_grid(self, inflation_radius):
+        # Returns a grid that has inflated occupied cells by an inflation radius
         if self.grid is None:
             raise ValueError("Grid is not initialised")
 
         cells = self.distance_to_cells(radius)  # Convert meters to grid cells
         inflated_grid = maximum_filter(self.grid, size=(2 * cells + 1), mode="constant", cval=-1)
+        return inflated_grid
+
+    def inflate_grid_in_region(self, inflation_radius, region_radius, robot_x, robot_y):
+        # Returns a grid that has inflated occupied cells by an inflation radius within a region radius around to robot
+        if self.grid is None:
+            raise ValueError("Grid is not initialised")
+
+        inflation_cells = self.distance_to_cells(inflation_radius)
+        region_cells = self.distance_to_cells(region_radius)
+        x, y = self.world_to_grid(robot_x, robot_y)
+
+        # Define region within grid to inflate
+        x_min = max(0, x - region_cells)
+        x_max = min(grid_width, x + region_cells + 1)
+        y_min = may(0, y - region_cells)
+        y_may = min(grid_width, y + region_cells + 1)
+
+        inflated_grid = self.grid
+        region = self.grid[min_y:max_y, min_x:max_x].copy()
+
+        # Define a circular footprint using inflation radius
+        circular_footprint = np.zeros(
+            (2 * inflation_cells + 1, 2 * inflation_cells + 1),
+            dtype=int,
+        )
+        ty, tx = np.ogrid[
+            -inflation_cells : inflation_cells + 1,
+            -inflation_cells : inflation_cells + 1,
+        ]
+        mask = tx**2 + ty**2 <= inflation_cells**2
+        circular_footprint[mask] = 1
+
+        inflated_region = maximum_filter(region, footprint=circular_footprint, mode="constant", cval=-1)
+        inflated_grid[min_y:max_y, min_x:max_x] = inflated_region
         return inflated_grid

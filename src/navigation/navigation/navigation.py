@@ -215,13 +215,13 @@ class Navigation(Node):
             angular_velocity = 0.15
             left_wheel = -angular_velocity
             right_wheel = angular_velocity
-            self.get_logger().info(f"Velocity: {angular_velocity}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
+            self.get_logger().info(f"Velocity: {angular_velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
         else:
             # angular_scale = 2 * (np.abs(alpha) / np.pi)
             command_velocity = self.state.velocity * np.exp(-2 * np.abs(alpha))
             left_wheel = command_velocity - (base/2) * omega
             right_wheel = command_velocity + (base/2) * omega
-            self.get_logger().info(f"Velocity: {command_velocity}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
+            self.get_logger().info(f"Velocity: {command_velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
 
         max_value = max(abs(left_wheel), abs(right_wheel))
 

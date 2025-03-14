@@ -34,7 +34,8 @@ class Pathing(Node):
         self.amplitude = 0.5
         self.cycles = 1.0
         self.adaptive_h = {}
-        self.base = 0.30
+        self.base = 0.4
+        self.region_radius = 0.8
         self.map = None
         self.inflated_grid = None
         
@@ -109,7 +110,7 @@ class Pathing(Node):
 
         inflation_radius = self.base
 
-        self.inflated_grid = self.map.inflate_grid(inflation_radius)
+        self.inflated_grid = self.map.inflate_grid_in_region(inflation_radius, self.region_radius, self.start_point[0], self.start_point[1])
 
         path_planner = AdaptiveAStar(self.inflated_grid, self.adaptive_h)
         path = path_planner.plan_path((start_y, start_x), (end_y, end_x))
