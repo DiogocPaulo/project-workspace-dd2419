@@ -5,6 +5,7 @@ import numpy as np
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, HistoryPolicy, ReliabilityPolicy
 
 from robp_interfaces.msg import Encoders
 from nav_msgs.msg import Path
@@ -153,16 +154,15 @@ class Navigation(Node):
         self.previous_index = 0
         self.reached_destination = False
 
-        self.create_subscription(
-                Odometry,
-                "/odom",
-                self.odom_callback,
-                10)
-        self.create_subscription(
-                Path,
-                "/custom_path",
-                self.path_callback,
-                10)
+        qos_profile = QoSProfile(
+            depth=1,
+            history=HistoryPolicy.KEEP_LAST,
+            reliability=ReliabilityPolicy.BEST_EFFORT
+        )
+
+        self.create_subscription(Odometry, "/odom", self.odom_callback, qos_profile)
+        self.create_subscription(Path, "/custom_path", self.path_callback, qos_profile)
+
         self.motor_publisher = self.create_publisher(DutyCycles, "/motor/duty_cycles", 10)
         self.reached_destination_client = self.create_client(Trigger, "/reached_destination")
         while not self.reached_destination_client.wait_for_service(timeout_sec=1.0):
