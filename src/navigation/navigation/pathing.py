@@ -58,8 +58,8 @@ class Pathing(Node):
         else:
             self.map.update_grid(grid)
 
-    def update_inflated_map(self)
-        if self.map is None or self.inflated_grid is None
+    def update_inflated_map(self):
+        if self.map is None or self.inflated_grid is None:
             return
 
         map_msg = OccupancyGrid()
@@ -81,7 +81,7 @@ class Pathing(Node):
         map_msg.data = self.inflated_grid.flatten().tolist()
 
         self.inflated_map_publisher.publish(map_msg)
-        self.get_logger().debug("Published inflated occupancy map", once=True)
+        self.get_logger().info("Published inflated occupancy map", once=True)
 
 
     def set_end_point(self, request, response):
@@ -96,12 +96,12 @@ class Pathing(Node):
 
 
     def publish_astar_path(self):
-        if self.end_point is (None, None):
-            self.get_logger().debug("No end point received")
+        if self.end_point == (None, None):
+            self.get_logger().info("No end point received")
             return
 
         if self.map is None:
-            self.get_logger().debug("Occupancy map not received")
+            self.get_logger().info("Occupancy map not received")
             return
 
         start_x, start_y = self.map.world_to_grid(self.start_point[0], self.start_point[1])
@@ -133,7 +133,7 @@ class Pathing(Node):
             path_msg.poses.append(pose)
 
         self.path_publisher.publish(path_msg)
-        self.get_logger().debug("Published A star custom path", once=True)
+        self.get_logger().info("Published A star custom path", once=True)
 
 
     def publish_curved_path(self):
@@ -174,7 +174,7 @@ class Pathing(Node):
             path_msg.poses.append(pose)
 
         self.path_publisher.publish(path_msg)
-        self.get_logger().debug("Published curved custom path", once=True)
+        self.get_logger().info("Published curved custom path", once=True)
         
 
     def publish_straight_path(self):
@@ -202,7 +202,7 @@ class Pathing(Node):
             path_msg.poses.append(pose)
 
         self.path_publisher.publish(path_msg)
-        self.get_logger().debug("Published straight custom path", once=True)
+        self.get_logger().info("Published straight custom path", once=True)
 
 def main():
     rclpy.init()

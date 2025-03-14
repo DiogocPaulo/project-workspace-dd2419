@@ -16,25 +16,25 @@ def generate_launch_description():
             package="project_master",
             executable="project_master",
             name="robot_master",
-            ros_arguments=["--log-level", "debug"]
+            ros_arguments=["--log-level", "info"]
         ),
         Node(
             package="navigation",
             executable="navigation",
             name="robot_navigation",
-            ros_arguments=["--log-level", "debug"]
+            ros_arguments=["--log-level", "info"]
         ),
         Node(
             package="navigation",
             executable="mapping",
             name="robot_mapping",
-            ros_arguments=["--log-level", "debug"]
+            ros_arguments=["--log-level", "info"]
         ),
         Node(
             package="navigation",
             executable="pathing",
             name="robot_pathing",
-            ros_arguments=["--log-level", "debug"]
+            ros_arguments=["--log-level", "info"]
         ),
         Node(
             package="detection",

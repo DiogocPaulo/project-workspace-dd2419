@@ -201,5 +201,5 @@ class Map:
             raise ValueError("Grid is not initialised")
 
         cells = self.distance_to_cells(radius)  # Convert meters to grid cells
-        inflated_grid = maximum_filter(self.grid, size=(2 * inflation_cells + 1), mode="constant", cval=-1)
+        inflated_grid = maximum_filter(self.grid, size=(2 * cells + 1), mode="constant", cval=-1)
         return inflated_grid
