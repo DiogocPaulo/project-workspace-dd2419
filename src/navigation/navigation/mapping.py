@@ -45,24 +45,24 @@ class Mapping(Node):
         self.map = Map(self.resolution)
 
         # Exploration workspace perimeter
-        # self.workspace_vertices = [
-        #     (-2.20, -1.30),
-        #     (2.20, -1.30),
-        #     (4.50, 0.66),
-        #     (7.00, 0.66),
-        #     (7.00, 2.84),
-        #     (5.46, 2.84),
-        #     (5.46, 1.30),
-        #     (-2.20, 1.30)
-        # ]
-
-        # Collection workspace perimeter
         self.workspace_vertices = [
             (-2.20, -1.30),
             (2.20, -1.30),
-            (2.20, 1.30),
-            (-2.20, 1.30),
+            (4.50, 0.66),
+            (7.00, 0.66),
+            (7.00, 2.84),
+            (5.46, 2.84),
+            (5.46, 1.30),
+            (-2.20, 1.30)
         ]
+
+        # Collection workspace perimeter
+        # self.workspace_vertices = [
+        #     (-2.20, -1.30),
+        #     (2.20, -1.30),
+        #     (2.20, 1.30),
+        #     (-2.20, 1.30),
+        # ]
 
         # Initalise map based on workspace perimeter
         self.map.initalise_grid_with_workspace(self.workspace_vertices)
