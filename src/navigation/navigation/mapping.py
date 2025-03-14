@@ -21,7 +21,6 @@ class Mapping(Node):
         super().__init__("mapping")
 
         self.map_publisher = self.create_publisher(OccupancyGrid, "/map", 10)
-        self.inflated_map_publisher = self.create_publisher(OccupancyGrid, "/inflated_map", 10)
         self.marker_publisher = self.create_publisher(Marker, "/workspace", 10)
 
         qos_profile = QoSProfile(
@@ -38,12 +37,10 @@ class Mapping(Node):
         )
 
         self.create_timer(0.5, self.update_map)
-        self.create_timer(0.05, self.update_inflated_map)
         # self.create_timer(0.5, self.update_marker)
 
         # Parameters
         self.resolution = 0.05  # 5 cm per cell
-        self.base = 0.30
         self.objects = None
         self.map = Map(self.resolution)
 
@@ -68,7 +65,7 @@ class Mapping(Node):
         ]
 
         # Initalise map based on workspace perimeter
-        self.map.initalise_map_with_workspace(self.workspace_vertices)
+        self.map.initalise_grid_with_workspace(self.workspace_vertices)
 
     def objects_callback(self, msg):
         for object_msg in msg.objects:
@@ -133,33 +130,8 @@ class Mapping(Node):
         # Flatting grid into a row-major list
         map_msg.data = self.map.grid.flatten().tolist()
 
-        #map_msg.data = self.grid.flatten().tolist()
-
         self.map_publisher.publish(map_msg)
         self.get_logger().info("Published occupancy map grid")
-
-    def update_inflated_map(self):
-        map_msg = OccupancyGrid()
-        map_msg.header.stamp = self.get_clock().now().to_msg()
-        map_msg.header.frame_id = "map"
-
-        map_msg.info.resolution = self.map.resolution
-        map_msg.info.width = self.map.grid_width
-        map_msg.info.height = self.map.grid_height
-        map_msg.info.origin.position.x = self.map.origin_x
-        map_msg.info.origin.position.y = self.map.origin_y
-        map_msg.info.origin.position.z = 0.0
-        map_msg.info.origin.orientation.x = 0.0
-        map_msg.info.origin.orientation.y = 0.0
-        map_msg.info.origin.orientation.z = 0.0
-        map_msg.info.origin.orientation.w = 1.0
-
-        # Flatting grid into a row-major list
-        self.map.inflate_map(self.base)
-        map_msg.data = self.map.inflated_grid.flatten().tolist()
-
-        self.inflated_map_publisher.publish(map_msg)
-        self.get_logger().info("Published inflated occupancy map grid")
 
 def main():
     rclpy.init()

@@ -22,7 +22,7 @@ class Pathing(Node):
         super().__init__("pathing")
 
         self.create_subscription(Odometry, "/odom", self.odom_callback, 10)
-        self.create_subscription(OccupancyGrid, "/inflated_map", self.map_callback, 10)
+        self.create_subscription(OccupancyGrid, "/map", self.map_callback, 10)
         self.path_publisher = self.create_publisher(Path, "/custom_path", 10)
         self.point_service = self.create_service(GoToPoint, "/navigation_point", self.set_end_point)
 
@@ -32,8 +32,8 @@ class Pathing(Node):
         self.target_yaw = 0
         self.amplitude = 0.5
         self.cycles = 1.0
-        self.grid = None
         self.adaptive_h = {}
+        self.base = 0.30
         self.map = None
         
         self.timer = self.create_timer(0.05, self.publish_astar_path)
@@ -44,12 +44,16 @@ class Pathing(Node):
     def map_callback(self, msg):
         width = msg.info.width
         height = msg.info.height
-        resolution = msg.info.resolution
-        origin_x = msg.info.origin.position.x
-        origin_y = msg.info.origin.position.y
-        self.map = Map(resolution, origin_x, origin_y)
+        grid = np.array(msg.data, dtype=np.int8).reshape((height, width))
 
-        self.grid = np.array(msg.data, dtype=np.int8).reshape((height, width))
+        # Create map or update map grid
+        if self.map is None:
+            resolution = msg.info.resolution
+            origin_x = msg.info.origin.position.x
+            origin_y = msg.info.origin.position.y
+            self.map = Map(resolution, origin_x, origin_y, width, height, grid)
+        else:
+            self.map.update_grid(grid)
 
     def set_end_point(self, request, response):
         self.end_point = (request.x, request.y)
@@ -67,14 +71,18 @@ class Pathing(Node):
             self.get_logger().info("No end point received")
             return
 
-        if self.grid is None or self.map is None:
-            self.get_logger().info("Occupancy map grid not received")
+        if self.map is None:
+            self.get_logger().info("Occupancy map not received")
             return
 
         start_x, start_y = self.map.world_to_grid(self.start_point[0], self.start_point[1])
         end_x, end_y = self.map.world_to_grid(self.end_point[0], self.end_point[1])
 
-        path_planner = AdaptiveAStar(self.grid, self.adaptive_h)
+        inflation_radius = self.base
+
+        inflated_grid = self.map.inflate_grid(inflation_radius)
+
+        path_planner = AdaptiveAStar(inflated_grid, self.adaptive_h)
         path = path_planner.plan_path((start_y, start_x), (end_y, end_x))
 
         if path is None:
