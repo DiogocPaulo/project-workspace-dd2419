@@ -66,6 +66,7 @@ class Map:
             # Grid is not yet initalised
             return
 
+
         if object_type == Object.CUBE:
             width = 0.05
             height = 0.05
@@ -83,13 +84,14 @@ class Map:
         grid_half_width = self.distance_to_cells(width) / 2
         grid_half_height = self.distance_to_cells(height) / 2
 
+        if not (0 <= grid_x < self.grid_width and 0 <= grid_y < self.grid_height):
+            # Grid coordinates out of bounds
+            return
+
         if (self.grid[grid_y, grid_x] == 100):
             # Object already in map
             return
 
-        if not (0 <= grid_x < self.grid_width and 0 <= grid_y < self.grid_height):
-            # Grid coordinates out of bounds
-            return
 
         object_vertices = np.array([
             [grid_half_width, grid_half_height],
@@ -209,15 +211,19 @@ class Map:
         if self.grid is None:
             raise ValueError("Grid is not initialised")
 
+
         inflation_cells = self.distance_to_cells(inflation_radius)
         region_cells = self.distance_to_cells(region_radius)
-        x, y = self.world_to_grid(robot_x, robot_y)
+        grid_x, grid_y = self.world_to_grid(robot_x, robot_y)
+        if not (0 <= grid_x < self.grid_width and 0 <= grid_y < self.grid_height):
+            # Grid coordinates out of bounds
+            return
 
         # Define region within grid to inflate
-        x_min = max(0, x - region_cells)
-        x_max = min(self.grid_width, x + region_cells + 1)
-        y_min = max(0, y - region_cells)
-        y_max = min(self.grid_height, y + region_cells + 1)
+        x_min = max(0, grid_x - region_cells)
+        x_max = min(self.grid_width, grid_x + region_cells + 1)
+        y_min = max(0, grid_y - region_cells)
+        y_max = min(self.grid_height, grid_y + region_cells + 1)
 
         inflated_grid = self.grid.copy()
         region = self.grid[y_min:y_max, x_min:x_max].copy()
