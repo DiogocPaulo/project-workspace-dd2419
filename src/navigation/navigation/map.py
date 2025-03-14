@@ -217,9 +217,9 @@ class Map:
         x_min = max(0, x - region_cells)
         x_max = min(self.grid_width, x + region_cells + 1)
         y_min = max(0, y - region_cells)
-        y_max = min(self.grid_width, y + region_cells + 1)
+        y_max = min(self.grid_height, y + region_cells + 1)
 
-        inflated_grid = self.grid
+        inflated_grid = self.grid.copy()
         region = self.grid[y_min:y_max, x_min:x_max].copy()
 
         # Define a circular footprint using inflation radius
@@ -234,6 +234,6 @@ class Map:
         mask = tx**2 + ty**2 <= inflation_cells**2
         circular_footprint[mask] = 1
 
-        inflated_region = maximum_filter(region, footprint=circular_footprint, mode="constant", cval=-1)
+        inflated_region = maximum_filter(region, footprint=circular_footprint, mode="constant", cval=100)
         inflated_grid[y_min:y_max, x_min:x_max] = inflated_region
         return inflated_grid
