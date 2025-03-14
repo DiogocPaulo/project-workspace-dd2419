@@ -109,15 +109,21 @@ class Pathing(Node):
         end_x, end_y = self.map.world_to_grid(self.end_point[0], self.end_point[1])
 
         inflation_radius = self.base
+        path = None
+        while path is None:
+            self.inflated_grid = self.map.inflate_grid_in_region(inflation_radius, self.region_radius, self.start_point[0], self.start_point[1])
+            path_planner = AdaptiveAStar(self.inflated_grid, self.adaptive_h)
+            path = path_planner.plan_path((start_y, start_x), (end_y, end_x))
 
-        self.inflated_grid = self.map.inflate_grid_in_region(inflation_radius, self.region_radius, self.start_point[0], self.start_point[1])
-
-        path_planner = AdaptiveAStar(self.inflated_grid, self.adaptive_h)
-        path = path_planner.plan_path((start_y, start_x), (end_y, end_x))
-
-        if path is None:
-            self.get_logger().warn("No path found")
-            return
+            if path is not None:
+                break
+            if inflation_radius > 0.1:
+                inflation_radius -= self.map.resolution
+                self.get_logger().info("No path found, trying smaller inflation radius")
+                continue
+            if path is None:
+                self.get_logger().warn("No path found")
+                return
 
         path_msg = Path()
         path_msg.header.stamp = self.get_clock().now().to_msg()
