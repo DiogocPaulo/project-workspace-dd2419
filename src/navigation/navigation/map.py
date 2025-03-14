@@ -234,6 +234,6 @@ class Map:
         mask = tx**2 + ty**2 <= inflation_cells**2
         circular_footprint[mask] = 1
 
-        inflated_region = maximum_filter(region, footprint=circular_footprint, mode="constant", cval=100)
+        inflated_region = maximum_filter(region, footprint=circular_footprint, mode="constant", cval=-1)
         inflated_grid[y_min:y_max, x_min:x_max] = inflated_region
         return inflated_grid
