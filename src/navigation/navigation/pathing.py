@@ -24,6 +24,7 @@ class Pathing(Node):
         self.create_subscription(Odometry, "/odom", self.odom_callback, 10)
         self.create_subscription(OccupancyGrid, "/map", self.map_callback, 10)
         self.path_publisher = self.create_publisher(Path, "/custom_path", 10)
+        self.inflated_map_publisher = self.create_publisher(OccupancyGrid, "/inflated_map", 10)
         self.point_service = self.create_service(GoToPoint, "/navigation_point", self.set_end_point)
 
         # Parameters
@@ -35,8 +36,10 @@ class Pathing(Node):
         self.adaptive_h = {}
         self.base = 0.30
         self.map = None
+        self.inflated_grid = None
         
-        self.timer = self.create_timer(0.05, self.publish_astar_path)
+        self.create_timer(0.05, self.publish_astar_path)
+        self.create_timer(0.5, self.update_inflated_map)
 
     def odom_callback(self, msg: Odometry):
         self.start_point = (msg.pose.pose.position.x, msg.pose.pose.position.y)
@@ -55,6 +58,32 @@ class Pathing(Node):
         else:
             self.map.update_grid(grid)
 
+    def update_inflated_map(self)
+        if self.map is None or self.inflated_grid is None
+            return
+
+        map_msg = OccupancyGrid()
+        map_msg.header.stamp = self.get_clock().now().to_msg()
+        map_msg.header.frame_id = "map"
+
+        map_msg.info.resolution = self.map.resolution
+        map_msg.info.width = self.map.grid_width
+        map_msg.info.height = self.map.grid_height
+        map_msg.info.origin.position.x = self.map.origin_x
+        map_msg.info.origin.position.y = self.map.origin_y
+        map_msg.info.origin.position.z = 0.0
+        map_msg.info.origin.orientation.x = 0.0
+        map_msg.info.origin.orientation.y = 0.0
+        map_msg.info.origin.orientation.z = 0.0
+        map_msg.info.origin.orientation.w = 1.0
+
+        # Flatting grid into a row-major list
+        map_msg.data = self.inflated_grid.flatten().tolist()
+
+        self.inflated_map_publisher.publish(map_msg)
+        self.get_logger().debug("Published inflated occupancy map", once=True)
+
+
     def set_end_point(self, request, response):
         self.end_point = (request.x, request.y)
         self.target_yaw = request.yaw
@@ -68,11 +97,11 @@ class Pathing(Node):
 
     def publish_astar_path(self):
         if self.end_point is (None, None):
-            self.get_logger().info("No end point received")
+            self.get_logger().debug("No end point received")
             return
 
         if self.map is None:
-            self.get_logger().info("Occupancy map not received")
+            self.get_logger().debug("Occupancy map not received")
             return
 
         start_x, start_y = self.map.world_to_grid(self.start_point[0], self.start_point[1])
@@ -80,13 +109,13 @@ class Pathing(Node):
 
         inflation_radius = self.base
 
-        inflated_grid = self.map.inflate_grid(inflation_radius)
+        self.inflated_grid = self.map.inflate_grid(inflation_radius)
 
-        path_planner = AdaptiveAStar(inflated_grid, self.adaptive_h)
+        path_planner = AdaptiveAStar(self.inflated_grid, self.adaptive_h)
         path = path_planner.plan_path((start_y, start_x), (end_y, end_x))
 
         if path is None:
-            self.get_logger().info("No path found")
+            self.get_logger().warn("No path found")
             return
 
         path_msg = Path()
@@ -104,7 +133,7 @@ class Pathing(Node):
             path_msg.poses.append(pose)
 
         self.path_publisher.publish(path_msg)
-        self.get_logger().info("Published A star custom path")
+        self.get_logger().debug("Published A star custom path", once=True)
 
 
     def publish_curved_path(self):
@@ -145,7 +174,7 @@ class Pathing(Node):
             path_msg.poses.append(pose)
 
         self.path_publisher.publish(path_msg)
-        self.get_logger().info("Published curved custom path")
+        self.get_logger().debug("Published curved custom path", once=True)
         
 
     def publish_straight_path(self):
@@ -173,7 +202,7 @@ class Pathing(Node):
             path_msg.poses.append(pose)
 
         self.path_publisher.publish(path_msg)
-        self.get_logger().info("Published straight custom path")
+        self.get_logger().debug("Published straight custom path", once=True)
 
 def main():
     rclpy.init()

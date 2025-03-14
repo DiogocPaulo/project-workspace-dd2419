@@ -131,7 +131,7 @@ class Mapping(Node):
         map_msg.data = self.map.grid.flatten().tolist()
 
         self.map_publisher.publish(map_msg)
-        self.get_logger().info("Published occupancy map grid")
+        self.get_logger().debug("Published occupancy map", once=True)
 
 def main():
     rclpy.init()
