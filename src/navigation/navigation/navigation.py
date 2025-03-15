@@ -152,7 +152,7 @@ class Navigation(Node):
         self.state = RobotState()
         self.target_path = TargetPath()
         self.previous_index = 0
-        self.reached_destination = False
+        self.waiting_for_path = True
 
         qos_profile = QoSProfile(
             depth=1,
@@ -175,8 +175,12 @@ class Navigation(Node):
         self.state.update_state(msg)
 
     def path_callback(self, msg: Path):
-        self.reached_destination = False
-        self.target_path.update_path(msg)
+        if len(msg.poses) > 0:
+            self.waiting_for_path = False
+            self.target_path.update_path(msg)
+            self.get_logger().info(f"Recived new path with end point: ({msg.poses[-1].pose.position.x:.2f}, {msg.poses[-1].pose.position.y:.2f})")
+        else:
+            self.get_logger().warn("Recived empty path")
 
     def send_reached_destination(self):
         request = Trigger.Request()
@@ -190,26 +194,42 @@ class Navigation(Node):
         except Exception as e:
             self.get_logger().warn(f"Service call failed: {e}")
 
+    def publish_duty_cycles(self, left_wheel, right_wheel):
+        # Ensure left and right duty cycles are between -1 to 1
+        max_value = max(abs(left_wheel), abs(right_wheel))
+        if max_value > 1:
+            left_wheel = left_wheel / max_value
+            right_wheel = right_wheel / max_value
+
+        # Publish duty cycles for motors
+        duty_msg = DutyCycles()
+        duty_msg.header.frame_id = "base_link"
+        duty_msg.header.stamp = self.get_clock().now().to_msg()
+        duty_msg.duty_cycle_left = left_wheel
+        duty_msg.duty_cycle_right = right_wheel
+        self.motor_publisher.publish(duty_msg)
+
+
     def control_loop(self):
-        if not self.target_path.x_points:
-            self.get_logger().info("No target path")
+        if not self.target_path.x_points or self.waiting_for_path:
+            self.get_logger().info("Waiting for path")
+            self.publish_duty_cycles(0.0, 0.0)
             return
 
         omega, alpha, self.previous_index = pure_pursuit_control(self.state, self.target_path)
 
         if self.previous_index >= (len(self.target_path.x_points) - 1):
             distance = np.hypot(self.state.x - self.target_path.x_points[-1], self.state.y - self.target_path.y_points[-1])
-            if distance <= distance_threshold and not self.reached_destination:
+            if distance <= distance_threshold and not self.waiting_for_path:
                 self.get_logger().info(f"Reached destination")
-                self.reached_destination = True
+                self.waiting_for_path = True
+
+                # Clear existing target path
+                self.target_path.x_points = []
+                self.target_path.y_points = []
+
                 self.send_reached_destination()
                 return
-                # if self.target_path.compare_to_target_yaw(self.state.yaw, yaw_threshold):
-                #     self.get_logger().info(f"Reached destination")
-                #     self.send_reached_destination()
-                #     return
-                # else:
-                #     omega, alpha = calculate_angular_velocity(self.state, self.state.yaw, self.target_path.target_yaw)
 
         if abs(alpha) > (math.pi / 2):
             angular_velocity = 0.15
@@ -223,18 +243,7 @@ class Navigation(Node):
             right_wheel = command_velocity + (base/2) * omega
             self.get_logger().info(f"Velocity: {command_velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
 
-        max_value = max(abs(left_wheel), abs(right_wheel))
-
-        if max_value > 1:
-            left_wheel = left_wheel / max_value
-            right_wheel = right_wheel / max_value
-
-        dutyCycles = DutyCycles()
-        dutyCycles.header.frame_id = "base_link"
-        dutyCycles.header.stamp = self.get_clock().now().to_msg()
-        dutyCycles.duty_cycle_left = left_wheel
-        dutyCycles.duty_cycle_right = right_wheel
-        self.motor_publisher.publish(dutyCycles)
+        self.publish_duty_cycles(left_wheel, right_wheel)
 
 def main():
     rclpy.init()
