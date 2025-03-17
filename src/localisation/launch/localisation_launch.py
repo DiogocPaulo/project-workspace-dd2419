@@ -25,6 +25,12 @@ def generate_launch_description():
             output="screen",
         ),
         Node(
+            package="tf2_ros",
+            executable="static_transform_publisher",
+            arguments=["0.01", "0.085", "0.118", "0", "0", "0", "1", "base_link", "arm_base"],
+            output="screen",
+        ),
+        Node(
             package="localisation",
             executable="odometry",
             name="robot_odometry",
