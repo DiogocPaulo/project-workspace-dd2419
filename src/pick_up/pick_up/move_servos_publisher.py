@@ -116,26 +116,26 @@ class MultiServoPublisher(Node):
         msg.data = pose
         self.publisher.publish(msg)
 
-        # # Transform ---------------------------------------
-        # tf_future = self.tfBuffer.wait_for_transform_async(
-        #     target_frame = 'arm_base',
-        #     source_frame = message.header.frame_id,
-        #     time = zero_time # Get latest transform instead of timestamped, since we want to pickup when the robot is standing still
-        # )
+        # Transform ---------------------------------------
+        tf_future = self.tfBuffer.wait_for_transform_async(
+            target_frame = 'arm_base',
+            source_frame = message.header.frame_id,
+            time = zero_time # Get latest transform instead of timestamped, since we want to pickup when the robot is standing still
+        )
 
-        # rclpy.spin_until_future_complete(self,tf_future, timeout_sec=1)
+        rclpy.spin_until_future_complete(self,tf_future, timeout_sec=1)
 
-        # try:
-        #     t = self.tfBuffer.lookup_transform(
-        #         'arm_base',
-        #         message.header.frame_id,
-        #         zero_time
-        # )
-        # except TransformException as ex:
-        #     self.get_logger().info(
-        #         f'Could not transform map to arm_base: {ex}'
-        #     )
-        # # Transform ---------------------------------------
+        try:
+            t = self.tfBuffer.lookup_transform(
+                'arm_base',
+                message.header.frame_id,
+                zero_time
+        )
+        except TransformException as ex:
+            self.get_logger().info(
+                f'Could not transform map to arm_base: {ex}'
+            )
+        # Transform ---------------------------------------
 
         self.clock.sleep_for(rclpy.duration.Duration(seconds=2)) #Give arm time to do its thing
         # position = do_transform_point(message.point,t)
