@@ -7,6 +7,9 @@ class AdaptiveAStar:
         self.rows, self.columns = grid.shape  # (height, width)
         self.adaptive_h = adaptive_h if adaptive_h is not None else {}
 
+    def update_grid(self, grid):
+        self.grid = grid
+
     def heuristic(self, node, end_node):
         if node in self.adaptive_h:
             return self.adaptive_h[node]
@@ -65,7 +68,7 @@ class AdaptiveAStar:
         return None  # No path found
 
 if __name__ == "__main__":
-    from grid_map2 import Map
+    from navigation.map import Map
 
     # Initialize the grid map
     grid = Map(1, 0, 0, 15, 15)
