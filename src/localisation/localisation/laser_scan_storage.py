@@ -3,27 +3,58 @@ from scipy.spatial import KDTree
 
 class LaserScanData:
     def __init__(self):
-        self.points = []
+        """Initialize with empty points, pose, and timestamp."""
+        self.points = np.array([])  # Use NumPy array for consistency
         self.pose = None
         self.timestamp = None
 
-    def store_scan(self, ranges, angles, pose, timestamp=None):
-        """Converts polar coordinates to Cartesian, saves the points, pose, and timestamp."""
-        x = ranges * np.cos(angles)
-        y = ranges * np.sin(angles)
+    def store_scan(self, ranges, angles, pose, timestamp=None, max_range=10.0):
+        """Converts polar coordinates to Cartesian, saves valid points, pose, and timestamp."""
+        # Convert to NumPy arrays if not already
+        ranges = np.array(ranges)
+        angles = np.array(angles)
+
+        # Filter out invalid ranges (inf, nan, or beyond max_range)
+        valid_mask = np.isfinite(ranges) & (ranges >= 0) & (ranges <= max_range)
+        if not np.any(valid_mask):
+            self.points = np.array([])  # Empty array if no valid points
+            self.pose = pose
+            self.timestamp = timestamp
+            return
+
+        valid_ranges = ranges[valid_mask]
+        valid_angles = angles[valid_mask]
+
+        # Convert to Cartesian coordinates
+        x = valid_ranges * np.cos(valid_angles)
+        y = valid_ranges * np.sin(valid_angles)
         self.points = np.column_stack((x, y))
         self.pose = pose
         self.timestamp = timestamp
 
     def store_points(self, points, pose, timestamp=None):
-        """Stores the points, pose, and timestamp."""
-        self.points = points
+        """Stores precomputed points, pose, and timestamp after validation."""
+        # Validate points input
+        points = np.array(points, dtype=np.float64)  # Ensure NumPy array and float64
+        if points.ndim != 2 or points.shape[1] != 2:
+            raise ValueError(f"Points must be a 2D array with shape (N, 2), got {points.shape}")
+        
+        # Filter out inf/nan
+        valid_mask = np.isfinite(points).all(axis=1)
+        if not np.any(valid_mask):
+            self.points = np.array([])  # Empty if all invalid
+        else:
+            self.points = points[valid_mask]
+        
         self.pose = pose
         self.timestamp = timestamp
 
     def get_points(self):
-        """Returns the stored points."""
-        return self.points
+        """Returns the stored points, guaranteed to be finite."""
+        # Double-check for safety (though store methods should ensure this)
+        if len(self.points) > 0:
+            return self.points[np.isfinite(self.points).all(axis=1)]
+        return self.points  # Empty array if no valid points
 
     def get_pose(self):
         """Returns the stored pose."""
