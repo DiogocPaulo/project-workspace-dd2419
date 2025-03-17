@@ -124,5 +124,5 @@ if __name__ == "__main__":
     closest_scan = storage.get_closest_scan(np.array([2, 2, 0]))
     print(closest_scan.get_pose())  # Expected output: [1, 1, 0]
     
-    closest_scan = storage.get_closest_scan(np.array([2, 2, 0]), max_distance=1)
-    print(closest_scan)  # Expected output: None
+    closest_scan = storage.get_closest_scan(np.array([3, 2, 0]), max_distance=2)
+    print(closest_scan.get_pose() if closest_scan else None)  # Expected output: None
