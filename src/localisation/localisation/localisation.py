@@ -61,8 +61,12 @@ class Localisation(Node):
         )
         
         angles = [msg.angle_min + i * msg.angle_increment for i in range(len(msg.ranges))]
-        new_scan.store_scan(ranges=msg.ranges, angles=angles, pose=current_pose, timestamp=self.get_clock().now().to_msg())
-        
+        added = new_scan.store_scan(ranges=msg.ranges, angles=angles, pose=current_pose, timestamp=self.get_clock().now().to_msg())
+        if not added:
+            self.get_logger().error("Failed to store LaserScan data")
+            return
+
+
         if closest_scan is None or self.use_scan(closest_scan.pose, current_pose):
             self.laser_scans.add_scan(new_scan)
             self.get_logger().info(f"New Laser Scan added with {len(msg.ranges)} points")
@@ -77,13 +81,13 @@ class Localisation(Node):
             self.get_logger().error(f"ICP failed: {str(e)}")
             return
         
-        x = scan2.pose.position.x + translation[0]
-        y = scan2.pose.position.y + translation[1]
-        current_yaw = self.quaternion_to_yaw(scan2.pose.orientation)
+        x = scan2.pose[0] + translation[0]
+        y = scan2.pose[1] + translation[1]
+        current_yaw = scan2.pose[2]
         theta = math.atan2(math.sin(current_yaw + rotation), math.cos(current_yaw + rotation))
         
-        self.transform_x = x - scan2.pose.position.x
-        self.transform_y = y - scan2.pose.position.y
+        self.transform_x = x - scan2[0]
+        self.transform_y = y - scan2[1]
         self.transform_theta = theta - current_yaw
         self.get_logger().info(f"Updated map → odom (x={self.transform_x}, y={self.transform_y}, theta={self.transform_theta})")
 

@@ -9,7 +9,7 @@ class LaserScanData:
         self.timestamp = None
 
     def store_scan(self, ranges, angles, pose, timestamp=None, max_range=10.0):
-        """Converts polar coordinates to Cartesian, saves valid points, pose, and timestamp."""
+        """Converts polar coordinates to Cartesian, transforms to odom frame, and saves valid points, pose, and timestamp."""
         # Convert to NumPy arrays if not already
         ranges = np.array(ranges)
         angles = np.array(angles)
@@ -20,17 +20,27 @@ class LaserScanData:
             self.points = np.array([])  # Empty array if no valid points
             self.pose = pose
             self.timestamp = timestamp
-            return
+            return False  # Indicate that no points were added
 
         valid_ranges = ranges[valid_mask]
         valid_angles = angles[valid_mask]
 
-        # Convert to Cartesian coordinates
+        # Convert to Cartesian coordinates in the laser frame
         x = valid_ranges * np.cos(valid_angles)
         y = valid_ranges * np.sin(valid_angles)
-        self.points = np.column_stack((x, y))
+        points_laser = np.column_stack((x, y))
+
+        # Transform points to the odom frame using the pose
+        theta = pose[2]  # Orientation (yaw) in radians
+        rotation_matrix = np.array([[np.cos(theta), -np.sin(theta)],
+                         [np.sin(theta), np.cos(theta)]])
+        translation = pose[:2]  # Translation (x, y)
+        points_odom = points_laser @ rotation_matrix.T + translation
+
+        self.points = points_odom
         self.pose = pose
         self.timestamp = timestamp
+        return True  # Indicate that points were successfully added
 
     def store_points(self, points, pose, timestamp=None):
         """Stores precomputed points, pose, and timestamp after validation."""
@@ -43,11 +53,15 @@ class LaserScanData:
         valid_mask = np.isfinite(points).all(axis=1)
         if not np.any(valid_mask):
             self.points = np.array([])  # Empty if all invalid
+            self.pose = pose
+            self.timestamp = timestamp
+            return False  # Indicate no points were added
         else:
             self.points = points[valid_mask]
         
         self.pose = pose
         self.timestamp = timestamp
+        return True  # Indicate points were successfully added
 
     def get_points(self):
         """Returns the stored points, guaranteed to be finite."""
