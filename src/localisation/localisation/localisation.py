@@ -9,6 +9,8 @@ from geometry_msgs.msg import Pose, TransformStamped
 from tf_transformations import quaternion_from_euler  # Correct import
 import tf2_ros
 
+import numpy as np
+
 # Import custom classes and functions
 from localisation.laser_scan_storage import LaserScanStorage, LaserScanData
 from localisation.icp import icp
@@ -143,7 +145,10 @@ class Localisation(Node):
 
     def get_current_pose(self):
         """Return the current pose of the robot."""
-        return self.pose
+        x = self.pose.position.x
+        y = self.pose.position.y
+        theta = self.quaternion_to_yaw(self.pose.orientation)
+        return np.array([x, y, theta])
 
     @staticmethod
     def compute_pose_difference(pose1, pose2):
