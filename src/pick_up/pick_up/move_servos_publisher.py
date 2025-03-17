@@ -138,8 +138,8 @@ class MultiServoPublisher(Node):
         # Transform ---------------------------------------
 
         self.clock.sleep_for(rclpy.duration.Duration(seconds=2)) #Give arm time to do its thing
-        # position = do_transform_point(message.point,t)
-        position = message.point
+        position = do_transform_point(message.point,t)
+        # position = message.point
         base_arm,v1_arm,v2_arm,v3_arm = self.FindKinematics(position.x,position.y,position.z)
 
 

@@ -107,7 +107,7 @@ def main():
    # node.send_end_point(-1.5, 0.5)
 
     node.send_arm_task(0.1,0.19,-0.15,"PICKUP")
-    node.send_arm_task(0.26,-0.1,0.0,"DROPOFF")
+    node.send_arm_task(0.26,-0.1,0.0,"DROPOFF") 
 
     try:
         rclpy.spin(node)
