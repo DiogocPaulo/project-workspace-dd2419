@@ -28,6 +28,11 @@ class Localisation(Node):
         
         # TF2 broadcaster for map to odom transform
         self.map_odom_broadcaster = tf2_ros.TransformBroadcaster(self)
+        self.x = 0.0
+        self.y = 0.0
+        self.theta = 0.0
+        self.create_timer(0.1, self.broadcast_transform)  # Repeat every 0.1s
+        self.get_logger().info("Started broadcasting map -> odom transform")
         
         # Subscriptions
         self.create_subscription(Odometry, "/odom", self.odom_callback, 10)
@@ -72,29 +77,28 @@ class Localisation(Node):
         current_yaw = self.quaternion_to_yaw(scan2.pose.orientation)
         theta = math.atan2(math.sin(current_yaw + rotation), math.cos(current_yaw + rotation))
         
-        dx = x - scan2.pose.position.x
-        dy = y - scan2.pose.position.y
-        dtheta = theta - current_yaw
-        
-        self.broadcast_transform(dx, dy, dtheta)
+        self.x = x - scan2.pose.position.x
+        self.y = y - scan2.pose.position.y
+        self.theta = theta - current_yaw
 
-    def broadcast_transform(self, x: float, y: float, theta: float):
+    def broadcast_transform(self):
         """Broadcast the map to odom transform."""
         t = TransformStamped()
         t.header.stamp = self.get_clock().now().to_msg()
         t.header.frame_id = "map"
         t.child_frame_id = "odom"
-        t.transform.translation.x = x
-        t.transform.translation.y = y
+        t.transform.translation.x = self.x
+        t.transform.translation.y = self.y
         t.transform.translation.z = 0.0
         
-        q = quaternion_from_euler(0, 0, theta)
+        q = quaternion_from_euler(0, 0, self.theta)
         t.transform.rotation.x = q[0]
         t.transform.rotation.y = q[1]
         t.transform.rotation.z = q[2]
         t.transform.rotation.w = q[3]
         
         self.map_odom_broadcaster.sendTransform(t)
+        self.get_logger().info(f"Broadcasting transform: map → odom (x={self.x}, y={self.y}, theta={self.theta})")
 
     def get_current_pose(self):
         """Return the current pose of the robot."""
