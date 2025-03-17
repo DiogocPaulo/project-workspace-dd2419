@@ -82,7 +82,7 @@ class ProjectMaster(Node):
         arm_msg = ArmTaskMessage()
         arm_msg.header = Header()
         arm_msg.header.stamp = self.get_clock().now().to_msg()
-        arm_msg.header.frame_id = "map"
+        arm_msg.header.frame_id = "base_link"
         arm_msg.point = Point()
         arm_msg.point.x = x
         arm_msg.point.y = y
@@ -106,8 +106,8 @@ def main():
 
    # node.send_end_point(-1.5, 0.5)
 
-    node.send_arm_task(0.1,0.19,-0.15,"PICKUP")
-    node.send_arm_task(0.26,-0.1,0.0,"DROPOFF") 
+    node.send_arm_task(0.2,0.0,-0.03,"PICKUP")
+    node.send_arm_task(0.15,0.15,-0.03,"DROPOFF")  
 
     try:
         rclpy.spin(node)
