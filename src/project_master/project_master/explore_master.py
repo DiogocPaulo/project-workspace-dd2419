@@ -24,7 +24,7 @@ class ExploreMaster(Node):
         next_x = self.end_points[self.i][0]
         next_y = self.end_points[self.i][1]
         next_yaw = self.end_points[self.i][2]
-        self.send_end_point()
+        self.send_end_point(next_x, next_y, next_yaw)
         self.i = (self.i + 1) % 4
 
         response.success = True

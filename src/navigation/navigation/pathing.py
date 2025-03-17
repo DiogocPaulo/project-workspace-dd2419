@@ -90,7 +90,7 @@ class Pathing(Node):
         response.message = f"Pathing end point set: ({self.end_point[0]}, {self.end_point[1]})"
         return response
 
-    def clear_end_point(self):
+    def clear_end_point(self, request, response):
         self.end_point = (None, None)
         response.success = True
         response.message = "Cleared pathing end point"

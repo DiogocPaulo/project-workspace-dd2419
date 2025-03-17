@@ -191,7 +191,7 @@ class Navigation(Node):
         omega, alpha, self.previous_index = pure_pursuit_control(self.state, self.target_path)
 
         if self.previous_index >= (len(self.target_path.x_points) - 1):
-            distance = self.state.distance_to_state(self, self.end_point[0], self.end_point[1])
+            distance = self.state.distance_to_state(self.end_point[0], self.end_point[1])
             if distance <= distance_threshold and not self.waiting_for_path:
                 self.get_logger().info(f"Reached destination")
                 self.waiting_for_path = True
