@@ -24,8 +24,6 @@ setup(
     entry_points={
         'console_scripts': [
             'localisation = localisation.localisation:main',
-            'odometry = localisation.odometry:main',
-            'navigation = localisation.navigation:main',
         ],
     },
 )
