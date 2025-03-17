@@ -60,8 +60,8 @@ class Localisation(Node):
         if closest_scan is None or self.has_moved_enough(closest_scan.pose, current_pose):
             self.laser_scans.add_scan(new_scan)
             self.get_logger().info(f"New Laser Scan added with {len(msg.ranges)} points")
-            if closest_scan is not None:
-                self.update_map_odom_transform(closest_scan, new_scan)
+            #if closest_scan is not None:
+                #self.update_map_odom_transform(closest_scan, new_scan)
 
     def update_map_odom_transform(self, scan1, scan2):
         """Update and broadcast the map to odom transform using ICP."""
