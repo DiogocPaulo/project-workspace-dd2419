@@ -115,13 +115,11 @@ class Localisation(Node):
     @staticmethod
     def compute_pose_difference(pose1, pose2):
         """Compute linear and angular difference between two poses."""
-        dx = pose2.position.x - pose1.position.x
-        dy = pose2.position.y - pose1.position.y
+        dx = pose2[0]- pose1[0]
+        dy = pose2[1] - pose1 [1]
+        dtheta = pose2[2] - pose1[2]
         linear_distance = math.sqrt(dx ** 2 + dy ** 2)
-        
-        yaw1 = Localisation.quaternion_to_yaw(pose1.orientation)
-        yaw2 = Localisation.quaternion_to_yaw(pose2.orientation)
-        angular_diff = math.atan2(math.sin(yaw2 - yaw1), math.cos(yaw2 - yaw1))
+        angular_diff = math.atan2(math.sin(dtheta), math.cos(dtheta))
         
         return linear_distance, abs(angular_diff)
 
