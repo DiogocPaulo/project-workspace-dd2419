@@ -34,7 +34,7 @@ class Pathing(Node):
         self.amplitude = 0.5
         self.cycles = 1.0
         self.adaptive_h = {}
-        self.base = 0.3 
+        self.base = 0.4
         self.region_radius = 1.0
         self.map = None
         self.inflated_grid = None
