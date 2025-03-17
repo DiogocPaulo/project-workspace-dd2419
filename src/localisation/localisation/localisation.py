@@ -32,7 +32,6 @@ class Localisation(Node):
         self.y = 0.0
         self.theta = 0.0
         self.create_timer(0.1, self.broadcast_transform)  # Repeat every 0.1s
-        self.get_logger().info("Started broadcasting map -> odom transform")
         
         # Subscriptions
         self.create_subscription(Odometry, "/odom", self.odom_callback, 10)
@@ -41,10 +40,10 @@ class Localisation(Node):
     def odom_callback(self, msg):
         """Callback for odometry messages."""
         self.pose = msg.pose.pose
-        self.get_logger().info(
+        """self.get_logger().info(
             f"Odometry Pose: x={self.pose.position.x:.3f}, "
             f"y={self.pose.position.y:.3f}, z={self.pose.position.z:.3f}"
-        )
+        )"""
 
     def scan_callback(self, msg):
         """Callback for laser scan messages."""
@@ -80,6 +79,7 @@ class Localisation(Node):
         self.x = x - scan2.pose.position.x
         self.y = y - scan2.pose.position.y
         self.theta = theta - current_yaw
+        self.get_logger().info(f"Updated map → odom (x={self.x}, y={self.y}, theta={self.theta})")
 
     def broadcast_transform(self):
         """Broadcast the map to odom transform."""
@@ -98,7 +98,7 @@ class Localisation(Node):
         t.transform.rotation.w = q[3]
         
         self.map_odom_broadcaster.sendTransform(t)
-        self.get_logger().info(f"Broadcasting transform: map → odom (x={self.x}, y={self.y}, theta={self.theta})")
+        """self.get_logger().info(f"Broadcasting transform: map → odom (x={self.x}, y={self.y}, theta={self.theta})")"""
 
     def get_current_pose(self):
         """Return the current pose of the robot."""
