@@ -11,7 +11,7 @@ from rclpy.node import Node
 from nav_msgs.msg import Path, OccupancyGrid, Odometry
 from geometry_msgs.msg import PoseStamped
 
-from project_interfaces.srv import GoToPoint
+from project_interfaces.srv import GoToPoint, Trigger
 
 from navigation.map import Map
 from navigation.adaptive_a_star import AdaptiveAStar
@@ -25,12 +25,12 @@ class Pathing(Node):
         self.create_subscription(OccupancyGrid, "/map", self.map_callback, 10)
         self.path_publisher = self.create_publisher(Path, "/custom_path", 10)
         self.inflated_map_publisher = self.create_publisher(OccupancyGrid, "/inflated_map", 10)
-        self.point_service = self.create_service(GoToPoint, "/navigation_point", self.set_end_point)
+        self.end_point_service = self.create_service(GoToPoint, "/pathing_point", self.set_end_point)
+        self.clear_pathing_service = self.create_service(Trigger, "/clear_pathing", self.clear_end_point)
 
         # Parameters
         self.start_point = (0, 0)
         self.end_point = (None, None)
-        self.target_yaw = 0
         self.amplitude = 0.5
         self.cycles = 1.0
         self.adaptive_h = {}
@@ -84,17 +84,17 @@ class Pathing(Node):
         self.inflated_map_publisher.publish(map_msg)
         self.get_logger().info("Published inflated occupancy map", once=True)
 
-
     def set_end_point(self, request, response):
         self.end_point = (request.x, request.y)
-        self.target_yaw = request.yaw
-
-        self.get_logger().info(f"New end point:({self.end_point[0]}, {self.end_point[1]})")
-
         response.success = True
-        response.message = "End point set"
+        response.message = f"Pathing end point set: ({self.end_point[0]}, {self.end_point[1]})"
         return response
 
+    def clear_end_point(self):
+        self.end_point = (None, None):
+        response.success = True
+        response.message = "Cleared pathing end point"
+        return response
 
     def publish_astar_path(self):
         if self.end_point == (None, None):
@@ -138,7 +138,6 @@ class Pathing(Node):
                 pose.pose.position.x = x
                 pose.pose.position.y = y
                 pose.pose.position.z = 0.0
-                pose.pose.orientation.w = self.target_yaw
                 path_msg.poses.append(pose)
         else:
             path_msg.poses = []

@@ -12,7 +12,10 @@ from nav_msgs.msg import Path
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PoseStamped
 from robp_interfaces.msg import DutyCycles
-from project_interfaces.srv import Trigger
+from project_interfaces.srv import GoToPoint, Trigger
+
+from navigation.robot_state import RobotState
+from navigation.target_path import TargetPath
 
 # Robot parameters
 base = 0.3                  # Wheelbase of the vehicle
@@ -21,91 +24,6 @@ lookahead_min = 0.3         # Minimum look-ahead distance
 distance_threshold = 0.2    # Stop distance threshold
 yaw_threshold = 0.2         # Stop yaw threshold
 target_velocity = 0.22      # Robot's target velocity
-
-class RobotState:
-    """Using odometry message to update the current state of the robot"""
-    def __init__(self):
-        self.x = 0.0
-        self.y = 0.0
-        self.yaw = 0.0
-        self.velocity = 0.0
-
-    def update_state(self, odom_msg):
-        self.x = odom_msg.pose.pose.position.x
-        self.y = odom_msg.pose.pose.position.y
-
-        q = odom_msg.pose.pose.orientation
-        siny_cosp = 2 * (q.w * q.z + q.x * q.y)
-        cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z)
-        self.yaw = np.arctan2(siny_cosp, cosy_cosp)
-
-        odom_velocity = odom_msg.twist.twist.linear.x
-        self.velocity = odom_velocity + (target_velocity - odom_velocity)
-
-    def distance_to_state(self, x, y):
-        return np.hypot(self.x - x, self.y - y)
-
-class TargetPath:
-    """Determines the target route and searching of current point to navigate towards"""
-    def __init__(self):
-        self.x_points = []
-        self.y_points = []
-        self.target_yaw = 0.0
-        self.old_nearest_point_index = None
-
-    def compare_to_target_yaw(self, yaw, threshold):
-        yaw1 = (self.target_yaw + 180) % 360 - 180
-        yaw2 = (yaw + 180) % 360 - 180
-
-        error = abs(yaw1 - yaw2)
-
-        if error > 180:
-            error -= 360
-
-        return error <= threshold
-
-    def update_path(self, path_msg):
-        self.x_points = [pose.pose.position.x for pose in path_msg.poses]
-        self.y_points = [pose.pose.position.y for pose in path_msg.poses]
-
-        self.target_yaw = path_msg.poses[-1].pose.orientation.w
-        
-        self.old_nearest_point_index = None
-
-    def search_target_index(self, state):
-        if not self.x_points or not self.y_points:
-            # Checks if there exits a path
-            return None, None
-
-        if self.old_nearest_point_index is None:
-            # Search for nearest point on path to robot state
-            dx = [state.x - i for i in self.x_points]
-            dy = [state.y - i for i in self.y_points]
-            distances = np.hypot(dx, dy)
-            index = np.argmin(distances)
-        else:
-            index = self.old_nearest_point_index
-            distance_to_index = state.distance_to_state(self.x_points[index], self.y_points[index])
-            while True:
-                if (index + 1) >= len(self.x_points):
-                    break
-                distance_to_next_index = state.distance_to_state(self.x_points[index + 1], self.y_points[index + 1])
-                if distance_to_index < distance_to_next_index:
-                    break
-                index += 1
-                distance_to_index = distance_to_next_index
-            self.old_nearest_point_index = index
-
-        # Compute the lookahead distance
-        lookahead = lookahead_gain * state.velocity + lookahead_min
-
-        # Find index of target point within lookahead distance
-        while lookahead > state.distance_to_state(self.x_points[index], self.y_points[index]):
-            if (index + 1) >= len(self.x_points):
-                break
-            index += 1
-
-        return index, lookahead
 
 def pure_pursuit_control(state, target_path):
     index, lookahead = target_path.search_target_index(state)
@@ -149,11 +67,6 @@ class Navigation(Node):
     def __init__(self):
         super().__init__("navigation")
 
-        self.state = RobotState()
-        self.target_path = TargetPath()
-        self.previous_index = 0
-        self.waiting_for_path = True
-
         qos_profile = QoSProfile(
             depth=1,
             history=HistoryPolicy.KEEP_LAST,
@@ -162,11 +75,26 @@ class Navigation(Node):
 
         self.create_subscription(Odometry, "/odom", self.odom_callback, qos_profile)
         self.create_subscription(Path, "/custom_path", self.path_callback, qos_profile)
-
         self.motor_publisher = self.create_publisher(DutyCycles, "/motor/duty_cycles", 10)
+        self.end_point_service = self.create_service(GoToPoint, "/navigation_point", self.set_end_point)
+        self.end_point_client = self.create_client(GoToPoint, "/pathing_point")
+        while not self.end_point_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().debug("GoToPoint service not yet avaliable, waiting ...")
         self.reached_destination_client = self.create_client(Trigger, "/reached_destination")
         while not self.reached_destination_client.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info("Reached destination service not yet avaliable, waiting ...")
+            self.get_logger().debug("Trigger service not yet avaliable, waiting ...")
+        self.clear_pathing_client = self.create_client(Trigger, "/clear_pathing")
+        while not self.clear_pathing_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().debug("Trigger service not yet avaliable, waiting ...")
+
+        # Navigation parameters
+        self.state = RobotState()
+        self.target_path = TargetPath()
+        self.previous_index = 0
+        self.end_point = (None, None)
+        self.target_yaw = None
+        self.waiting_for_path = True
+        self.reached_destination = False
 
         self.create_timer(0.05, self.control_loop)
         self.send_reached_destination()
@@ -183,17 +111,57 @@ class Navigation(Node):
             self.waiting_for_path = True
             self.get_logger().warn("Recived empty path")
 
-    def send_reached_destination(self):
-        request = Trigger.Request()
-        future = self.reached_destination_client.call_async(request)
-        future.add_done_callback(self.reached_destination_response_callback)
+    def set_end_point(self, request, response):
+        # New destination received
+        self.end_point = (request.x, request.y)
+        self.target_yaw = request.yaw
+        self.reached_destination = False
 
-    def reached_destination_response_callback(self, future):
+        self.send_end_point(self.end_point[0], self.end_point[1], self.target_yaw)
+
+        self.get_logger().info(f"New end point set: ({self.end_point[0]}, {self.end_point[1]}) at {self.target_yaw} radians")
+        response.success = True
+        response.message = f"Navigation end point set: ({self.end_point[0]}, {self.end_point[1]}) at {self.target_yaw} radians"
+        return response
+
+    def send_end_point(self, x, y, yaw):
+        self.waiting_for_path = True
+        # Create new GoToPoint service for pathing node
+        pathing_request = GoToPoint.Request()
+        pathing_request.x = x
+        pathing_request.y = y
+        pathing_request.yaw = yaw
+
+        # Handle request and response to pathing node async
+        future = self.end_point_client.call_async(pathing_request)
+        future.add_done_callback(self.pathing_response_callback)
+
+    def clear_pathing(self):
+        self.waiting_for_path = True
+        # Create new Trigger service for pathing node
+        pathing_request = Trigger.Request()
+        # Handle request and response to pathing node async
+        future = self.clear_pathing_client.call_async(pathing_request)
+        future.add_done_callback(self.pathing_response_callback)
+
+    def pathing_response_callback(self, future):
         try:
             response = future.result()
-            self.get_logger().info(f"Trigger response: {response.success}, {response.message}")
+            self.get_logger().info(f"Pathing response: {response.success}, {response.message}")
         except Exception as e:
-            self.get_logger().warn(f"Service call failed: {e}")
+            self.get_logger().warn(f"Service call to pathing node failed: {e}")
+
+    def send_reached_destination(self):
+        master_request = Trigger.Request()
+        future = self.reached_destination_client.call_async(master_request)
+        future.add_done_callback(self.master_response_callback)
+
+    def master_response_callback(self, future):
+        try:
+            response = future.result()
+            self.get_logger().info(f"Master response: {response.success}, {response.message}")
+        except Exception as e:
+            self.get_logger().warn(f"Service call to master node failed: {e}")
 
     def publish_duty_cycles(self, left_wheel, right_wheel):
         # Ensure left and right duty cycles are between -1 to 1
@@ -210,8 +178,11 @@ class Navigation(Node):
         duty_msg.duty_cycle_right = right_wheel
         self.motor_publisher.publish(duty_msg)
 
-
     def control_loop(self):
+        if self.reached_destination:
+            self.get_logger().info("Waiting for new destination")
+            self.publish_duty_cycles(0.0, 0.0)
+            return
         if not self.target_path.x_points or self.waiting_for_path:
             self.get_logger().info("Waiting for path")
             self.publish_duty_cycles(0.0, 0.0)
@@ -220,16 +191,18 @@ class Navigation(Node):
         omega, alpha, self.previous_index = pure_pursuit_control(self.state, self.target_path)
 
         if self.previous_index >= (len(self.target_path.x_points) - 1):
-            distance = np.hypot(self.state.x - self.target_path.x_points[-1], self.state.y - self.target_path.y_points[-1])
+            distance = self.state.distance_to_state(self, self.end_point[0], self.end_point[1])
             if distance <= distance_threshold and not self.waiting_for_path:
                 self.get_logger().info(f"Reached destination")
                 self.waiting_for_path = True
+                self.reached_destination = True
 
                 # Clear existing target path
                 self.target_path.x_points = []
                 self.target_path.y_points = []
 
                 self.send_reached_destination()
+                self.clear_pathing()
                 return
 
         if abs(alpha) > (math.pi / 2):

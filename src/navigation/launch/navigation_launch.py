@@ -14,7 +14,7 @@ def generate_launch_description():
     return LaunchDescription([
         Node(
             package="project_master",
-            executable="project_master",
+            executable="explore_master",
             name="robot_master",
             ros_arguments=["--log-level", "info"]
         ),
