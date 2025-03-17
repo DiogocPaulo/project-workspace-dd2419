@@ -4,6 +4,7 @@ import rclpy.time
 from project_interfaces.srv import GoToPoint
 from std_msgs.msg import Header
 from project_interfaces.msg import ArmTaskMessage
+from project_interfaces.srv import PickObject
 from geometry_msgs.msg import Point
 from project_interfaces.srv import GoToPoint, Trigger
 
@@ -16,6 +17,8 @@ class ProjectMaster(Node):
         self.clock = self.get_clock()
 
         self.arm_publisher = self.create_publisher(ArmTaskMessage, "/Arm_Task", 10)
+
+        self.client = self.create_client(PickObject, 'PickObject')
 
         
         # self.send_arm_task(0.2,0.2,0.0,"PICKUP")
@@ -95,6 +98,32 @@ class ProjectMaster(Node):
 
         self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
 
+    def send_arm_request(self, x, y, z, task):
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
+        self.get_logger().info("ARMTASK!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        arm_msg = PickObject.Request()
+        arm_msg.header = Header()
+        arm_msg.header.stamp = self.get_clock().now().to_msg()
+        arm_msg.header.frame_id = "base_link"
+        arm_msg.point = Point()
+        arm_msg.point.x = x
+        arm_msg.point.y = y
+        arm_msg.point.z = z
+        arm_msg.description = task
+
+        future = self.client.call_async(arm_msg)
+        future.add_done_callback(self.response_callback)
+
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
+
+    def response_callback(self, future):
+        response = future.result()
+        if response:
+            self.get_logger().info(f"Result: {response.result}")
+        else:
+            self.get_logger().error("Service call failed")
+        rclpy.shutdown()
+
         
 
         
@@ -106,8 +135,7 @@ def main():
 
    # node.send_end_point(-1.5, 0.5)
 
-    node.send_arm_task(0.2,0.0,-0.03,"PICKUP")
-    node.send_arm_task(0.15,-0.15,-0.03,"DROPOFF")  
+    node.send_arm_request(0.2,0.0,-0.03,"DROPOFF")
 
     try:
         rclpy.spin(node)

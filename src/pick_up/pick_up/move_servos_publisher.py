@@ -26,7 +26,6 @@ from visualization_msgs.msg import Marker
 from visualization_msgs.msg import MarkerArray
 
 from project_interfaces.srv import PickObject
-from project_interfaces.action import PickUpObject
 from project_interfaces.msg import ArmTaskMessage
 
 from rclpy.action import ActionClient
@@ -39,13 +38,13 @@ class MultiServoPublisher(Node):
         self.publisher_sim = self.create_publisher(JointState, '/joint_states', 10)
         self.i = 0
 
-        self.task_subscription = self.create_subscription(
-            ArmTaskMessage,           # Message type
-            '/Arm_Task',        # Topic name
-            self.task_callback,  # Callback function
-            10                # Queue size
-        )
-        self.task_subscription
+        # self.task_subscription = self.create_subscription(
+        #     ArmTaskMessage,           # Message type
+        #     '/Arm_Task',        # Topic name
+        #     self.task_callback,  # Callback function
+        #     10                # Queue size
+        # )
+        # self.task_subscription
 
         # self.task_publisher = self.create_publisher(ArmTaskMessage, "/Arm_Task", 10)
 
@@ -53,7 +52,7 @@ class MultiServoPublisher(Node):
         self.listener = tf2_ros.TransformListener(self.tfBuffer,self)
         self.clock = self.get_clock()
         
-        # self.service = self.create_service(PickObject, 'PickObject', self.pickup_callback_sim)
+        self.service = self.create_service(PickObject, 'PickObject', self.task_callback)
         # self.client = self.create_client(PickObject, 'PickObject')
 
 
@@ -90,20 +89,31 @@ class MultiServoPublisher(Node):
 
         # self.task_publisher.publish(arm_msg)
 
-    def task_callback(self,msg):
-        if msg.description == "PICKUP":
-            self.pickup_callback(msg)
-        elif msg.description == "DROPOFF":
-            self.dropoff_callback(msg)
+    # def task_callback(self,msg):
+    #     if msg.description == "PICKUP":
+    #         self.pickup_callback(msg)
+    #     elif msg.description == "DROPOFF":
+    #         self.dropoff_callback(msg)
+    #     else:
+    #         return
+
+    def task_callback(self,request,response):
+        if request.description == "PICKUP":
+            response.result = self.pickup_callback(request)
+        elif request.description == "DROPOFF":
+            response.result = self.dropoff_callback(request)
         else:
-            return
+            response.result = 2
+            return response
+        return response
+
 
         
 
 
 
-    def pickup_callback(self, message):
-        self.get_logger().info(f'Received pickup request at {message.point}')
+    def pickup_callback(self, request):
+        self.get_logger().info(f'Received pickup request at {request.point}')
         msg = Int16MultiArray()
         msg.layout = MultiArrayLayout(dim=[MultiArrayDimension(label="", size=12, stride=12)], data_offset=0)
         move_time = 2000 #arm speed (milliseconds)
@@ -119,7 +129,7 @@ class MultiServoPublisher(Node):
         # Transform ---------------------------------------
         tf_future = self.tfBuffer.wait_for_transform_async(
             target_frame = 'arm_base',
-            source_frame = message.header.frame_id,
+            source_frame = request.header.frame_id,
             time = zero_time # Get latest transform instead of timestamped, since we want to pickup when the robot is standing still
         )
 
@@ -128,7 +138,7 @@ class MultiServoPublisher(Node):
         try:
             t = self.tfBuffer.lookup_transform(
                 'arm_base',
-                message.header.frame_id,
+                request.header.frame_id,
                 zero_time
         )
         except TransformException as ex:
@@ -138,14 +148,14 @@ class MultiServoPublisher(Node):
         # Transform ---------------------------------------
 
         self.clock.sleep_for(rclpy.duration.Duration(seconds=2)) #Give arm time to do its thing
-        position = do_transform_point(message,t)
+        position = do_transform_point(request,t)
         position = position.point
         base_arm,v1_arm,v2_arm,v3_arm = self.FindKinematics(position.x,position.y,position.z)
 
 
         if base_arm == -1:
-            self.get_logger().info(f'COULD NOT FIND KINEMATIC SOLUTION FOR POSITION: {request.target_position}')
-            return
+            self.get_logger().info(f'COULD NOT FIND KINEMATIC SOLUTION FOR POSITION: {request.point}')
+            return 1
 
 
 
@@ -172,10 +182,10 @@ class MultiServoPublisher(Node):
 
         self.get_logger().info(f"PICKUP COMPLETE")
 
-        return
+        return 0
 
-    def dropoff_callback(self, message):
-        self.get_logger().info(f'Received dropoff request at {message.point}')
+    def dropoff_callback(self, request):
+        self.get_logger().info(f'Received dropoff request at {request.point}')
         msg = Int16MultiArray()
         msg.layout = MultiArrayLayout(dim=[MultiArrayDimension(label="", size=12, stride=12)], data_offset=0)
         move_time = 2000 #arm speed (milliseconds)
@@ -184,40 +194,40 @@ class MultiServoPublisher(Node):
         zero_time.sec = 0
         zero_time.nanosec = 0
 
-        pose = [14000,12000,12000,12000,12000,12000,move_time,move_time,move_time,move_time,move_time,move_time]
+        pose = [3000,12000,12000,12000,12000,12000,move_time,move_time,move_time,move_time,move_time,move_time]
         msg.data = pose
         self.publisher.publish(msg)
+    
+        # Transform ---------------------------------------
+        tf_future = self.tfBuffer.wait_for_transform_async(
+            target_frame = 'arm_base',
+            source_frame = request.header.frame_id,
+            time = zero_time # Get latest transform instead of timestamped, since we want to pickup when the robot is standing still
+        )
 
-        # # Transform ---------------------------------------
-        # tf_future = self.tfBuffer.wait_for_transform_async(
-        #     target_frame = 'arm_base',
-        #     source_frame = message.header.frame_id,
-        #     time = zero_time # Get latest transform instead of timestamped, since we want to pickup when the robot is standing still
-        # )
+        rclpy.spin_until_future_complete(self,tf_future, timeout_sec=1)
 
-        # rclpy.spin_until_future_complete(self,tf_future, timeout_sec=1)
-
-        # try:
-        #     t = self.tfBuffer.lookup_transform(
-        #         'arm_base',
-        #         message.header.frame_id,
-        #         zero_time
-        # )
-        # except TransformException as ex:
-        #     self.get_logger().info(
-        #         f'Could not transform map to arm_base: {ex}'
-        #     )
-        # # Transform ---------------------------------------
+        try:
+            t = self.tfBuffer.lookup_transform(
+                'arm_base',
+                request.header.frame_id,
+                zero_time
+        )
+        except TransformException as ex:
+            self.get_logger().info(
+                f'Could not transform map to arm_base: {ex}'
+            )
+        # Transform ---------------------------------------
 
         self.clock.sleep_for(rclpy.duration.Duration(seconds=2)) #Give arm time to do its thing
-        # position = do_transform_point(message.point,t)
-        position = message.point
+        position = do_transform_point(request,t)
+        position = position.point
         base_arm,v1_arm,v2_arm,v3_arm = self.FindKinematics(position.x,position.y,position.z)
 
 
         if base_arm == -1:
-            self.get_logger().info(f'COULD NOT FIND KINEMATIC SOLUTION FOR POSITION: {request.target_position}')
-            return
+            self.get_logger().info(f'COULD NOT FIND KINEMATIC SOLUTION FOR POSITION: {request.point}')
+            return 1
 
 
 
@@ -244,7 +254,7 @@ class MultiServoPublisher(Node):
 
         self.get_logger().info(f"DROPOFF COMPLETE")
 
-        return
+        return 0
 
 
     def pickup_callback_sim(self, msg):
