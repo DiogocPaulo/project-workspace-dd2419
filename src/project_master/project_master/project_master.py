@@ -112,6 +112,7 @@ class ProjectMaster(Node):
         arm_msg.description = task
 
         future = self.client.call_async(arm_msg)
+        rclpy.spin_until_future_complete(self, future)
         future.add_done_callback(self.response_callback)
 
         self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
@@ -135,6 +136,7 @@ def main():
 
    # node.send_end_point(-1.5, 0.5)
 
+    node.send_arm_request(0.2,0.0,-0.03,"DROPOFF")
     node.send_arm_request(0.2,0.0,-0.03,"DROPOFF")
 
     try:
