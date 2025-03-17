@@ -23,14 +23,18 @@ class Localisation(Node):
         
         # Initialize class variables
         self.pose = Pose()
+        self.linear_velocity = 0.0
+        self.angular_velocity = 0.0
+        self.distance_threshold = 0.1
+        self.angular_threshold = 0.1  # radians
         self.laser_scans = LaserScanStorage()
         self.distance_threshold = 0.3
         
         # TF2 broadcaster for map to odom transform
         self.map_odom_broadcaster = tf2_ros.TransformBroadcaster(self)
-        self.x = 0.0
-        self.y = 0.0
-        self.theta = 0.0
+        self.transform_x = 0.0
+        self.transform_y = 0.0
+        self.transform_theta = 0.0
         self.create_timer(0.1, self.broadcast_transform)  # Repeat every 0.1s
         
         # Subscriptions
@@ -40,6 +44,8 @@ class Localisation(Node):
     def odom_callback(self, msg):
         """Callback for odometry messages."""
         self.pose = msg.pose.pose
+        self.linear_velocity = msg.twist.twist.linear.x
+        self.angular_velocity = msg.twist.twist.angular.z
         """self.get_logger().info(
             f"Odometry Pose: x={self.pose.position.x:.3f}, "
             f"y={self.pose.position.y:.3f}, z={self.pose.position.z:.3f}"
@@ -57,11 +63,11 @@ class Localisation(Node):
         angles = [msg.angle_min + i * msg.angle_increment for i in range(len(msg.ranges))]
         new_scan.store_scan(ranges=msg.ranges, angles=angles, pose=current_pose, timestamp=self.get_clock().now().to_msg())
         
-        if closest_scan is None or self.has_moved_enough(closest_scan.pose, current_pose):
+        if closest_scan is None or self.use_scan(closest_scan.pose, current_pose):
             self.laser_scans.add_scan(new_scan)
             self.get_logger().info(f"New Laser Scan added with {len(msg.ranges)} points")
-            #if closest_scan is not None:
-                #self.update_map_odom_transform(closest_scan, new_scan)
+            if closest_scan is not None:
+                self.update_map_odom_transform(closest_scan, new_scan)
 
     def update_map_odom_transform(self, scan1, scan2):
         """Update and broadcast the map to odom transform using ICP."""
@@ -76,10 +82,10 @@ class Localisation(Node):
         current_yaw = self.quaternion_to_yaw(scan2.pose.orientation)
         theta = math.atan2(math.sin(current_yaw + rotation), math.cos(current_yaw + rotation))
         
-        self.x = x - scan2.pose.position.x
-        self.y = y - scan2.pose.position.y
-        self.theta = theta - current_yaw
-        self.get_logger().info(f"Updated map → odom (x={self.x}, y={self.y}, theta={self.theta})")
+        self.transform_x = x - scan2.pose.position.x
+        self.transform_y = y - scan2.pose.position.y
+        self.transform_theta = theta - current_yaw
+        self.get_logger().info(f"Updated map → odom (x={self.transform_x}, y={self.transform_y}, theta={self.transform_theta})")
 
     def broadcast_transform(self):
         """Broadcast the map to odom transform."""
@@ -125,15 +131,13 @@ class Localisation(Node):
         linear_distance = math.sqrt(dx ** 2 + dy ** 2)
         angular_diff = math.atan2(math.sin(dtheta), math.cos(dtheta))
         
-        return linear_distance, abs(angular_diff)
+        return linear_distance, angular_diff
 
-    def has_moved_enough(self, pose1, pose2):
+    def use_scan(self, pose1, pose2):
         """Check if the robot has moved beyond specified thresholds."""
-        linear_threshold = 0.1  # meters
-        angular_threshold = 0.1  # radians
         linear_dist, angular_diff = self.compute_pose_difference(pose1, pose2)
         #self.get_logger().info(f"Movement: distance={linear_dist:.3f}m, angle={angular_diff:.3f}rad")
-        return linear_dist > linear_threshold or angular_diff > angular_threshold
+        return self.angular_velocity < self.angular_threshold and linear_dist < self.distance_threshold
 
 def main():
     """Main function to run the Localisation node."""
