@@ -12,15 +12,15 @@ def generate_launch_description():
             launch_description_source=AnyLaunchDescriptionSource(frames_launch_file),
         ),
         Node(
-            package="tf2_ros",
-            executable="static_transform_publisher",
-            arguments=["0", "0", "0", "0", "0", "0", "1", "map", "odom"],
+            package="localisation",
+            executable="odometry",
+            name="robot_odometry",
             output="screen",
         ),
         Node(
             package="localisation",
-            executable="odometry",
-            name="robot_odometry",
+            executable="localisation",
+            name="robot_localisation",
             output="screen",
         ),
     ])
