@@ -91,7 +91,7 @@ class Pathing(Node):
         return response
 
     def clear_end_point(self):
-        self.end_point = (None, None):
+        self.end_point = (None, None)
         response.success = True
         response.message = "Cleared pathing end point"
         return response

@@ -3,11 +3,12 @@ from nav_msgs.msg import Odometry
 
 class RobotState:
     """Using odometry message to update the current state of the robot"""
-    def __init__(self):
+    def __init__(self, target_velocity):
         self.x = 0.0
         self.y = 0.0
         self.yaw = 0.0
         self.velocity = 0.0
+        self.target_velocity = target_velocity
 
     def update_state(self, odom_msg: Odometry):
         self.x = odom_msg.pose.pose.position.x
@@ -19,7 +20,7 @@ class RobotState:
         self.yaw = np.arctan2(siny_cosp, cosy_cosp)
 
         odom_velocity = odom_msg.twist.twist.linear.x
-        self.velocity = odom_velocity + (target_velocity - odom_velocity)
+        self.velocity = odom_velocity + (self.target_velocity - odom_velocity)
 
     def distance_to_state(self, x, y):
         return np.hypot(self.x - x, self.y - y)
