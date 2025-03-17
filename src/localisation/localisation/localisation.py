@@ -32,7 +32,6 @@ class Localisation(Node):
         self.y = 0.0
         self.theta = 0.0
         self.create_timer(0.1, self.broadcast_transform)  # Repeat every 0.1s
-        self.get_logger().info("Started broadcasting map -> odom transform")
         
         # Subscriptions
         self.create_subscription(Odometry, "/odom", self.odom_callback, 10)
@@ -41,10 +40,10 @@ class Localisation(Node):
     def odom_callback(self, msg):
         """Callback for odometry messages."""
         self.pose = msg.pose.pose
-        self.get_logger().info(
+        """self.get_logger().info(
             f"Odometry Pose: x={self.pose.position.x:.3f}, "
             f"y={self.pose.position.y:.3f}, z={self.pose.position.z:.3f}"
-        )
+        )"""
 
     def scan_callback(self, msg):
         """Callback for laser scan messages."""
@@ -61,8 +60,8 @@ class Localisation(Node):
         if closest_scan is None or self.has_moved_enough(closest_scan.pose, current_pose):
             self.laser_scans.add_scan(new_scan)
             self.get_logger().info(f"New Laser Scan added with {len(msg.ranges)} points")
-            if closest_scan is not None:
-                self.update_map_odom_transform(closest_scan, new_scan)
+            #if closest_scan is not None:
+                #self.update_map_odom_transform(closest_scan, new_scan)
 
     def update_map_odom_transform(self, scan1, scan2):
         """Update and broadcast the map to odom transform using ICP."""
@@ -80,6 +79,7 @@ class Localisation(Node):
         self.x = x - scan2.pose.position.x
         self.y = y - scan2.pose.position.y
         self.theta = theta - current_yaw
+        self.get_logger().info(f"Updated map → odom (x={self.x}, y={self.y}, theta={self.theta})")
 
     def broadcast_transform(self):
         """Broadcast the map to odom transform."""
@@ -98,7 +98,7 @@ class Localisation(Node):
         t.transform.rotation.w = q[3]
         
         self.map_odom_broadcaster.sendTransform(t)
-        self.get_logger().info(f"Broadcasting transform: map → odom (x={self.x}, y={self.y}, theta={self.theta})")
+        """self.get_logger().info(f"Broadcasting transform: map → odom (x={self.x}, y={self.y}, theta={self.theta})")"""
 
     def get_current_pose(self):
         """Return the current pose of the robot."""
@@ -132,7 +132,7 @@ class Localisation(Node):
         linear_threshold = 0.1  # meters
         angular_threshold = 0.1  # radians
         linear_dist, angular_diff = self.compute_pose_difference(pose1, pose2)
-        self.get_logger().info(f"Movement: distance={linear_dist:.3f}m, angle={angular_diff:.3f}rad")
+        #self.get_logger().info(f"Movement: distance={linear_dist:.3f}m, angle={angular_diff:.3f}rad")
         return linear_dist > linear_threshold or angular_diff > angular_threshold
 
 def main():
