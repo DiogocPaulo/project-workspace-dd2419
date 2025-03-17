@@ -25,8 +25,9 @@ class Localisation(Node):
         self.pose = Pose()
         self.linear_velocity = 0.0
         self.angular_velocity = 0.0
-        self.distance_threshold = 0.1
-        self.angular_threshold = 0.1  # radians
+        self.min_translation_threshold = 0.1
+        self.rotation_threshold = 0.1  # radians
+        self.max_angular_velocity_threshold = 0.5 # rad/s
         self.laser_scans = LaserScanStorage()
         self.distance_threshold = 0.3
         
@@ -131,13 +132,14 @@ class Localisation(Node):
         linear_distance = math.sqrt(dx ** 2 + dy ** 2)
         angular_diff = math.atan2(math.sin(dtheta), math.cos(dtheta))
         
-        return linear_distance, abs(angular_diff)
+        return linear_distance, angular_diff
 
     def use_scan(self, pose1, pose2):
         """Check if the robot has moved beyond specified thresholds."""
         linear_dist, angular_diff = self.compute_pose_difference(pose1, pose2)
         #self.get_logger().info(f"Movement: distance={linear_dist:.3f}m, angle={angular_diff:.3f}rad")
-        return self.angular_velocity < self.angular_threshold and linear_dist < self.distance_threshold
+        return (abs(self.angular_velocity) < self.max_angular_velocity_threshold and 
+                (self.min_translation_threshold < linear_dist or abs(angular_diff) > self.rotation_threshold))
 
 def main():
     """Main function to run the Localisation node."""
