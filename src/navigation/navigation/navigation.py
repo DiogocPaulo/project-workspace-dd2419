@@ -180,6 +180,7 @@ class Navigation(Node):
             self.target_path.update_path(msg)
             self.get_logger().info(f"Recived new path with end point: ({msg.poses[-1].pose.position.x:.2f}, {msg.poses[-1].pose.position.y:.2f})")
         else:
+            self.waiting_for_path = True
             self.get_logger().warn("Recived empty path")
 
     def send_reached_destination(self):

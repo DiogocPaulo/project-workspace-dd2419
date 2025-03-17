@@ -121,26 +121,31 @@ class Pathing(Node):
                 inflation_radius -= self.map.resolution
                 self.get_logger().info("No path found, trying smaller inflation radius")
                 continue
-            if path is None:
+            else:
+                # If the path is none
                 self.get_logger().warn("No path found")
-                return
+                break
 
         path_msg = Path()
         path_msg.header.stamp = self.get_clock().now().to_msg()
         path_msg.header.frame_id = "map"
 
-        for point in path:
-            x, y = self.map.grid_to_world(point[1], point[0])
-            pose = PoseStamped()
-            pose.header = path_msg.header
-            pose.pose.position.x = x
-            pose.pose.position.y = y
-            pose.pose.position.z = 0.0
-            pose.pose.orientation.w = self.target_yaw
-            path_msg.poses.append(pose)
+        if path is not None:
+            for point in path:
+                x, y = self.map.grid_to_world(point[1], point[0])
+                pose = PoseStamped()
+                pose.header = path_msg.header
+                pose.pose.position.x = x
+                pose.pose.position.y = y
+                pose.pose.position.z = 0.0
+                pose.pose.orientation.w = self.target_yaw
+                path_msg.poses.append(pose)
+        else:
+            path_msg.poses = []
+            self.get_logger().warn("Publishing empty path")
 
         self.path_publisher.publish(path_msg)
-        self.get_logger().info("Published A star custom path", once=True)
+        self.get_logger().info("Published A star custom path")
 
 
     def publish_curved_path(self):
