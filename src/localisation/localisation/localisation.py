@@ -64,7 +64,7 @@ class Localisation(Node):
         # Check distance from last scan
         closest_scan = self.laser_scans.get_closest_scan(
             current_pose, 
-            threshold=self.distance_threshold
+            max_distance=self.distance_threshold
         )
         if closest_scan is None:
             self.laser_scans.add_scan(new_scan)
