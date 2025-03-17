@@ -377,7 +377,7 @@ class MultiServoPublisher(Node):
             angle = math.radians(angle/100)
 
             base,v1,v2,v3 = self.CalcKinematics(x,y,z,angle)
-            base_arm = 12000 - int(math.degrees(base)*100)
+            base_arm = 12000 + int(math.degrees(base)*100)
             v1_arm = 12000 - int(math.degrees(v1)*100)
             v2_arm = 12000 + int(math.degrees(v2)*100)
             v3_arm = 12000 - int(math.degrees(v3)*100)

@@ -77,7 +77,7 @@ class ProjectMaster(Node):
             self.get_logger().info("GoToPoint service failed")
 
     def send_arm_task(self, x, y, z, task):
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
         self.get_logger().info("ARMTASK!!!!!!!!!!!!!!!!!!!!!!!!!!")
         arm_msg = ArmTaskMessage()
         arm_msg.header = Header()
@@ -107,7 +107,7 @@ def main():
    # node.send_end_point(-1.5, 0.5)
 
     node.send_arm_task(0.2,0.0,-0.03,"PICKUP")
-    node.send_arm_task(0.15,0.15,-0.03,"DROPOFF")  
+    node.send_arm_task(0.15,-0.15,-0.03,"DROPOFF")  
 
     try:
         rclpy.spin(node)
