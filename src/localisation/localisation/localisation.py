@@ -132,7 +132,7 @@ class Localisation(Node):
         linear_threshold = 0.1  # meters
         angular_threshold = 0.1  # radians
         linear_dist, angular_diff = self.compute_pose_difference(pose1, pose2)
-        self.get_logger().info(f"Movement: distance={linear_dist:.3f}m, angle={angular_diff:.3f}rad")
+        #self.get_logger().info(f"Movement: distance={linear_dist:.3f}m, angle={angular_diff:.3f}rad")
         return linear_dist > linear_threshold or angular_diff > angular_threshold
 
 def main():
