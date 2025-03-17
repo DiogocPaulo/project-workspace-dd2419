@@ -131,7 +131,7 @@ class Localisation(Node):
         linear_distance = math.sqrt(dx ** 2 + dy ** 2)
         angular_diff = math.atan2(math.sin(dtheta), math.cos(dtheta))
         
-        return linear_distance, angular_diff
+        return linear_distance, abs(angular_diff)
 
     def use_scan(self, pose1, pose2):
         """Check if the robot has moved beyond specified thresholds."""
