@@ -76,19 +76,16 @@ class Localisation(Node):
     def update_map_odom_transform(self, scan1, scan2):
         """Update and broadcast the map to odom transform using ICP."""
         try:
-            rotation, translation, _ = icp(scan1.points, scan2.points)
+            rotation_matrix, translation_vector, _ = icp(scan1.points, scan2.points)
         except Exception as e:
             self.get_logger().error(f"ICP failed: {str(e)}")
             return
         
-        x = scan2.pose[0] + translation[0]
-        y = scan2.pose[1] + translation[1]
-        current_yaw = scan2.pose[2]
-        theta = math.atan2(math.sin(current_yaw + rotation), math.cos(current_yaw + rotation))
-        
-        self.transform_x = x - scan2[0]
-        self.transform_y = y - scan2[1]
-        self.transform_theta = theta - current_yaw
+        # Update transform
+        rotation = np.arctan2(rotation_matrix[1, 0], rotation_matrix[0, 0])
+        self.transform_x = translation_vector[0]
+        self.transform_y = translation_vector[1]
+        self.transform_theta = rotation
         self.get_logger().info(f"Updated map → odom (x={self.transform_x}, y={self.transform_y}, theta={self.transform_theta})")
 
     def broadcast_transform(self):

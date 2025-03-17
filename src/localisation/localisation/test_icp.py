@@ -52,6 +52,10 @@ if __name__ == '__main__':
     # Run ICP
     rotation, translation, aligned_points = icp(scan1.points, scan2.points)
 
+    # Print the results
+    print(f"Rotation: {rotation}")
+    print(f"Translation: {translation}")
+
     # Plot the results
     plt.plot(reference_points[:, 0], reference_points[:, 1], 'rx', label='reference points')
     plt.plot(points_to_be_aligned[:, 0], points_to_be_aligned[:, 1], 'b1', label='points to be aligned')
