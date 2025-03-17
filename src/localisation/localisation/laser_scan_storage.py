@@ -45,7 +45,7 @@ class LaserScanStorage:
         self.poses.append(scan.get_pose())
         self.kd_tree = KDTree(self.poses)
 
-    def find_closest_scan(self, pose, max_distance=np.inf):
+    def get_closest_scan(self, pose, max_distance=np.inf):
         """Finds the closest LaserScan object to the given pose within the max_distance."""
         if not self.kd_tree:
             return None
@@ -73,11 +73,11 @@ if __name__ == "__main__":
     storage.add_scan(scan1)
     storage.add_scan(scan2)
     
-    closest_scan = storage.find_closest_scan(np.array([0, 0, 0]))
+    closest_scan = storage.get_closest_scan(np.array([0, 0, 0]))
     print(closest_scan.get_pose())  # Expected output: [0, 0, 0]
     
-    closest_scan = storage.find_closest_scan(np.array([2, 2, 0]))
+    closest_scan = storage.get_closest_scan(np.array([2, 2, 0]))
     print(closest_scan.get_pose())  # Expected output: [1, 1, 0]
     
-    closest_scan = storage.find_closest_scan(np.array([2, 2, 0]), max_distance=1)
+    closest_scan = storage.get_closest_scan(np.array([2, 2, 0]), max_distance=1)
     print(closest_scan)  # Expected output: None
