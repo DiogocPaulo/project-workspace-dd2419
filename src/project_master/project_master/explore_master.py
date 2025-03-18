@@ -28,7 +28,7 @@ def main():
 
     try:
         while rclpy.ok():
-            rclpy.spin_once(tree_node, timeout_sec=0.1)
+            rclpy.spin_once(node, timeout_sec=0.1)
             behaviour_tree.tick()
             rate.sleep()
     except KeyboardInterrupt:

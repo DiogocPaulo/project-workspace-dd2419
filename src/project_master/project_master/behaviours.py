@@ -84,7 +84,7 @@ class Navigate(py_trees.behaviour.Behaviour):
         self.current_point[1] = msg.pose.pose.position.y
 
     def update(self):
-        if current_point == (None, None):
+        if self.current_point == (None, None):
             self.logger.info(f"{self.name}: Waiting for current point ...")
             return py_trees.common.Status.RUNNING
         
