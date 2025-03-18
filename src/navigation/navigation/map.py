@@ -66,7 +66,6 @@ class Map:
             # Grid is not yet initalised
             return
 
-
         if object_type == Object.CUBE:
             width = 0.05
             height = 0.05
@@ -74,10 +73,10 @@ class Map:
             width = 0.05
             height = 0.05
         elif object_type == Object.PLUSHIE:
-            width = 0.05
+            width = 0.10
             height = 0.10
         elif object_type == Object.BOX:
-            width = 0.15
+            width = 0.20
             height = 0.25
 
         grid_x, grid_y = self.world_to_grid(x, y)
@@ -202,8 +201,21 @@ class Map:
         if self.grid is None:
             raise ValueError("Grid is not initialised")
 
-        cells = self.distance_to_cells(radius)  # Convert meters to grid cells
-        inflated_grid = maximum_filter(self.grid, size=(2 * cells + 1), mode="constant", cval=-1)
+        inflation_cells = self.distance_to_cells(inflation_radius)
+
+        # Define a circular footprint using inflation radius
+        circular_footprint = np.zeros(
+            (2 * inflation_cells + 1, 2 * inflation_cells + 1),
+            dtype=int,
+        )
+        ty, tx = np.ogrid[
+            -inflation_cells : inflation_cells + 1,
+            -inflation_cells : inflation_cells + 1,
+        ]
+        mask = tx**2 + ty**2 <= inflation_cells**2
+        circular_footprint[mask] = 1
+
+        inflated_grid = maximum_filter(self.grid, footprint=circular_footprint, mode="constant", cval=-1)
         return inflated_grid
 
     def inflate_grid_in_region(self, inflation_radius, region_radius, robot_x, robot_y):
