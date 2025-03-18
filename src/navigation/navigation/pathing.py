@@ -25,8 +25,7 @@ class Pathing(Node):
         self.create_subscription(OccupancyGrid, "/map", self.map_callback, 10)
         self.path_publisher = self.create_publisher(Path, "/custom_path", 10)
         self.inflated_map_publisher = self.create_publisher(OccupancyGrid, "/inflated_map", 10)
-        self.end_point_service = self.create_service(GoToPoint, "/pathing_point", self.set_end_point)
-        self.clear_pathing_service = self.create_service(Trigger, "/clear_pathing", self.clear_end_point)
+        self.end_point_service = self.create_service(GoToPoint, "/pathing_end_point", self.receive_end_point)
 
         # Parameters
         self.start_point = (0, 0)
@@ -59,6 +58,12 @@ class Pathing(Node):
         else:
             self.map.update_grid(grid)
 
+    def receive_end_point(self, request, response):
+        self.end_point = (request.x, request.y)
+        response.success = True
+        response.message = f"Pathing end point set: ({self.end_point[0]}, {self.end_point[1]})"
+        return response
+
     def update_inflated_map(self):
         if self.map is None or self.inflated_grid is None:
             return
@@ -83,18 +88,6 @@ class Pathing(Node):
 
         self.inflated_map_publisher.publish(map_msg)
         self.get_logger().info("Published inflated occupancy map", once=True)
-
-    def set_end_point(self, request, response):
-        self.end_point = (request.x, request.y)
-        response.success = True
-        response.message = f"Pathing end point set: ({self.end_point[0]}, {self.end_point[1]})"
-        return response
-
-    def clear_end_point(self, request, response):
-        self.end_point = (None, None)
-        response.success = True
-        response.message = "Cleared pathing end point"
-        return response
 
     def publish_astar_path(self):
         if self.end_point == (None, None):

@@ -2,20 +2,17 @@ import numpy as np
 from navigation.robot_state import RobotState
 from nav_msgs.msg import Path
 
-# Robot parameters
-base = 0.3                  # Wheelbase of the vehicle
-lookahead_gain = 0.1        # Look-ahead distance gain
-lookahead_min = 0.3         # Minimum look-ahead distance
-distance_threshold = 0.2    # Stop distance threshold
-yaw_threshold = 0.2         # Stop yaw threshold
-target_velocity = 0.22      # Robot's target velocity
-
 class TargetPath:
-    """Determines the target route and searching of current point to navigate towards"""
-    def __init__(self):
+    """
+    A class used to define a target route for navigation.
+    Uses a path message to update the target route.
+    """
+    def __init__(self, lookahead_gain, lookahead_min):
         self.x_points = []
         self.y_points = []
         self.old_nearest_point_index = None
+        self.lookahead_gain = lookahead_gain
+        self.lookahead_min = lookahead_min
 
     def update_path(self, path_msg: Path):
         self.x_points = [pose.pose.position.x for pose in path_msg.poses]
@@ -48,7 +45,7 @@ class TargetPath:
             self.old_nearest_point_index = index
 
         # Compute the lookahead distance
-        lookahead = lookahead_gain * state.velocity + lookahead_min
+        lookahead = self.lookahead_gain * state.velocity + self.lookahead_min
 
         # Find index of target point within lookahead distance
         while lookahead > state.distance_to_state(self.x_points[index], self.y_points[index]):

@@ -1,21 +1,17 @@
 import numpy as np
 from nav_msgs.msg import Odometry
 
-# Robot parameters
-base = 0.3                  # Wheelbase of the vehicle
-lookahead_gain = 0.1        # Look-ahead distance gain
-lookahead_min = 0.3         # Minimum look-ahead distance
-distance_threshold = 0.2    # Stop distance threshold
-yaw_threshold = 0.2         # Stop yaw threshold
-target_velocity = 0.22      # Robot's target velocity
-
 class RobotState:
-    """Using odometry message to update the current state of the robot"""
-    def __init__(self):
+    """
+    A class to keep track of the robots current state.
+    Uses an odometry message to update the state.
+    """
+    def __init__(self, target_velocity):
         self.x = 0.0
         self.y = 0.0
         self.yaw = 0.0
         self.velocity = 0.0
+        self.target_velocity = target_velocity
 
     def update_state(self, odom_msg: Odometry):
         self.x = odom_msg.pose.pose.position.x
@@ -27,7 +23,7 @@ class RobotState:
         self.yaw = np.arctan2(siny_cosp, cosy_cosp)
 
         odom_velocity = odom_msg.twist.twist.linear.x
-        self.velocity = odom_velocity + (target_velocity - odom_velocity)
+        self.velocity = odom_velocity + (self.target_velocity - odom_velocity)
 
     def distance_to_state(self, x, y):
         return np.hypot(self.x - x, self.y - y)
