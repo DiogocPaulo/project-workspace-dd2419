@@ -28,8 +28,6 @@ class ProjectMaster(Node):
         # while not self.point_client.wait_for_service(timeout_sec=1.0):
         #     self.get_logger().debug("GoToPoint service not yet avaliable, waiting ...")
 
-        self.get_logger().info("ARMTASK!!!!!!!!!!!!!!!!!!!!!!!!!!")
-
         self.end_points = [
             (0.5, 0.0, 0.0),
             (0.5, -0.5, 0.0),
@@ -99,8 +97,8 @@ class ProjectMaster(Node):
         self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
 
     def send_arm_request(self, x, y, z, task):
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
-        self.get_logger().info("ARMTASK!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
+        self.get_logger().info("ARMTASK!")
         arm_msg = PickObject.Request()
         arm_msg.header = Header()
         arm_msg.header.stamp = self.get_clock().now().to_msg()
@@ -113,22 +111,15 @@ class ProjectMaster(Node):
 
         future = self.client.call_async(arm_msg)
         rclpy.spin_until_future_complete(self, future)
-        if future.result() is not None:
-            response = future.result()
-            self.response_callback(response)  # Call response handler manually
-        else:
-            self.get_logger().error("Service call failed")
-        # future.add_done_callback(self.response_callback)
 
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
-
-    def response_callback(self, future):
-        response = future.result()
-        if response:
-            self.get_logger().info(f"Result: {response.result}")
+        response = future.result() 
+        if response is not None:
+            self.get_logger().info(f"Response received: {response.result}")
         else:
-            self.get_logger().error("Service call failed")
-        rclpy.shutdown()
+            self.get_logger().error("No response received!")
+
+
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
 
         
 
@@ -141,7 +132,7 @@ def main():
 
    # node.send_end_point(-1.5, 0.5)
 
-    node.send_arm_request(0.2,0.0,-0.03,"DROPOFF")
+    node.send_arm_request(0.2,0.0,-0.03,"PICKUP")
     node.send_arm_request(0.2,0.0,-0.03,"DROPOFF")
 
     try:
