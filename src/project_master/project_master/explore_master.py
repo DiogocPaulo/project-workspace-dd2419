@@ -84,8 +84,7 @@ class ReachedEndPoint(py_trees.behaviour.Behaviour):
         return True
 
     def odom_callback(self, msg: Odometry):
-        self.current_point[0] = msg.pose.pose.position.x
-        self.current_point[1] = msg.pose.pose.position.y
+        self.current_point = (msg.pose.pose.position.x, msg.pose.pose.position.y)
 
     def update(self):
         if self.current_point == (None, None):
