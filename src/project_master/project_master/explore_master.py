@@ -159,10 +159,10 @@ def main():
     rclpy.init()
     node = ExploreMaster()
     end_points = [
-        (-1.6, 0.9, 0.0),
-        (-1.6, -0.9, 0.0),
-        (1.6, -0.9, 0.0),
-        (1.6, 0.9, 0.0),
+        (-1.6, 0.8, 0.0),
+        (-1.6, -0.8, 0.0),
+        (1.6, -0.8, 0.0),
+        (1.6, 0.8, 0.0),
     ]
 
     root = create_exploration_tree(node, end_points)
