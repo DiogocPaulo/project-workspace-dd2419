@@ -13,11 +13,11 @@ from nav_msgs.msg import Odometry
 from project_master import behaviours
 
 class ServiceClient(py_trees.behaviour.Behaviour):
-    def __init__(self, name, service_type, service_name, request):
+    def __init__(self, name, service_type, service_name, **kwargs):
         super().__init__(name)
         self.service_type = service_type
         self.service_name = service_name
-        self.request = request
+        self.request_args = kwargs
         self.client = None
         self.future = None
         self.sent_request = False
@@ -41,10 +41,19 @@ class ServiceClient(py_trees.behaviour.Behaviour):
             return py_trees.common.Status.RUNNING
             
         if not self.sent_request:
-            self.future = self.client.call_async(self.request)
-            self.sent_request = True
-            self.logger.info(f"{self.name} - Sent request to {self.service_name}")
-            return py_trees.common.Status.RUNNING
+            try:
+                request = self.service_type.Request()
+
+                for key, value in self.request_args.items():
+                    setattr(request, key, value)
+
+                self.future = self.client.call_async(request)
+                self.sent_request = True
+                self.logger.info(f"{self.name} - Sent request to {self.service_name}")
+                return py_trees.common.Status.RUNNING
+            except Exception as e:
+                self.logger.error(f"{self.name} - Failed to send request: {e}")
+                return py_trees.common.Status.FAILURE
 
         if self.future.done():
             try:
@@ -111,16 +120,13 @@ def create_exploration_tree(node, end_points):
     for i, (x, y, yaw) in enumerate(end_points):
         point_sequence = py_trees.composites.Sequence(f"EndPoint{i}", memory=True)
 
-        request = GoToPoint.Request
-        request.x = x
-        request.y = y
-        request.yaw = yaw
-
         pathing_service = ServiceClient(
             name=f"GoToPoint{i}",
             service_type=GoToPoint,
             service_name="/pathing_end_point",
-            request=request,
+            x=x,
+            y=y,
+            yaw=yaw
         )
         
         end_point_check = ReachedEndPoint(
