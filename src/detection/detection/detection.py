@@ -16,7 +16,7 @@ from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
 import tf2_geometry_msgs
 from tf2_geometry_msgs import do_transform_point
-from geometry_msgs.msg import PointStamped
+from geometry_msgs.msg import PointStamped, TransformStamped
 import os
 from scipy.spatial import cKDTree
 from sklearn.cluster import DBSCAN
@@ -40,6 +40,8 @@ class ExamineImage(Node):
 
         self.tfBuffer = tf2_ros.Buffer()
         self.listener = tf2_ros.TransformListener(self.tfBuffer, self)
+
+        self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
 
         qos_profile = QoSProfile(
             depth=1,
@@ -78,6 +80,37 @@ class ExamineImage(Node):
 
         # Add a counter to track the number of messages received
         self.message_counter = 0
+
+        self.read_map_file()
+
+    def read_map_file(self):
+        if not os.path.exists(self.file_path):
+            self.get_logger().warn(f"Map file {self.file_path} does not exist.")
+            return
+
+        with open(self.file_path, 'r') as file:
+            lines = file.readlines()
+            
+
+        for line in lines:
+            parts = line.strip().split('\t')
+            if len(parts) < 4:
+                continue
+
+            object_type = parts[0]
+            x_cm = float(parts[1])
+            y_cm = float(parts[2])
+            angle = float(parts[3])
+
+            x = x_cm / 100.0
+            y = y_cm / 100.0
+
+            self.publish_object(x, y, angle, object_type, self.get_clock().now().to_msg())
+
+            self.get_logger().info(f"Published TF for object: {object_type} at ({x:.2f}, {y:.2f})")
+
+
+        
 
     def cloud_callback(self, msg: PointCloud2):
         # Increment the message counter
@@ -227,7 +260,7 @@ class ExamineImage(Node):
                 # Compute the orientation angle of the box
                 angle = self.estimate_box_orientation(cluster_points)
 
-                # Store box with angle information
+                # Store box with angle information[detection-5] [INFO] [1742488983.869258672] [robot_detection]:
                 if angle == 0.0:
                     self.publish_object(x, z + 0.08, angle, Object.BOX, msg.header.stamp)
                 elif angle == 90.0:
@@ -247,7 +280,7 @@ class ExamineImage(Node):
             # ------------------------------------------------------------------------
 
     def write_to_file(self):
-        with open(self.file_path, 'w') as file:
+        with open(self.file_path, 'a') as file:
             for object_msg in self.object_list:
                 file.write(f"{object_msg.object_type} {object_msg.x:.2f} {object_msg.y:.2f} {object_msg.angle:.1f}\n")
 
@@ -481,6 +514,8 @@ class ExamineImage(Node):
 
                 self.object_list.append(object_msg)
 
+                self.publish_object_tf(x_transformed, y_transformed, angle, object_type, stamp)
+
                 object_list_msg = ObjectList()
                 object_list_msg.header.frame_id = "map"
                 object_list_msg.header.stamp = stamp
@@ -492,6 +527,31 @@ class ExamineImage(Node):
 
         except TransformException as e:
             self.get_logger().error(f"Failed coordinate transform for newly detected object: {e}")
+
+    def publish_object_tf(self, x, y, angle, object_type, stamp):
+        transform = TransformStamped()
+
+        # Set the header
+        transform.header.stamp = stamp
+        transform.header.frame_id = "map"  # Parent frame (map frame)
+        transform.child_frame_id = f"object_{object_type}_{len(self.object_list)}"  # Unique frame ID with object type
+
+        # Set the translation (position of the object)
+        transform.transform.translation.x = x
+        transform.transform.translation.y = y
+        transform.transform.translation.z = 0.0  # Objects are on the ground (z = 0)
+
+        # Set the rotation (quaternion from yaw angle)
+        q = Quaternion()
+        q.z = np.sin(angle / 2.0)  # Convert yaw angle to quaternion
+        q.w = np.cos(angle / 2.0)
+        transform.transform.rotation = q
+
+        # Broadcast the transform
+        self.tf_broadcaster.sendTransform(transform)
+
+        self.get_logger().info(f"Published TF for {object_type} at ({x:.2f}, {y:.2f}) with angle {angle:.2f}")
+        
 
 def main(args=None):
     rclpy.init(args=args)
