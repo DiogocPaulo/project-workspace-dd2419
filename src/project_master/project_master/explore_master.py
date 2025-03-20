@@ -155,14 +155,14 @@ class ExploreMaster(Node):
             (-2.20, 1.30),
         ]
 
-        # self.end_points = [
-        #     (-1.6, 0.8, 0.0),
-        #     (-1.6, -0.8, 0.0),
-        #     (1.6, -0.8, 0.0),
-        #     (1.6, 0.8, 0.0),
-        # ]
+        self.end_points = [
+            (-1.5, 0.8, 0.0),
+            (-1.5, -0.8, 0.0),
+            (1.5, -0.8, 0.0),
+            (1.5, 0.8, 0.0),
+        ]
         
-        self.end_points = create_offset_end_points(self.workspace_vertices, 0.5)
+        # self.end_points = create_offset_end_points(self.workspace_vertices, 0.5)
         root = self.create_exploration_tree()
         self.tree = py_trees_ros.trees.BehaviourTree(root=root)
         tree_string = py_trees.display.ascii_tree(root)

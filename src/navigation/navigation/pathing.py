@@ -60,9 +60,9 @@ class Pathing(Node):
             self.map.update_grid(grid)
 
     def receive_end_point(self, request, response):
-        if request.x != end_point[0] and request.y != end_point[1]:
+        if self.end_point != (request.x, request.y):
+            self.end_point = (request.x, request.y)
             self.pathing_failed = False
-        self.end_point = (request.x, request.y)
 
         if not self.pathing_failed:
             response.success = True
@@ -120,7 +120,7 @@ class Pathing(Node):
 
             if path is not None:
                 break
-            if inflation_radius > 0.2:
+            if inflation_radius > 0.3:
                 inflation_radius -= self.map.resolution
                 self.get_logger().info("No path found, trying smaller inflation radius")
                 continue
