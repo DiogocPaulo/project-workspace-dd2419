@@ -108,7 +108,6 @@ class ExamineImage(Node):
             x = x_cm / 100.0
             y = y_cm / 100.0
 
-
             # Create new object message
             object_msg = Object()
             object_msg.x = x
@@ -130,7 +129,6 @@ class ExamineImage(Node):
         object_list_msg.length = len(self.object_list)
         object_list_msg.objects = self.object_list
         self.object_list_publisher.publish(object_list_msg)
-
         
 
     def cloud_callback(self, msg: PointCloud2):
@@ -301,7 +299,7 @@ class ExamineImage(Node):
             # ------------------------------------------------------------------------
 
     def write_to_file(self):
-        with open(self.file_path, 'a') as file:
+        with open(self.file_path, 'w') as file:
             if self.read == 1:
                 file.write('\n')
                 self.read = 0
