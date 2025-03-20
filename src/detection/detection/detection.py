@@ -41,7 +41,7 @@ class ExamineImage(Node):
         self.tfBuffer = tf2_ros.Buffer()
         self.listener = tf2_ros.TransformListener(self.tfBuffer, self)
 
-        self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
+        self.object_list_broadcaster = tf2_ros.TransformBroadcaster(self)
 
         qos_profile = QoSProfile(
             depth=1,
@@ -75,11 +75,15 @@ class ExamineImage(Node):
         # Publisher for clusters
         self.cluster_publisher = self.create_publisher(PointCloud2, '/clusters', 10)
 
+        self.broadcaster = self.create_timer(5.0, self.broadcast_object_list)
+
         # Timer to periodically write to map.txt
         self.write_timer = self.create_timer(5.0, self.write_to_file)  # Write every 5 seconds
 
         # Add a counter to track the number of messages received
         self.message_counter = 0
+
+        self.read = 0
 
         self.read_map_file()
 
@@ -91,9 +95,8 @@ class ExamineImage(Node):
         with open(self.file_path, 'r') as file:
             lines = file.readlines()
             
-
         for line in lines:
-            parts = line.strip().split('\t')
+            parts = line.strip().split(',')
             if len(parts) < 4:
                 continue
 
@@ -105,10 +108,28 @@ class ExamineImage(Node):
             x = x_cm / 100.0
             y = y_cm / 100.0
 
-            self.publish_object(x, y, angle, object_type, self.get_clock().now().to_msg())
+
+            # Create new object message
+            object_msg = Object()
+            object_msg.x = x
+            object_msg.y = y
+            object_msg.angle = angle
+            object_msg.object_type = object_type
+
+            self.object_list.append(object_msg)
+
+            self.read = 1
+
+            self.get_logger().info(f"Published new object list now includes: {object_type} at ({x:.2f}, {y:.2f})")
 
             self.get_logger().info(f"Published TF for object: {object_type} at ({x:.2f}, {y:.2f})")
 
+        object_list_msg = ObjectList()
+        object_list_msg.header.frame_id = "map"
+        object_list_msg.header.stamp = self.get_clock().now().to_msg()
+        object_list_msg.length = len(self.object_list)
+        object_list_msg.objects = self.object_list
+        self.object_list_publisher.publish(object_list_msg)
 
         
 
@@ -281,8 +302,12 @@ class ExamineImage(Node):
 
     def write_to_file(self):
         with open(self.file_path, 'a') as file:
-            for object_msg in self.object_list:
-                file.write(f"{object_msg.object_type} {object_msg.x:.2f} {object_msg.y:.2f} {object_msg.angle:.1f}\n")
+            if self.read == 1:
+                file.write('\n')
+                self.read = 0
+            else:
+                for object_msg in self.object_list:
+                    file.write(f"{object_msg.object_type} {object_msg.x:.2f} {object_msg.y:.2f} {object_msg.angle:.1f}\n")
 
     def estimate_box_orientation(self, cluster_points):
         # Find the point with the lowest Z-coordinate
@@ -514,8 +539,6 @@ class ExamineImage(Node):
 
                 self.object_list.append(object_msg)
 
-                self.publish_object_tf(x_transformed, y_transformed, angle, object_type, stamp)
-
                 object_list_msg = ObjectList()
                 object_list_msg.header.frame_id = "map"
                 object_list_msg.header.stamp = stamp
@@ -528,29 +551,27 @@ class ExamineImage(Node):
         except TransformException as e:
             self.get_logger().error(f"Failed coordinate transform for newly detected object: {e}")
 
-    def publish_object_tf(self, x, y, angle, object_type, stamp):
-        transform = TransformStamped()
 
-        # Set the header
-        transform.header.stamp = stamp
-        transform.header.frame_id = "map"  # Parent frame (map frame)
-        transform.child_frame_id = f"object_{object_type}_{len(self.object_list)}"  # Unique frame ID with object type
+    def broadcast_object_list(self):
+        for i, object_msg in enumerate(self.object_list):
+            transform = TransformStamped()
+            transform.header.frame_id = 'map'  # Change to your desired parent frame
+            transform.header.stamp = self.get_clock().now().to_msg()
+            transform.child_frame_id = f"{object_msg.object_type}_{i}"
+            
+            # Set translation from end_point coordinates
+            transform.transform.translation.x = object_msg.x
+            transform.transform.translation.y = object_msg.y
+            transform.transform.translation.z = 0.0
+            
+            # Set the rotation (quaternion from yaw angle)
+            q = Quaternion()
+            q.z = np.sin(object_msg.angle / 2.0)  # Convert yaw angle to quaternion
+            q.w = np.cos(object_msg.angle / 2.0)
+            transform.transform.rotation = q
 
-        # Set the translation (position of the object)
-        transform.transform.translation.x = x
-        transform.transform.translation.y = y
-        transform.transform.translation.z = 0.0  # Objects are on the ground (z = 0)
-
-        # Set the rotation (quaternion from yaw angle)
-        q = Quaternion()
-        q.z = np.sin(angle / 2.0)  # Convert yaw angle to quaternion
-        q.w = np.cos(angle / 2.0)
-        transform.transform.rotation = q
-
-        # Broadcast the transform
-        self.tf_broadcaster.sendTransform(transform)
-
-        self.get_logger().info(f"Published TF for {object_type} at ({x:.2f}, {y:.2f}) with angle {angle:.2f}")
+            
+            self.object_list_broadcaster.sendTransform(transform)
         
 
 def main(args=None):
