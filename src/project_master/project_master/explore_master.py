@@ -6,9 +6,12 @@ import py_trees_ros
 
 import rclpy
 from rclpy.node import Node
+from tf2_ros import TransformBroadcaster
+from geometry_msgs.msg import TransformStamped
 from rclpy.qos import QoSProfile, HistoryPolicy, ReliabilityPolicy
 from project_interfaces.srv import GoToPoint, Trigger
 from nav_msgs.msg import Odometry
+from project_interfaces.msg import Point, Workspace
 
 from project_master import behaviours
 
@@ -135,12 +138,13 @@ def create_offset_end_points(workspace_vertices, offset_distance=0.5):
         cross_product = np.cross(edge_vector, perp_vector)
         if cross_product < 0:
             normal_vector = -normal_vector
-        
-        offset_point = midpoint + (normal_vector * offset_distance)
-        
-        # Add to waypoints as a tuple
-        end_points.append((offset_point[0], offset_point[1], 0.0))
 
+        offset_vertex = current + (normal_vector * offset_distance)
+        end_points.append((offset_vertex[0], offset_vertex[1], 0.0))
+        
+        offset_midpoint = midpoint + (normal_vector * offset_distance)
+        end_points.append((offset_midpoint[0], offset_midpoint[1], 0.0))
+    
     return end_points
 
 class ExploreMaster(Node):
@@ -148,21 +152,13 @@ class ExploreMaster(Node):
     def __init__(self):
         super().__init__("explore_master")
 
-        self.workspace_vertices = [
-            (-2.20, -1.30),
-            (2.20, -1.30),
-            (2.20, 1.30),
-            (-2.20, 1.30),
-        ]
+        workspace_file = "workspaces/large_workspace.tsv"
+        self.workspace_vertices = self.read_workspace(workspace_file, skip_header=True)
+        self.workspace_publisher = self.create_publisher(Workspace, "/workspace", 10)
+        self.end_points_broadcaster = TransformBroadcaster(self)
 
-        self.end_points = [
-            (-1.5, 0.8, 0.0),
-            (-1.5, -0.8, 0.0),
-            (1.5, -0.8, 0.0),
-            (1.5, 0.8, 0.0),
-        ]
-        
-        # self.end_points = create_offset_end_points(self.workspace_vertices, 0.5)
+        self.end_points = create_offset_end_points(self.workspace_vertices, 0.5)
+
         root = self.create_exploration_tree()
         self.tree = py_trees_ros.trees.BehaviourTree(root=root)
         tree_string = py_trees.display.ascii_tree(root)
@@ -170,6 +166,40 @@ class ExploreMaster(Node):
         self.tree.setup(timeout=15, node=self)
 
         self.create_timer(0.1, self.tick_tree) # Tick tree every 100 ms
+        self.create_timer(2, self.publish_workspace)
+        self.create_timer(2, self.broadcast_end_points)
+
+    def publish_workspace(self):
+        workspace_msg = Workspace()
+        workspace_msg.header.stamp = self.get_clock().now().to_msg()
+        workspace_msg.header.frame_id = "map"
+
+        for vertex in self.workspace_vertices:
+            point_msg = Point()
+            point_msg.x = vertex[0]
+            point_msg.y = vertex[1]
+            workspace_msg.points.append(point_msg)
+
+        self.workspace_publisher.publish(workspace_msg)
+        self.get_logger().info("Published workspace vertices", once=True)
+
+    def broadcast_end_points(self):
+        for i, point in enumerate(self.end_points):
+            transform = TransformStamped()
+            transform.header.frame_id = 'map'  # Change to your desired parent frame
+            transform.child_frame_id = f'EndPoint{i}'
+            
+            # Set translation from end_point coordinates
+            transform.transform.translation.x = point[0]
+            transform.transform.translation.y = point[1]
+            transform.transform.translation.z = 0.0
+            
+            transform.transform.rotation.x = 0.0
+            transform.transform.rotation.y = 0.0
+            transform.transform.rotation.z = 0.0
+            transform.transform.rotation.w = 1.0
+            
+            self.end_points_broadcaster.sendTransform(transform)
 
     def create_exploration_tree(self):
         root = py_trees.composites.Selector("ExplorationRoot", memory=True)
@@ -210,13 +240,10 @@ class ExploreMaster(Node):
             point_selector.add_children([service_check_sequence, fallback])
             exploration_sequence.add_child(point_selector)
 
-        repeater = py_trees.decorators.FailureIsRunning(
-            name="RepeatExploration",
-            child=py_trees.decorators.Repeat(
-                name="RepeatTwice", 
-                child=exploration_sequence,
-                num_success=2
-            )
+        repeater = py_trees.decorators.Repeat(
+            name="RepeatExploration", 
+            child=exploration_sequence,
+            num_success=2
         )
         
         root.add_child(repeater)
@@ -228,6 +255,26 @@ class ExploreMaster(Node):
         except Exception as e:
             self.get_logger().error(f"Exception during tree tick: {e}")
 
+    def read_workspace(self, filename, skip_header=False):
+        workspace_vertices = []
+        try:
+            with open(filename, "r") as file:
+                if skip_header:
+                    next(file)
+                for line in file:
+                    line = line.strip()
+                    if line:
+                        parts = line.split("\t")
+                        if len(parts) == 2:
+                            x, y = parts
+                            workspace_vertices.append((float(x)/100, float(y)/100))
+                            self.get_logger().info(f"Added vertex: ({float(x)/100}, {float(y)/100})")
+                        else:
+                            self.get_logger().warn("Skipping invalid line: {line}")
+            return workspace_vertices
+        except FileNotFoundError:
+            self.get_logger().warn(f"File {filename} not found")
+            return []
 
 def main():
     rclpy.init()
