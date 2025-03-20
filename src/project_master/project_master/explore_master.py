@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import numpy as np
+import shapely
 import py_trees
 import py_trees_ros
 
@@ -113,73 +114,101 @@ class ReachedEndPoint(py_trees.behaviour.Behaviour):
             self.node.get_logger().info(f"{self.name}: Distance to end point is {distance:.2f}")
             return py_trees.common.Status.RUNNING
 
-def create_exploration_tree(node, end_points):
+def create_offset_end_points(workspace_vertices, offset_distance=0.5):
 
-    root = py_trees.composites.Selector("ExplorationRoot", memory=True)
-    exploration_sequence = py_trees.composites.Sequence("Exploration", memory=True)
+    end_points = []
+    vertices = [np.array(vertex) for vertex in workspace_vertices]
 
-    for i, (x, y, yaw) in enumerate(end_points):
-        point_sequence = py_trees.composites.Sequence(f"EndPoint{i}", memory=True)
+    for i in range(len(vertices)):
+        current = vertices[i]
+        next = vertices[(i+1) % len(vertices)]
 
-        pathing_service = ServiceClient(
-            name=f"GoToPoint{i}",
-            service_type=GoToPoint,
-            service_name="/pathing_end_point",
-            x=x,
-            y=y,
-            yaw=yaw
-        )
+        edge_vector = next - current
+        midpoint = (current + next) / 2
+
+        perp_vector = np.array([-edge_vector[1], edge_vector[0]])
+        normal_vector = perp_vector / np.linalg.norm(perp_vector)
         
-        end_point_check = ReachedEndPoint(
-            name=f"ReachedEndPoint{i}",
-            x=x,
-            y=y
-        )
+        cross_product = np.cross(edge_vector, perp_vector)
+        if cross_product < 0:
+            normal_vector = -normal_vector
         
-        point_sequence.add_children([pathing_service, end_point_check])
-        exploration_sequence.add_child(point_sequence)
+        offset_point = midpoint + (normal_vector * offset_distance)
+        
+        # Add to waypoints as a tuple
+        end_points.append((offset_point[0], offset_point[1], 0.0))
 
-    repeater = py_trees.decorators.FailureIsRunning(
-        name="RepeatExploration",
-        child=py_trees.decorators.Repeat(
-            name="RepeatForever", 
-            child=exploration_sequence,
-            num_success=-1  # -1 means infinite repetition
-        )
-    )
-    
-    root.add_child(repeater)
-    return root
+    return end_points
 
 class ExploreMaster(Node):
 
     def __init__(self):
         super().__init__("explore_master")
 
+        self.workspace_vertices = [
+            (-2.20, -1.30),
+            (2.20, -1.30),
+            (2.20, 1.30),
+            (-2.20, 1.30),
+        ]
+        
+        self.end_points = create_offset_end_points(self.workspace_vertices, 0.5)
+        root = self.create_exploration_tree()
+        self.tree = py_trees_ros.trees.BehaviourTree(root=root)
+        tree_string = py_trees.display.ascii_tree(root)
+        self.get_logger().info(f"Behavior Tree Structure:\n{tree_string}")
+        self.tree.setup(timeout=15, node=self)
+
+        self.create_timer(0.1, self.tick_tree) # Tick tree every 100 ms
+
+    def create_exploration_tree(self):
+        root = py_trees.composites.Selector("ExplorationRoot", memory=True)
+        exploration_sequence = py_trees.composites.Sequence("Exploration", memory=True)
+
+        for i, (x, y, yaw) in enumerate(self.end_points):
+            point_sequence = py_trees.composites.Sequence(f"EndPoint{i}", memory=True)
+
+            pathing_service = ServiceClient(
+                name=f"GoToPoint{i}",
+                service_type=GoToPoint,
+                service_name="/pathing_end_point",
+                x=x,
+                y=y,
+                yaw=yaw
+            )
+            
+            end_point_check = ReachedEndPoint(
+                name=f"ReachedEndPoint{i}",
+                x=x,
+                y=y
+            )
+            
+            point_sequence.add_children([pathing_service, end_point_check])
+            exploration_sequence.add_child(point_sequence)
+
+        repeater = py_trees.decorators.FailureIsRunning(
+            name="RepeatExploration",
+            child=py_trees.decorators.Repeat(
+                name="RepeatForever", 
+                child=exploration_sequence,
+                num_success=-1  # -1 means infinite repetition
+            )
+        )
+        
+        root.add_child(repeater)
+        return root
+
+    def tick_tree(self):
+        try:
+            self.tree.tick()
+        except Exception as e:
+            self.get_logger().error(f"Exception during tree tick: {e}")
+
+
 def main():
     rclpy.init()
     node = ExploreMaster()
-    end_points = [
-        (-1.6, 0.8, 0.0),
-        (-1.6, -0.8, 0.0),
-        (1.6, -0.8, 0.0),
-        (1.6, 0.8, 0.0),
-        # (6.50, 2.0, 0.0),
-    ]
-
-    root = create_exploration_tree(node, end_points)
-
-    # Then use BehaviourTree with proper ROS integration
-    tree = py_trees_ros.trees.BehaviourTree(
-        root=root,
-        unicode_tree_debug=True
-    )
-    tree.setup(timeout=15, node=node)
-
-    rate = node.create_rate(10)
-
     try:
-        tree.tick_tock(period_ms=100)
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass
