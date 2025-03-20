@@ -9,6 +9,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, HistoryPolicy, ReliabilityPolicy
 from project_interfaces.srv import GoToPoint, Trigger
 from nav_msgs.msg import Odometry
+from project_interfaces.msg import Point, Workspace
 
 from project_master import behaviours
 
@@ -148,12 +149,10 @@ class ExploreMaster(Node):
     def __init__(self):
         super().__init__("explore_master")
 
-        self.workspace_vertices = [
-            (-2.20, -1.30),
-            (2.20, -1.30),
-            (2.20, 1.30),
-            (-2.20, 1.30),
-        ]
+        workspace_file = "workspaces/large_workspace.tsv"
+        self.workspace_vertices = self.read_workspace(workspace_file, skip_header=True)
+        self.workspace_publisher = self.create_publisher(Workspace, "/workspace", 10)
+        self.publish_workspace()
 
         self.end_points = [
             (-1.5, 0.8, 0.0),
@@ -170,6 +169,15 @@ class ExploreMaster(Node):
         self.tree.setup(timeout=15, node=self)
 
         self.create_timer(0.1, self.tick_tree) # Tick tree every 100 ms
+
+    def publish_workspace(self):
+        workspace_msg = Workspace()
+        workspace_msg.header.stamp = self.get_clock().now().to_msg()
+        workspace_msg.header.frame_id = "map"
+
+        workspace_msg.points = self.workspace_vertices
+        self.get_logger().info("Published workspace vertices", once=True)
+
 
     def create_exploration_tree(self):
         root = py_trees.composites.Selector("ExplorationRoot", memory=True)
@@ -210,13 +218,10 @@ class ExploreMaster(Node):
             point_selector.add_children([service_check_sequence, fallback])
             exploration_sequence.add_child(point_selector)
 
-        repeater = py_trees.decorators.FailureIsRunning(
-            name="RepeatExploration",
-            child=py_trees.decorators.Repeat(
-                name="RepeatTwice", 
-                child=exploration_sequence,
-                num_success=2
-            )
+        repeater = py_trees.decorators.Repeat(
+            name="RepeatExploration", 
+            child=exploration_sequence,
+            num_success=2
         )
         
         root.add_child(repeater)
@@ -228,6 +233,26 @@ class ExploreMaster(Node):
         except Exception as e:
             self.get_logger().error(f"Exception during tree tick: {e}")
 
+    def read_workspace(self, filename, skip_header=False):
+        workspace_vertices = []
+        try:
+            with open(filename, "r") as file:
+                if skip_header:
+                    next(file)
+                for line in file:
+                    line = line.strip()
+                    if line:
+                        parts = line.split("\t")
+                        if len(parts) == 2:
+                            x, y = parts
+                            workspace_vertices.append((float(x)/100, float(y)/100))
+                            self.get_logger().info(f"Added vertex: ({float(x)/100}, {float(y)/100})")
+                        else:
+                            self.get_logger().warn("Skipping invalid line: {line}")
+            return workspace_vertices
+        except FileNotFoundError:
+            self.get_logger().warn(f"File {filename} not found")
+            return []
 
 def main():
     rclpy.init()
