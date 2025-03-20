@@ -25,11 +25,12 @@ class ServiceClient(py_trees.behaviour.Behaviour):
     def setup(self, **kwargs):
         try:
             self.node = kwargs.get("node")
-            self.client = self.node.create_client(self.service_type, self.service_name)
-            return True
         except Exception as e:
-            self.logger.error(f"{self.name} - Service client setup failed: {e}")
+            self.logger.error(f"{self.name} - Setup failed: {e}")
             return False
+
+        self.client = self.node.create_client(self.service_type, self.service_name)
+        return True
 
     def initialise(self):
         self.sent_request = False
@@ -37,7 +38,7 @@ class ServiceClient(py_trees.behaviour.Behaviour):
 
     def update(self):
         if not self.client.service_is_ready():
-            self.logger.info(f"{self.name} - Waiting for service {self.service_name} ...")
+            self.node.get_logger().info(f"{self.name} - Waiting for service {self.service_name} ...")
             return py_trees.common.Status.RUNNING
             
         if not self.sent_request:
@@ -49,19 +50,19 @@ class ServiceClient(py_trees.behaviour.Behaviour):
 
                 self.future = self.client.call_async(request)
                 self.sent_request = True
-                self.logger.info(f"{self.name} - Sent request to {self.service_name}")
+                self.node.get_logger().info(f"{self.name} - Sent request to {self.service_name}")
                 return py_trees.common.Status.RUNNING
             except Exception as e:
-                self.logger.error(f"{self.name} - Failed to send request: {e}")
+                self.node.get_logger().error(f"{self.name} - Failed to send request: {e}")
                 return py_trees.common.Status.FAILURE
 
         if self.future.done():
             try:
                 response = self.future.result()
-                self.logger.info(f"{self.name} - Service call response: {response.success}, {response.message}")
+                self.node.get_logger().info(f"{self.name} - Service call response: {response.success}, {response.message}")
                 return py_trees.common.Status.SUCCESS
             except Exception as e:
-                self.logger.error(f"{self.name} - Service call failed with exception: {e}")
+                self.node.get_logger().error(f"{self.name} - Service call failed with exception: {e}")
                 return py_trees.common.Status.FAILURE
         else:
             return py_trees.common.Status.RUNNING
@@ -97,7 +98,7 @@ class ReachedEndPoint(py_trees.behaviour.Behaviour):
 
     def update(self):
         if self.current_point == (None, None):
-            self.logger.info(f"{self.name}: Waiting for current point ...")
+            self.node.get_logger().info(f"{self.name}: Waiting for current point ...")
             return py_trees.common.Status.RUNNING
         
         distance = np.hypot(
@@ -106,10 +107,10 @@ class ReachedEndPoint(py_trees.behaviour.Behaviour):
         )
 
         if distance <= self.tolerance:
-            self.logger.info(f"{self.name}: Reached end point of ({self.end_point[0], self.end_point[1]})")
+            self.node.get_logger().info(f"{self.name}: Reached end point of ({self.end_point[0], self.end_point[1]})")
             return py_trees.common.Status.SUCCESS
         else:
-            self.logger.info(f"{self.name}: Distance to end point is {distance:.2f}")
+            self.node.get_logger().info(f"{self.name}: Distance to end point is {distance:.2f}")
             return py_trees.common.Status.RUNNING
 
 def create_exploration_tree(node, end_points):
@@ -163,7 +164,7 @@ def main():
         (-1.6, -0.8, 0.0),
         (1.6, -0.8, 0.0),
         (1.6, 0.8, 0.0),
-        # (6.50, 2, 0.0),
+        # (6.50, 2.0, 0.0),
     ]
 
     root = create_exploration_tree(node, end_points)
@@ -175,7 +176,6 @@ def main():
     )
     tree.setup(timeout=15, node=node)
 
-    # print(py_trees.display.ascii_tree(root))
     rate = node.create_rate(10)
 
     try:
