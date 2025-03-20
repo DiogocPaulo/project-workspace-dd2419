@@ -59,8 +59,12 @@ class ServiceClient(py_trees.behaviour.Behaviour):
         if self.future.done():
             try:
                 response = self.future.result()
-                self.node.get_logger().info(f"{self.name} - Service call response: {response.success}, {response.message}")
-                return py_trees.common.Status.SUCCESS
+                if response.success:
+                    self.node.get_logger().info(f"{self.name} - Service call response: {response.success}, {response.message}")
+                    return py_trees.common.Status.SUCCESS
+                else:
+                    self.node.get_logger().info(f"{self.name} - Service call response: {response.success}, {response.message}")
+                    return py_trees.common.Status.FAILURE
             except Exception as e:
                 self.node.get_logger().error(f"{self.name} - Service call failed with exception: {e}")
                 return py_trees.common.Status.FAILURE
@@ -165,7 +169,8 @@ class ExploreMaster(Node):
         exploration_sequence = py_trees.composites.Sequence("Exploration", memory=True)
 
         for i, (x, y, yaw) in enumerate(self.end_points):
-            point_sequence = py_trees.composites.Sequence(f"EndPoint{i}", memory=True)
+            point_selector = py_trees.composites.Selector(f"EndPoint{i}", memory=True)
+            try_point = py_trees.composites.Sequence(f"TryPoint{i}", memory=True)
 
             pathing_service = ServiceClient(
                 name=f"GoToPoint{i}",
@@ -181,16 +186,19 @@ class ExploreMaster(Node):
                 x=x,
                 y=y
             )
-            
-            point_sequence.add_children([pathing_service, end_point_check])
-            exploration_sequence.add_child(point_sequence)
+
+            try_point.add_children([pathing_service, end_point_check])
+            fallback = py_trees.behaviours.Success(name=f"SkipToNext{i}")
+
+            point_selector.add_children([try_point, fallback])
+            exploration_sequence.add_child(point_selector)
 
         repeater = py_trees.decorators.FailureIsRunning(
             name="RepeatExploration",
             child=py_trees.decorators.Repeat(
                 name="RepeatForever", 
                 child=exploration_sequence,
-                num_success=-1  # -1 means infinite repetition
+                num_success=2
             )
         )
         

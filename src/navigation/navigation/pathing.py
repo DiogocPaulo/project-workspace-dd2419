@@ -37,6 +37,7 @@ class Pathing(Node):
         self.region_radius = 1.0
         self.map = None
         self.inflated_grid = None
+        self.pathing_failed = False
         
         self.create_timer(0.05, self.publish_astar_path)
         self.create_timer(0.5, self.update_inflated_map)
@@ -59,9 +60,17 @@ class Pathing(Node):
             self.map.update_grid(grid)
 
     def receive_end_point(self, request, response):
+        if request.x != end_point[0] and request.y != end_point[1]:
+            self.pathing_failed = False
         self.end_point = (request.x, request.y)
-        response.success = True
-        response.message = f"Pathing end point set: ({self.end_point[0]}, {self.end_point[1]})"
+
+        if not self.pathing_failed:
+            response.success = True
+            response.message = f"Pathing end point set: ({self.end_point[0]}, {self.end_point[1]})"
+        else:
+            response.success = False
+            response.message = f"Failed to find path to end point: ({self.end_point[0]}, {self.end_point[1]})"
+
         return response
 
     def update_inflated_map(self):
@@ -103,7 +112,7 @@ class Pathing(Node):
 
         inflation_radius = self.base
         path = None
-        while path is None:
+        while path is None and not self.pathing_failed:
             # self.inflated_grid = self.map.inflate_grid_in_region(inflation_radius, self.region_radius, self.start_point[0], self.start_point[1])
             self.inflated_grid = self.map.inflate_grid(inflation_radius)
             path_planner = AdaptiveAStar(self.inflated_grid, self.adaptive_h)
@@ -118,7 +127,7 @@ class Pathing(Node):
             else:
                 # If the path is none
                 self.get_logger().warn("No path found")
-                break
+                self.pathing_failed = True
 
         path_msg = Path()
         path_msg.header.stamp = self.get_clock().now().to_msg()
