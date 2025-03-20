@@ -154,6 +154,13 @@ class ExploreMaster(Node):
             (2.20, 1.30),
             (-2.20, 1.30),
         ]
+
+        # self.end_points = [
+        #     (-1.6, 0.8, 0.0),
+        #     (-1.6, -0.8, 0.0),
+        #     (1.6, -0.8, 0.0),
+        #     (1.6, 0.8, 0.0),
+        # ]
         
         self.end_points = create_offset_end_points(self.workspace_vertices, 0.5)
         root = self.create_exploration_tree()
@@ -170,7 +177,8 @@ class ExploreMaster(Node):
 
         for i, (x, y, yaw) in enumerate(self.end_points):
             point_selector = py_trees.composites.Selector(f"EndPoint{i}", memory=True)
-            try_point = py_trees.composites.Sequence(f"TryPoint{i}", memory=True)
+
+            service_check_sequence = py_trees.composites.Sequence(f"ServiceCheck{i}", memory=True)
 
             pathing_service = ServiceClient(
                 name=f"GoToPoint{i}",
@@ -180,6 +188,8 @@ class ExploreMaster(Node):
                 y=y,
                 yaw=yaw
             )
+
+            retry_on_endpoint_failure = py_trees.composites.Sequence(f"RetryOnEndpointFailure{i}", memory=False)
             
             end_point_check = ReachedEndPoint(
                 name=f"ReachedEndPoint{i}",
@@ -187,16 +197,23 @@ class ExploreMaster(Node):
                 y=y
             )
 
-            try_point.add_children([pathing_service, end_point_check])
+            retry_endpoint = py_trees.decorators.FailureIsRunning(
+                name=f"RetryEndpoint{i}",
+                child=end_point_check
+            )
+
+            retry_on_endpoint_failure.add_children([pathing_service, retry_endpoint])
+            service_check_sequence.add_child(retry_on_endpoint_failure)
+
             fallback = py_trees.behaviours.Success(name=f"SkipToNext{i}")
 
-            point_selector.add_children([try_point, fallback])
+            point_selector.add_children([service_check_sequence, fallback])
             exploration_sequence.add_child(point_selector)
 
         repeater = py_trees.decorators.FailureIsRunning(
             name="RepeatExploration",
             child=py_trees.decorators.Repeat(
-                name="RepeatForever", 
+                name="RepeatTwice", 
                 child=exploration_sequence,
                 num_success=2
             )
