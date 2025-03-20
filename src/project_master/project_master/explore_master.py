@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 import numpy as np
-import shapely
 import py_trees
 import py_trees_ros
 
