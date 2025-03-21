@@ -68,7 +68,7 @@ class AdaptiveAStar:
         return None  # No path found
 
 if __name__ == "__main__":
-    from grid_map2 import Map
+    from navigation.map import Map
 
     # Initialize the grid map
     grid = Map(1, 0, 0, 15, 15)

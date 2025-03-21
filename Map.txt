@@ -1,0 +1,5 @@
+sphere	-199	-116	0
+cube	206	-100	0
+plushie	187	118	0
+box	16	122	0
+plushie	-206	107	0

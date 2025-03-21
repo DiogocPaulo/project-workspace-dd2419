@@ -14,32 +14,32 @@ def generate_launch_description():
     return LaunchDescription([
         Node(
             package="project_master",
-            executable="project_master",
+            executable="explore_master",
             name="robot_master",
-            ros_arguments=['--log-level', 'info']
+            ros_arguments=["--log-level", "error"]
         ),
         Node(
             package="navigation",
             executable="navigation",
             name="robot_navigation",
-            ros_arguments=['--log-level', 'warn']
+            ros_arguments=["--log-level", "error"]
         ),
         Node(
             package="navigation",
             executable="mapping",
             name="robot_mapping",
-            ros_arguments=['--log-level', 'warn']
+            ros_arguments=["--log-level", "error"]
         ),
         Node(
             package="navigation",
             executable="pathing",
             name="robot_pathing",
-            ros_arguments=['--log-level', 'warn']
+            ros_arguments=["--log-level", "error"]
         ),
         Node(
-            package='detection',
-            executable='detection',
-            name='robot_detection',
-            ros_arguments=['--log-level', 'info']
+            package="detection",
+            executable="detection",
+            name="robot_detection",
+            ros_arguments=["--log-level", "info"]
         ),
     ])

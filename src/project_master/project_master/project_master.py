@@ -16,6 +16,7 @@ class ProjectMaster(Node):
     def __init__(self):
         super().__init__("project_master")
 
+<<<<<<< HEAD
 
         self.clock = self.get_clock()
 
@@ -178,6 +179,8 @@ class ProjectMaster(Node):
         
 
 
+=======
+>>>>>>> navigation
 def main():
     rclpy.init()
     node = ProjectMaster()
