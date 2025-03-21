@@ -119,7 +119,7 @@ class ExamineImage(Node):
 
             self.read = 1
 
-            self.get_logger().info(f"Published new object list now includes: {object_type} at ({x:.2f}, {y:.2f})")
+            #self.get_logger().info(f"Published new object list now includes: {object_type} at ({x:.2f}, {y:.2f})")
 
             self.get_logger().info(f"Published TF for object: {object_type} at ({x:.2f}, {y:.2f})")
 
@@ -220,6 +220,8 @@ class ExamineImage(Node):
             green_ratio = len(green_points) / total_points
             blue_ratio = len(blue_points) / total_points
             brown_ratio = len(brown_points) / total_points
+
+            self.get_logger().info(f"red: {red_ratio} blue: {blue_ratio} green:{green_ratio} brown:{brown_ratio}")
 
             pure_red = pure_green = pure_blue = pure_brown = False
 
@@ -540,7 +542,7 @@ class ExamineImage(Node):
                 object_list_msg.objects = self.object_list
                 self.object_list_publisher.publish(object_list_msg)
 
-                self.get_logger().info(f"Published new object list now includes: {object_type} at ({x_transformed:.2f}, {y_transformed:.2f})")
+                #self.get_logger().info(f"Published new object list now includes: {object_type} at ({x_transformed:.2f}, {y_transformed:.2f})")
 
         except TransformException as e:
             self.get_logger().error(f"Failed coordinate transform for newly detected object: {e}")
