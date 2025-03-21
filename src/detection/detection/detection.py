@@ -120,9 +120,9 @@ class ExamineImage(Node):
 
             self.read = 1
 
-            self.get_logger().info(f"Published new object list now includes: {object_type} at ({x:.2f}, {y:.2f})")
+            #self.get_logger().info(f"Published new object list now includes: {object_type} at ({x:.2f}, {y:.2f})")
 
-            self.get_logger().info(f"Published TF for object: {object_type} at ({x:.2f}, {y:.2f})")
+            #self.get_logger().info(f"Published TF for object: {object_type} at ({x:.2f}, {y:.2f})")
 
         object_list_msg = ObjectList()
         object_list_msg.header.frame_id = "map"
@@ -226,6 +226,8 @@ class ExamineImage(Node):
             blue_ratio = len(blue_points) / total_points
             brown_ratio = len(brown_points) / total_points
 
+            #self.get_logger().info(f"Brown {red_ratio} {blue_ratio} {green_ratio} {brown_ratio}")
+
             pure_red = pure_green = pure_blue = pure_brown = False
 
             # Check if the cluster is predominantly red, green, or blue
@@ -235,7 +237,7 @@ class ExamineImage(Node):
                 pure_green = True
             elif blue_ratio > 0.001 and red_ratio == 0.0 and green_ratio == 0.0 and brown_ratio < 0.01:
                 pure_blue = True
-            elif brown_ratio > 0.001 and red_ratio == 0.0 and green_ratio == 0.0 and blue_ratio == 0.0:
+            elif brown_ratio > 0.1 and red_ratio == 0.0 and green_ratio == 0.0 and blue_ratio == 0.0:
                 pure_brown = True
 
             # Classify based on floor contact points for the current cluster
@@ -271,10 +273,6 @@ class ExamineImage(Node):
                 elif object_type == "unknown":
                     self.get_logger().info(f'Object not identified :(!')
 
-            elif self.is_plushie(cluster_points):
-                self.get_logger().info(f'🧸 Cluster {cluster_label} is a plushie!')
-                self.publish_object(x + 0.01, z, 0.0, Object.PLUSHIE, msg.header.stamp)
-
             elif self.is_box(cluster_points):  # If detected object is a box
                 self.get_logger().info(f'📦 Cluster {cluster_label} is a box!')
 
@@ -288,6 +286,10 @@ class ExamineImage(Node):
                     self.publish_object(x, z + 0.12, angle, Object.BOX, msg.header.stamp)
                 else:
                     self.publish_object(x, z + 0.08, angle, Object.BOX, msg.header.stamp)
+
+            elif self.is_plushie(cluster_points):
+                self.get_logger().info(f'🧸 Cluster {cluster_label} is a plushie!')
+                self.publish_object(x + 0.01, z, 0.0, Object.PLUSHIE, msg.header.stamp)
 
             else:
                 if pure_brown:
@@ -435,6 +437,8 @@ class ExamineImage(Node):
 
         ratio = num_middle_layer_points / num_highest_layer_points
 
+        self.get_logger().info(f"ratio: {ratio}")
+
         # Classification based on the ratio
         if 1 < ratio <= 6.5:  # Cube: ratio is approximately 1
             return "cube"
@@ -504,7 +508,16 @@ class ExamineImage(Node):
         point_in.point = Point(x=x, y=0.09, z=y)  # Set the point coordinates
 
         try:
-            # Lookup the transform from camera_depth_optical_frame to map
+            """             # Wait until the transform is available or timeout
+            timeout = 2.0  # Timeout duration in seconds
+            start_time = time.time()
+
+            while not self.tfBuffer.can_transform('map', 'camera_depth_optical_frame', point_in.header.stamp):
+                if time.time() - start_time > timeout:
+                    raise Exception(f"Timeout waiting for transform from 'camera_depth_optical_frame' to 'map'")
+                rclpy.spin_once(self)  # This will allow other callbacks to process, ensuring the system remains responsive
+            # Lookup the transform from camera_depth_optical_frame to map """
+        
             transform = self.tfBuffer.lookup_transform(
                 'map',  # Target frame
                 point_in.header.frame_id,  # Source frame
@@ -546,7 +559,7 @@ class ExamineImage(Node):
                 object_list_msg.objects = self.object_list
                 self.object_list_publisher.publish(object_list_msg)
 
-                self.get_logger().info(f"Published new object list now includes: {object_type} at ({x_transformed:.2f}, {y_transformed:.2f})")
+                #self.get_logger().info(f"Published new object list now includes: {object_type} at ({x_transformed:.2f}, {y_transformed:.2f})")
 
         except TransformException as e:
             self.get_logger().error(f"Failed coordinate transform for newly detected object: {e}")
