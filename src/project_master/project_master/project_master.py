@@ -185,7 +185,7 @@ def main():
    # node.send_end_point(-1.5, 0.5)
 
     
-    node.process_map_file("/home/robot/project-workspace-dd2419/maps/Map1.txt")
+    node.process_map_file("/home/robot/project-workspace-dd2419/maps/Map_test.txt")
     node.publish_transforms()
     # node.send_arm_request(0.2,0.0,0.0,"PICKUP")
     # node.send_arm_request(0.15,-0.15,0.0,"DROPOFF")   
