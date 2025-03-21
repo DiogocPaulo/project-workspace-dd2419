@@ -33,6 +33,7 @@ def generate_launch_description():
             output='screen',
             arguments=["serial", "--dev", "/dev/ttyUSB1", "-v6"] # Changed to 1
         ),
+        
         # Node(
         #     package="navigation",
         #     executable="navigation",

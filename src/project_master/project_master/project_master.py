@@ -7,6 +7,9 @@ from project_interfaces.msg import ArmTaskMessage
 from project_interfaces.srv import PickObject
 from geometry_msgs.msg import Point
 from project_interfaces.srv import GoToPoint, Trigger
+import tf2_ros
+from geometry_msgs.msg import TransformStamped
+import math
 
 class ProjectMaster(Node):
 
@@ -35,6 +38,10 @@ class ProjectMaster(Node):
             (-0.5, 0.0, 0.0),
         ]
         self.i = 0
+
+        self.objects = []
+
+        self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
 
     def reached_destination_callback(self, request, response):
         self.get_logger().info("Master - Reached destination")
@@ -114,15 +121,57 @@ class ProjectMaster(Node):
 
         response = future.result() 
         if response is not None:
-            self.get_logger().info(f"Response received: {response.result}")
+            if response.result == 0:
+                self.get_logger().info(f"REQUEST SUCCESFUL!")
+            elif response.result == 1:
+                self.get_logger().info(f"REQUEST FAILED!: COULD NOT FIND KINEMATIC SOLUTION")
+            else:
+                self.get_logger().info(f"REQUEST FAILED!: PICKUP DID NOT PICK UP OBJECT")
         else:
-            self.get_logger().error("No response received!")
+            self.get_logger().error("NO RESPONSE RECIEVED!")
 
 
         self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
 
         
+    class Object:
+        def __init__(self,type,x,y):
+            self.x = x
+            self.y = y
+            self.type = type
 
+    def process_map_file(self, file_path):
+        with open(file_path, "r") as file:
+            for line in file:
+                parts = line.strip().split(" ")
+                O = self.Object(parts[0],float(parts[1])/1000,float(parts[2])/1000)
+                self.objects.append(O)
+
+    def publish_transforms(self):
+        for Object in self.objects:
+            self.publish_transform(Object.type,Object.x,Object.y,0)
+
+
+    def publish_transform(self, name, x, y, theta):
+        t = TransformStamped()
+        t.header.stamp = self.get_clock().now().to_msg()
+        t.header.frame_id = "map"
+        t.child_frame_id = name
+
+        t.transform.translation.x = x
+        t.transform.translation.y = y
+        t.transform.translation.z = 0.0
+
+        # Convert yaw to quaternion
+        qz = math.sin(theta / 2.0)
+        qw = math.cos(theta / 2.0)
+        t.transform.rotation.x = 0.0
+        t.transform.rotation.y = 0.0
+        t.transform.rotation.z = qz
+        t.transform.rotation.w = qw
+
+        self.tf_broadcaster.sendTransform(t)
+        self.get_logger().info(f"Published transform for {name} at ({x}, {y})")
         
 
 
@@ -132,8 +181,12 @@ def main():
 
    # node.send_end_point(-1.5, 0.5)
 
-    node.send_arm_request(0.2,0.0,-0.03,"PICKUP")
-    node.send_arm_request(0.2,0.0,-0.03,"DROPOFF")
+    # node.send_arm_request(0.2,0.0,0.0,"PICKUP")
+    # node.send_arm_request(0.15,-0.15,0.0,"DROPOFF")
+    node.process_map_file("/home/robot/project-workspace-dd2419/maps/Map1.txt")
+    node.publish_transforms()
+
+
 
     try:
         rclpy.spin(node)

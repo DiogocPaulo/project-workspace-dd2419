@@ -38,31 +38,13 @@ class MultiServoPublisher(Node):
         self.publisher_sim = self.create_publisher(JointState, '/joint_states', 10)
         self.i = 0
 
-        # self.task_subscription = self.create_subscription(
-        #     ArmTaskMessage,           # Message type
-        #     '/Arm_Task',        # Topic name
-        #     self.task_callback,  # Callback function
-        #     10                # Queue size
-        # )
-        # self.task_subscription
-
-        # self.task_publisher = self.create_publisher(ArmTaskMessage, "/Arm_Task", 10)
 
         self.tfBuffer = tf2_ros.Buffer()
         self.listener = tf2_ros.TransformListener(self.tfBuffer,self)
         self.clock = self.get_clock()
         
         self.service = self.create_service(PickObject, 'PickObject', self.task_callback)
-        # self.client = self.create_client(PickObject, 'PickObject')
 
-
-        # self._action_server = ActionServer(
-        #     self,
-        #     PickUpObject,
-        #     'PickUpObject',
-        #     self.pickup_callback_sim
-        # )
-        # self._action_client = ActionClient(self, PickUpObject, 'PickUpObject')
 
         arm_msg = ArmTaskMessage()
         arm_msg.header = Header()
@@ -77,25 +59,6 @@ class MultiServoPublisher(Node):
         # self.publisher_marker = self.create_publisher(Marker, '/visualization_marker', 10)
 
         # self.timer = self.create_timer(1.0, self.publish_object_marker)
-
-        # request = PickObject.Request()
-        # request.target_position = self.position
-        # future = self.client.call_async(request)
-        # self.get_logger().info(f"RESPONSE: {future}")
-
-        # goal_msg = PickUpObject.Goal()
-        # goal_msg.target_position = self.position
-        # self._action_client.send_goal_async(goal_msg, feedback_callback=self.feedback_callback).add_done_callback(self.result_callback)
-
-        # self.task_publisher.publish(arm_msg)
-
-    # def task_callback(self,msg):
-    #     if msg.description == "PICKUP":
-    #         self.pickup_callback(msg)
-    #     elif msg.description == "DROPOFF":
-    #         self.dropoff_callback(msg)
-    #     else:
-    #         return
 
     def task_callback(self,request,response):
         if request.description == "PICKUP":
@@ -326,19 +289,6 @@ class MultiServoPublisher(Node):
 
         self.get_logger().info(f"DROPOFF COMPLETE")
         return 
-
-    def feedback_callback(self, feedback):
-        self.get_logger().info(f'Feedback: {feedback.message}')
-
-    def result_callback(self, future):
-        # This is called once the result of the action is available
-        result = future.result()
-        
-        # Check the result's status and print it
-        if result:
-            self.get_logger().info(f'Result received: Status = {result.status}')
-        else:
-            self.get_logger().error('Action failed!')
 
 
 
