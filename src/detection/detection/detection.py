@@ -150,16 +150,13 @@ class ExamineImage(Node):
         # Extract XYZ coordinates from the point cloud
         points = points_data[:, :3]  # Shape (N, 3)
 
-        # Set distance threshold for filtering
-        max_dist = 0.9  # Maximum distance from the sensor (in meters)
-
         # Compute Euclidean distance of each point from the origin
         distances = np.linalg.norm(points, axis=1)
 
         # Create a boolean mask to filter points:
         # - Points within max_dist from the sensor
         # - Points above the floor (y < 0.09) (y-axis points downwards)
-        mask = (distances < max_dist) & (points[:, 1] < 0.085) & (0.01 < points[:, 1])
+        mask = (distances > 0.04) & (distances < 0.9) & (points[:, 1] < 0.085) & (0.01 < points[:, 1])
 
         # Apply the mask to filter points before processing colors
         points = points[mask]
@@ -241,8 +238,7 @@ class ExamineImage(Node):
             # Classify based on floor contact points for the current cluster
             object_type = self.classify_based_on_floor_contact(cluster_points)
 
-            centroid = np.mean(cluster_points, axis=0)
-            x, y, z = centroid
+            x, y, z = np.mean(cluster_points, axis=0)
 
             if pure_brown:
                 if object_type == "cube":
