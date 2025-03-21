@@ -33,20 +33,19 @@ def generate_launch_description():
             output='screen',
             arguments=["serial", "--dev", "/dev/ttyUSB1", "-v6"] # Changed to 1
         ),
-        
-        # Node(
-        #     package="navigation",
-        #     executable="navigation",
-        #     name="robot_navigation",
-        # ),
-        # Node(
-        #     package="navigation",
-        #     executable="mapping",
-        #     name="robot_mapping",
-        # ),
-        # Node(
-        #     package="navigation",
-        #     executable="pathing",
-        #     name="robot_pathing",
-        # ),
+        Node(
+            package="navigation",
+            executable="navigation",
+            name="robot_navigation",
+        ),
+        Node(
+            package="navigation",
+            executable="mapping",
+            name="robot_mapping",
+        ),
+        Node(
+            package="navigation",
+            executable="pathing",
+            name="robot_pathing",
+        ),
     ])
