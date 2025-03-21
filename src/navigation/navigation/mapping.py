@@ -60,8 +60,11 @@ class Mapping(Node):
             angle = object_msg.angle
             object_type = object_msg.object_type
             self.map.add_object(x, y, angle, object_type)
+        self.get_logger().info(f"Object List length: {msg.length}")
 
     def workspace_callback(self, msg):
+        if self.map.grid is not None:
+            return
         for point_msg in msg.points:
             x = point_msg.x
             y = point_msg.y

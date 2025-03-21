@@ -121,30 +121,53 @@ class ReachedEndPoint(py_trees.behaviour.Behaviour):
             return py_trees.common.Status.RUNNING
 
 def create_offset_end_points(workspace_vertices, offset_distance=0.5):
+    vertices = [np.array(vertex) for vertex in workspace_vertices]
+    num_vertices = len(vertices)
 
     end_points = []
-    vertices = [np.array(vertex) for vertex in workspace_vertices]
 
-    for i in range(len(vertices)):
-        current = vertices[i]
-        next = vertices[(i+1) % len(vertices)]
-
-        edge_vector = next - current
-        midpoint = (current + next) / 2
-
+    def compute_offset_normal(p, q):
+        edge_vector = q - p
+        norm_edge = np.linalg.norm(edge_vector)
+        if norm_edge == 0:
+            return np.array([0, 0])
         perp_vector = np.array([-edge_vector[1], edge_vector[0]])
         normal_vector = perp_vector / np.linalg.norm(perp_vector)
-        
         cross_product = np.cross(edge_vector, perp_vector)
         if cross_product < 0:
             normal_vector = -normal_vector
+        return normal_vector
 
-        offset_vertex = current + (normal_vector * offset_distance)
+    # Compute and add offset midpoints for each edge.
+    for i in range(num_vertices):
+        prev = vertices[i - 1]
+        current = vertices[i]
+        nxt = vertices[(i + 1) % num_vertices]
+
+        normal1 = compute_offset_normal(prev, current)
+        normal2 = compute_offset_normal(current, nxt)
+
+        p1 = current + normal1 * offset_distance
+        d1 = current - prev  # direction of the incoming edge
+        p2 = current + normal2 * offset_distance
+        d2 = nxt - current   # direction of the outgoing edge
+
+        denom = np.cross(d1, d2)
+        if np.abs(denom) < 1e-6:
+            offset_vertex = current + normal1 * offset_distance
+        else:
+            t = np.cross((p2 - p1), d2) / denom
+            offset_vertex = p1 + t * d1
+
         end_points.append((offset_vertex[0], offset_vertex[1], 0.0))
-        
-        offset_midpoint = midpoint + (normal_vector * offset_distance)
-        end_points.append((offset_midpoint[0], offset_midpoint[1], 0.0))
-    
+
+        edge_vector = nxt - current
+        midpoint = (current + nxt) / 2.0
+
+        normal_vector = compute_offset_normal(current, nxt)
+        offset_mid = midpoint + normal_vector * offset_distance
+        end_points.append((offset_mid[0], offset_mid[1], 0.0))
+
     return end_points
 
 class ExploreMaster(Node):
@@ -152,7 +175,7 @@ class ExploreMaster(Node):
     def __init__(self):
         super().__init__("explore_master")
 
-        workspace_file = "workspaces/large_workspace.tsv"
+        workspace_file = "workspaces/small_workspace.tsv"
         self.workspace_vertices = self.read_workspace(workspace_file, skip_header=True)
         self.workspace_publisher = self.create_publisher(Workspace, "/workspace", 10)
         self.end_points_broadcaster = TransformBroadcaster(self)
@@ -187,6 +210,7 @@ class ExploreMaster(Node):
         for i, point in enumerate(self.end_points):
             transform = TransformStamped()
             transform.header.frame_id = 'map'  # Change to your desired parent frame
+            transform.header.stamp = self.get_clock().now().to_msg()
             transform.child_frame_id = f'EndPoint{i}'
             
             # Set translation from end_point coordinates
