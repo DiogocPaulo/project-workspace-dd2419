@@ -19,6 +19,7 @@ set(msg_files
 	"msg/Workspace.msg"
 	"msg/Object.msg"
 	"msg/ObjectList.msg"
+	"msg/ArmTaskMessage.msg"
 	)
 
 set(srv_files
@@ -31,15 +32,11 @@ set(action_files
 	"action/PickUpObject.action"
 	)
 
-set(msg_files
-	"msg/ArmTaskMessage.msg"
-	)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
 	${msg_files}
 	${srv_files}
-  ${action_files}
-  ${msg_files}
+  	${action_files}
 	DEPENDENCIES std_msgs geometry_msgs
 	)
 
