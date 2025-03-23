@@ -144,53 +144,50 @@ class PickUp(py_trees.behaviour.Behaviour):
         )
 
         self.node = rclpy.create_node("pickup_behaviour")
-        self.node.create_client(PickObject, 'PickObject')
-        self.node.create_subscription(Odometry, "/odom", self.odom_callback, qos_profile)
-        self.end_point_client = self.node.create_client(GoToPoint, "/pathing_end_point")
-        while not self.end_point_client.wait_for_service(timeout_sec=1.0):
-            self.logger.info("GoToPoint service not yet avaliable, waiting ...")
+        self.arm_client = self.create_client(PickObject, 'PickObject')
+        while not self.arm_client.wait_for_service(timeout_sec=1.0):
+            self.logger.info("Arm Request service not yet avaliable, waiting ...")
+
+        # self.node.create_subscription(Odometry, "/odom", self.odom_callback, qos_profile)
+
+        # self.end_point_client = self.node.create_client(GoToPoint, "/pathing_end_point")
+        # while not self.end_point_client.wait_for_service(timeout_sec=1.0):
+        #     self.logger.info("GoToPoint service not yet avaliable, waiting ...")
         self.logger.info(f"{self.name}: Setup complete")
         return True
 
-    def odom_callback(self, msg: Odometry):
-        self.current_point[0] = msg.pose.pose.position.x
-        self.current_point[1] = msg.pose.pose.position.y
+    def send_arm_request(self, x, y, z, task):
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
+        self.get_logger().info("ARMTASK!")
+        arm_msg = PickObject.Request()
+        arm_msg.header = Header()
+        arm_msg.header.stamp = self.get_clock().now().to_msg()
+        arm_msg.header.frame_id = "base_link"
+        arm_msg.point = Point()
+        arm_msg.point.x = x
+        arm_msg.point.y = y
+        arm_msg.point.z = z
+        arm_msg.description = task
 
-    def update(self):
-        if self.current_point == (None, None):
-            self.logger.info(f"{self.name}: Waiting for current point ...")
-            return py_trees.common.Status.RUNNING
-        
-        distance = np.hypot(
-            self.current_point[0] - self.end_point[0],
-            self.current_point[1] - self.end_point[1]
-        )
+        future = self.arm_client.call_async(arm_msg)
+        rclpy.spin_until_future_complete(self, future)
 
-        if distance <= self.tolerance:
-            self.logger.info(f"{self.name}: Reached end point of ({self.end_point[0], self.end_point[1]})")
-            return py_trees.common.Status.SUCCESS
+        response = future.result() 
+        if response is not None:
+            if response.result == 0:
+                self.get_logger().info(f"REQUEST SUCCESFUL!")
+            elif response.result == 1:
+                self.get_logger().info(f"REQUEST FAILED!: COULD NOT FIND KINEMATIC SOLUTION")
+            else:
+                self.get_logger().info(f"REQUEST FAILED!: PICKUP DID NOT PICK UP OBJECT")
         else:
-            self.send_end_point(self.end_point[0], self.end_point[1])
-            self.logger.info(f"{self.name}: Distance to end point is {distance:.2f}")
-            return py_trees.common.Status.RUNNING
+            self.get_logger().error("NO RESPONSE RECIEVED!")
 
-    def send_end_point(self, x, y):
-        # Create new GoToPoint service for pathing node
-        request = GoToPoint.Request()
-        request.x = x
-        request.y = y
-        request.yaw = 0.0
 
-        # Handle request and response to pathing node async
-        future = self.end_point_client.call_async(request)
-        future.add_done_callback(self.pathing_response_callback)
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
 
-    def pathing_response_callback(self, future):
-        try:
-            response = future.result()
-            self.logger.info(f"Pathing response: {response.success}, {response.message}")
-        except Exception as e:
-            self.logger.warn(f"Service call to pathing node failed: {e}")
+
+    
 
     def terminate(self):
         if self.node is not None:

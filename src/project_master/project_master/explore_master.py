@@ -181,6 +181,7 @@ class ExploreMaster(Node):
         self.end_points_broadcaster = TransformBroadcaster(self)
 
         self.end_points = create_offset_end_points(self.workspace_vertices, 0.5)
+        self.collection_points = [(1.0,1.0,0.0),(-1.0,1.0,0.0),(-1.0,-1.0,0.0)]
 
         root = self.create_exploration_tree()
         self.tree = py_trees_ros.trees.BehaviourTree(root=root)
@@ -268,7 +269,7 @@ class ExploreMaster(Node):
             root = py_trees.composites.Selector("CollectionRoot", memory=True)
             Collection_sequence = py_trees.composites.Sequence("Collection", memory=True)
 
-            for i, (x, y, yaw) in enumerate(self.end_points):
+            for i, (x, y, yaw) in enumerate(self.collection_points):
                 point_selector = py_trees.composites.Selector(f"EndPoint{i}", memory=True)
 
                 service_check_sequence = py_trees.composites.Sequence(f"ServiceCheck{i}", memory=True)
