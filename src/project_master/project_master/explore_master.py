@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python
 
 import numpy as np
@@ -258,19 +259,18 @@ class ExploreMaster(Node):
         self.i = 0
 
         self.end_points = create_offset_end_points(self.workspace_vertices, 0.5)
-        self.collection_points = [(1.0,1.0,0.0)]
-        self.collection_points.append((2.0,1.0,0.0))
-        self.collection_points.append((0.0,0.0,0.0))
+        self.objects, self.boxes = self.process_map_file("/home/robot/project-workspace-dd2419/maps/Map1.txt")
+
+        self.create_timer(0.1, self.tick_tree) # Tick tree every 100 ms
+        self.create_timer(2, self.publish_workspace)
+        self.create_timer(2, self.broadcast_end_points)
+        self.create_timer(2, self.publish_transforms)
 
         root = self.create_collection_tree()
         self.tree = py_trees_ros.trees.BehaviourTree(root=root)
         tree_string = py_trees.display.ascii_tree(root)
         self.get_logger().info(f"Behavior Tree Structure:\n{tree_string}")
         self.tree.setup(timeout=15, node=self)
-
-        self.create_timer(0.1, self.tick_tree) # Tick tree every 100 ms
-        self.create_timer(2, self.publish_workspace)
-        self.create_timer(2, self.broadcast_end_points)
 
     def publish_workspace(self):
         workspace_msg = Workspace()
@@ -305,65 +305,97 @@ class ExploreMaster(Node):
             
             self.end_points_broadcaster.sendTransform(transform)
 
-    def create_exploration_tree(self):
-        root = py_trees.composites.Selector("ExplorationRoot", memory=True)
-        exploration_sequence = py_trees.composites.Sequence("Exploration", memory=True)
+    class Object:
+        def __init__(self,type,x,y):
+            self.x = x
+            self.y = y
+            self.type = type
 
-        for i, (x, y, yaw) in enumerate(self.end_points):
-            point_selector = py_trees.composites.Selector(f"EndPoint{i}", memory=True)
+    def process_map_file(self, file_path):
+        objects = []
+        boxes = []
+        with open(file_path, "r") as file:
+            for line in file:
+                parts = line.strip().split(" ")
+                O = self.Object(parts[0],float(parts[1])/1000,float(parts[2])/1000)
+                if O.type = "b":
+                    boxes.append(O)
+                else:
+                    objects.append(O)
 
-            service_check_sequence = py_trees.composites.Sequence(f"ServiceCheck{i}", memory=True)
+        return objects,boxes
 
-            pathing_service = ServiceClient(
-                name=f"GoToPoint{i}",
-                service_type=GoToPoint,
-                service_name="/pathing_end_point",
-                x=x,
-                y=y,
-                yaw=yaw
-            )
+    def publish_transforms(self):
+        for Object in self.objects:
+            self.publish_transform(Object.type,Object.x,Object.y,0)
+        for Box in self.boxes
+            self.publish_transform(Box.type,Box.x,Box.y,0)
 
-            retry_on_endpoint_failure = py_trees.composites.Sequence(f"RetryOnEndpointFailure{i}", memory=False)
-            
-            end_point_check = ReachedEndPoint(
-                name=f"ReachedEndPoint{i}",
-                x=x,
-                y=y
-            )
 
-            retry_endpoint = py_trees.decorators.FailureIsRunning(
-                name=f"RetryEndpoint{i}",
-                child=end_point_check
-            )
+    def publish_transform(self, name, x, y, theta):
+        t = TransformStamped()
+        t.header.stamp = self.get_clock().now().to_msg()
+        t.header.frame_id = "map"
+        t.child_frame_id = name
 
-            retry_on_endpoint_failure.add_children([pathing_service, retry_endpoint])
-            service_check_sequence.add_child(retry_on_endpoint_failure)
+        t.transform.translation.x = x
+        t.transform.translation.y = y
+        t.transform.translation.z = 0.0
 
-            fallback = py_trees.behaviours.Success(name=f"SkipToNext{i}")
+        # Convert yaw to quaternion
+        qz = math.sin(theta / 2.0)
+        qw = math.cos(theta / 2.0)
+        t.transform.rotation.x = 0.0
+        t.transform.rotation.y = 0.0
+        t.transform.rotation.z = qz
+        t.transform.rotation.w = qw
 
-            point_selector.add_children([service_check_sequence, fallback])
-            exploration_sequence.add_child(point_selector)
+        self.end_points_broadcaster.sendTransform(t)
+        self.get_logger().info(f"Published transform for {name} at ({x}, {y})")
 
-        repeater = py_trees.decorators.Repeat(
-            name="RepeatExploration", 
-            child=exploration_sequence,
-            num_success=2
-        )
+    def create_rob_coordinates(self, point1, point2, offset):
+        direction = np.array(point2) - np.array(point1)
         
-        root.add_child(repeater)
-        return root
+        unit_direction = direction / np.linalg.norm(direction)
+        
+        new_endpoint = np.array(point1) + unit_direction * new_length
+
+        rob_x = point2[0] - new_endpoint[0]
+        rob_y = point2[1] - new_endpoint[1]
+        
+        return rob_X, rob_y
     
     def create_collection_tree(self):
         root = py_trees.composites.Selector("CollectionRoot", memory=True)
         Collection_sequence = py_trees.composites.Sequence("Collection", memory=True)
+        prev_rob_x = 0
+        prev_rob_y = 0
 
-        for i, (x, y, yaw) in enumerate(self.collection_points):
-            point_selector = py_trees.composites.Selector(f"EndPoint{i}", memory=True)
+        while len(self.Objects)>0:
 
-            service_check_sequence = py_trees.composites.Sequence(f"ServiceCheck{i}", memory=True)
+            ################# Pick Up Phase ##################
+
+            # Picks the closest object
+            distance = 100000
+            closest = None
+            O_i = 0
+            for i, O in enumerate(self.objects):
+                distance_O = np.linalg.norm(np.array(O.x,O.y) - np.array(prev_rob_x,prev_rob_y))
+                if distance_O < distance:
+                    closest = O
+                    distance = distance_O
+                    O_i = i
+
+
+            rob_x,rob_y = self.create_rob_coordinates(closest.x,closest.y,0.15)
+            x = closest.x
+            y = closest.y
+            yaw = 0.0
+
+            service_check_sequence = py_trees.composites.Sequence(f"ServiceCheck{O_i}", memory=True)
 
             pathing_service = ServiceClient(
-                name=f"GoToPoint{i}",
+                name=f"GoToPoint{O_i}",
                 service_type=GoToPoint,
                 service_name="/pathing_end_point",
                 x=x,
@@ -373,46 +405,103 @@ class ExploreMaster(Node):
 
             pick_service = ArmClient(
                 name=f"PickupObject",
-                x=x+0.1,
-                y=y-0.1,
-                z=-0.05,
+                x=x,
+                y=y,
+                z=0.0,
                 task='PICKUP'
             )
 
-            drop_service = ArmClient(
-                name=f"PickupObject",
-                x=x+0.1,
-                y=y-0.15,
-                z=0.2,
-                task='DROPOFF'
-            )
-
-            retry_on_endpoint_failure = py_trees.composites.Sequence(f"RetryOnEndpointFailure{i}", memory=False)
+            retry_on_endpoint_failure = py_trees.composites.Sequence(f"RetryOnEndpointFailure{O_i}", memory=False)
             
             end_point_check = ReachedEndPoint(
-                name=f"ReachedEndPoint{i}",
+                name=f"ReachedEndPoint{O_i}",
                 x=x,
                 y=y
             )
 
             retry_endpoint = py_trees.decorators.FailureIsRunning(
-                name=f"RetryEndpoint{i}",
+                name=f"RetryEndpoint{O_i}",
                 child=end_point_check
             )
 
             retry_on_endpoint_failure.add_children([pathing_service, retry_endpoint])
             service_check_sequence.add_child(retry_on_endpoint_failure)
-            if(self.i%2==0):
-                service_check_sequence.add_child(pick_service)
-            else:
-                service_check_sequence.add_child(drop_service)
+            service_check_sequence.add_child(pick_service)
 
-            self.i = self.i + 1
-
-            fallback = py_trees.behaviours.Success(name=f"SkipToNext{i}")
+            fallback = py_trees.behaviours.Success(name=f"SkipToNext{O_i}")
 
             point_selector.add_children([service_check_sequence, fallback])
             Collection_sequence.add_child(point_selector)
+
+            self.Objects.pop(O_i)
+
+            prev_rob_x = rob_x
+            prev_rob_y = rob_y
+
+            ################# Drop Off Phase ##################
+
+            # Picks the closest box
+            distance = 100000
+            closest = None
+            O_i = 0
+            for i, O in enumerate(self.boxes):
+                distance_O = np.linalg.norm(np.array(O.x,O.y) - np.array(prev_rob_x,prev_rob_y))
+                if distance_O < distance:
+                    closest = O
+                    distance = distance_O
+                    O_i = i
+
+
+            rob_x,rob_y = self.create_rob_coordinates(closest.x,closest.y,0.15)
+            x = closest.x
+            y = closest.y
+            yaw = 0.0
+
+            service_check_sequence = py_trees.composites.Sequence(f"ServiceCheck{O_i}", memory=True)
+
+            pathing_service = ServiceClient(
+                name=f"GoToPoint{O_i}",
+                service_type=GoToPoint,
+                service_name="/pathing_end_point",
+                x=x,
+                y=y,
+                yaw=yaw
+            )
+
+            drop_service = ArmClient(
+                name=f"PickupObject",
+                x=x,
+                y=y,
+                z=0.0,
+                task='DROPOFF'
+            )
+
+            retry_on_endpoint_failure = py_trees.composites.Sequence(f"RetryOnEndpointFailure{O_i}", memory=False)
+            
+            end_point_check = ReachedEndPoint(
+                name=f"ReachedEndPoint{O_i}",
+                x=x,
+                y=y
+            )
+
+            retry_endpoint = py_trees.decorators.FailureIsRunning(
+                name=f"RetryEndpoint{O_i}",
+                child=end_point_check
+            )
+
+            retry_on_endpoint_failure.add_children([pathing_service, retry_endpoint])
+            service_check_sequence.add_child(retry_on_endpoint_failure)
+            service_check_sequence.add_child(pick_service)
+
+            fallback = py_trees.behaviours.Success(name=f"SkipToNext{O_i}")
+
+            point_selector.add_children([service_check_sequence, fallback])
+            Collection_sequence.add_child(point_selector)
+
+            prev_rob_x = rob_x 
+            prev_rob_y = rob_y
+
+            
     
         repeater = py_trees.decorators.Repeat(
             name="RepeatCollection", 
