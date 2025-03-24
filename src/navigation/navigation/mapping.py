@@ -41,8 +41,6 @@ class Mapping(Node):
         self.tf_listener = TransformListener(self.tf_buffer, self, spin_thread=True)
 
         # Parameters
-        self.occupancy_increase = 20
-        self.occupancy_decrease = 5
         self.resolution = 0.05  # 5 cm per cell
         self.map = Map(self.resolution)
         self.workspace_vertices = []
