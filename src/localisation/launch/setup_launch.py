@@ -17,11 +17,17 @@ def generate_launch_description():
     camera_launch_file = os.path.join(
         get_package_share_directory("robp_launch"), "launch", "rs_d435i_launch.py"
     )
+    lidar_launch_file = os.path.join(
+        get_package_share_directory("robp_launch"), "launch", "lidar_launch.yaml"
+    )
     return LaunchDescription([
         IncludeLaunchDescription(
             launch_description_source=PythonLaunchDescriptionSource(phidgets_launch_file),
         ),
         IncludeLaunchDescription(
            launch_description_source=PythonLaunchDescriptionSource(camera_launch_file),
+        ),
+        IncludeLaunchDescription(
+            launch_description_source=AnyLaunchDescriptionSource(lidar_launch_file),
         ),
     ])
