@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import math
 import numpy as np
 import sys
 
@@ -8,10 +9,14 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, HistoryPolicy, ReliabilityPolicy
 
 from tf2_ros import TransformBroadcaster
+from tf2_ros.buffer import Buffer
+import tf2_geometry_msgs
+
 from nav_msgs.msg import OccupancyGrid
 from project_interfaces.msg import Object, ObjectList
 from visualization_msgs.msg import Marker, MarkerArray
-from geometry_msgs.msg import Point, Pose, Quaternion, Vector3
+from geometry_msgs.msg import PointStamped, Pose, Quaternion, Vector3
+from sensor_msgs.msg import LaserScan
 from project_interfaces.msg import Point, Workspace
 
 from navigation.map import Map
@@ -28,6 +33,7 @@ class Mapping(Node):
         )
 
         self.create_subscription(Workspace, "/workspace", self.workspace_callback, 10)
+        self.create_subscription(LaserScan, "/scan", self.scan_callback, 10)
         self.map_publisher = self.create_publisher(OccupancyGrid, "/map", 10)
 
         # Parameters
@@ -38,8 +44,8 @@ class Mapping(Node):
         self.create_timer(0.5, self.update_map)
 
 
-    def workspace_callback(self, msg):
-        if self.map.grid is not None:
+    def workspace_callback(self, msg: Workspace):
+        if self.workspace_vertices is not None:
             return
         for point_msg in msg.points:
             x = point_msg.x
@@ -48,8 +54,44 @@ class Mapping(Node):
         # Initalise map based on workspace perimeter
         self.map.initalise_grid_with_workspace(self.workspace_vertices)
 
+    def scan_callback(self, msg: LaserScan):
+        if self.map.grid is None:
+            return
+        # Starting angle for the scan
+        angle = self.msg.angle
+
+        # Process laser scan readings
+        for reading in msg.ranges:
+            if math.isinf(reading) or math.isnan(reading):
+                    angle += msg.angle_increment
+                    continue
+
+            point_lidar = PointStamped()
+            point_lidar.header.stamp = msg.header.stamp
+            point_lidar.header.frame_id = msg.header.frame_id
+            point_lidar.point.x = reading * math.cos(angle)
+            point_lidar.point.y = reading * math.sin(angle)
+            point_lidar.point.z = 0.0
+
+            try:
+                point_transform = self.tf_buffer.lookup_transform(
+                    "odom",
+                    msg.header.frame_id,
+                    msg.header.stamp,
+                    rclpy.duration.Duration(seconds=1.0)
+                )
+                point_odom = tf2_geometry_msgs.do_transform_point(point_lidar, point_transform)
+                
+            except TransformException as ex:
+                self.get_logger().warn(f"Could not transform LaserScan reading point ({point_msg.point.x}, {point_msg.point.y}): {ex}")
+                angle += msg.angle_increment
+                continue
+
+            self.map.add_obstacle_point(point_odom.point.x, point_odom.point.y)
+            angle += msg.angle_increment
+
     def update_map(self):
-        if not self.workspace_vertices:
+        if self.workspace_vertices is None or self.map.grid is None:
             return
         map_msg = OccupancyGrid()
         map_msg.header.stamp = self.get_clock().now().to_msg()

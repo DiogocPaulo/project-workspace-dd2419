@@ -28,6 +28,7 @@ import time
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from project_interfaces.msg import Object, ObjectList
+from project_interfaces.msg import Point, Workspace
 
 class ExamineImage(Node):
 
@@ -71,7 +72,7 @@ class ExamineImage(Node):
         # Initialize an empty list to store detected objects
         self.object_list = []
 
-        self.workspace_vertices = None
+        self.workspace_vertices = []
         self.workspace_x_min = None
         self.workspace_x_max = None
         self.workspace_y_min = None

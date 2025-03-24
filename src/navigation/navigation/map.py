@@ -121,6 +121,14 @@ class Map:
                 if self.winding_number(i, j, object_vertices):
                     self.grid[j, i] = 100
 
+    def add_obstacle_point(self, x, y):
+        grid_x, grid_y = self.world_to_grid(x, y)
+        if not (0 <= grid_x < self.grid_width and 0 <= grid_y < self.grid_height):
+            # Grid coordinates out of bounds
+            return
+        self.grid[grid_y, grid_x] += 10
+
+
     def set_workspace_vertices(self, vertices):
         """Sets the workspace boundary as a list of (x, y) vertices and marks grid cells outside the workspace."""
         self.workspace_vertices = vertices
