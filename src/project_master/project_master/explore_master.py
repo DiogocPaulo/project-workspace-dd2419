@@ -289,11 +289,10 @@ class ExploreMaster(Node):
     def broadcast_end_points(self):
         for i, point in enumerate(self.end_points):
             transform = TransformStamped()
-            transform.header.frame_id = 'map'  # Change to your desired parent frame
+            transform.header.frame_id = 'map'
             transform.header.stamp = self.get_clock().now().to_msg()
             transform.child_frame_id = f'EndPoint{i}'
             
-            # Set translation from end_point coordinates
             transform.transform.translation.x = point[0]
             transform.transform.translation.y = point[1]
             transform.transform.translation.z = 0.0
@@ -318,7 +317,7 @@ class ExploreMaster(Node):
             for line in file:
                 parts = line.strip().split(" ")
                 O = self.Object(parts[0],float(parts[1])/1000,float(parts[2])/1000)
-                if O.type = "b":
+                if O.type == "B" or O.type == "b":
                     boxes.append(O)
                 else:
                     objects.append(O)
@@ -363,7 +362,7 @@ class ExploreMaster(Node):
         rob_x = point2[0] - new_endpoint[0]
         rob_y = point2[1] - new_endpoint[1]
         
-        return rob_X, rob_y
+        return rob_x, rob_y
     
     def create_collection_tree(self):
         root = py_trees.composites.Selector("CollectionRoot", memory=True)
@@ -398,8 +397,8 @@ class ExploreMaster(Node):
                 name=f"GoToPoint{O_i}",
                 service_type=GoToPoint,
                 service_name="/pathing_end_point",
-                x=x,
-                y=y,
+                x=rob_x,
+                y=rob_y,
                 yaw=yaw
             )
 
@@ -463,8 +462,8 @@ class ExploreMaster(Node):
                 name=f"GoToPoint{O_i}",
                 service_type=GoToPoint,
                 service_name="/pathing_end_point",
-                x=x,
-                y=y,
+                x=rob_x,
+                y=rob_y,
                 yaw=yaw
             )
 
