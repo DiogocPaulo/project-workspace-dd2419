@@ -17,6 +17,7 @@ from project_interfaces.srv import PickObject
 from std_msgs.msg import Header
 import rclpy.time
 from geometry_msgs.msg import Point as GeometryPoint
+import math
 
 from project_master import behaviours
 
@@ -251,6 +252,8 @@ class ExploreMaster(Node):
     def __init__(self):
         super().__init__("explore_master")
 
+        self.get_logger().info(f"INITIALIZING COLLECTION MASTER")
+
         workspace_file = "workspaces/small_workspace.tsv"
         self.workspace_vertices = self.read_workspace(workspace_file, skip_header=True)
         self.workspace_publisher = self.create_publisher(Workspace, "/workspace", 10)
@@ -259,7 +262,9 @@ class ExploreMaster(Node):
         self.i = 0
 
         self.end_points = create_offset_end_points(self.workspace_vertices, 0.5)
-        self.objects, self.boxes = self.process_map_file("/home/robot/project-workspace-dd2419/maps/Map1.txt")
+        self.objects, self.boxes = self.process_map_file("maps/Map_test.txt")
+
+        self.publish_transforms()
 
         self.create_timer(0.1, self.tick_tree) # Tick tree every 100 ms
         self.create_timer(2, self.publish_workspace)
@@ -325,10 +330,14 @@ class ExploreMaster(Node):
         return objects,boxes
 
     def publish_transforms(self):
-        for Object in self.objects:
-            self.publish_transform(Object.type,Object.x,Object.y,0)
-        for Box in self.boxes
-            self.publish_transform(Box.type,Box.x,Box.y,0)
+        object_number = 0
+        box_number = 0
+        for object in self.objects:
+            self.publish_transform(object.type+str(object_number),object.x,object.y,0)
+            object_number+=1
+        for box in self.boxes:
+            self.publish_transform(box.type+str(box_number),box.x,box.y,0)
+            box_number+=1
 
 
     def publish_transform(self, name, x, y, theta):
@@ -357,7 +366,7 @@ class ExploreMaster(Node):
         
         unit_direction = direction / np.linalg.norm(direction)
         
-        new_endpoint = np.array(point1) + unit_direction * new_length
+        new_endpoint = np.array(point1) + unit_direction * offset
 
         rob_x = point2[0] - new_endpoint[0]
         rob_y = point2[1] - new_endpoint[1]
@@ -370,23 +379,27 @@ class ExploreMaster(Node):
         prev_rob_x = 0
         prev_rob_y = 0
 
-        while len(self.Objects)>0:
+        objects_copy = self.objects.copy()
 
+        while len(objects_copy)>0:
             ################# Pick Up Phase ##################
 
             # Picks the closest object
             distance = 100000
             closest = None
             O_i = 0
-            for i, O in enumerate(self.objects):
-                distance_O = np.linalg.norm(np.array(O.x,O.y) - np.array(prev_rob_x,prev_rob_y))
+            for i, O in enumerate(objects_copy):
+                distance_O = np.linalg.norm(np.array([O.x,O.y]) - np.array([prev_rob_x,prev_rob_y]))
                 if distance_O < distance:
                     closest = O
                     distance = distance_O
                     O_i = i
 
+            point_selector = py_trees.composites.Selector(f"EndPoint{O_i}", memory=True)
 
-            rob_x,rob_y = self.create_rob_coordinates(closest.x,closest.y,0.15)
+
+
+            rob_x,rob_y = self.create_rob_coordinates((closest.x,closest.y),(prev_rob_x,prev_rob_y),0.1)
             x = closest.x
             y = closest.y
             yaw = 0.0
@@ -432,7 +445,7 @@ class ExploreMaster(Node):
             point_selector.add_children([service_check_sequence, fallback])
             Collection_sequence.add_child(point_selector)
 
-            self.Objects.pop(O_i)
+            objects_copy.pop(O_i)
 
             prev_rob_x = rob_x
             prev_rob_y = rob_y
@@ -444,14 +457,16 @@ class ExploreMaster(Node):
             closest = None
             O_i = 0
             for i, O in enumerate(self.boxes):
-                distance_O = np.linalg.norm(np.array(O.x,O.y) - np.array(prev_rob_x,prev_rob_y))
+                distance_O = np.linalg.norm(np.array([O.x,O.y]) - np.array([prev_rob_x,prev_rob_y]))
                 if distance_O < distance:
                     closest = O
                     distance = distance_O
                     O_i = i
 
+            point_selector = py_trees.composites.Selector(f"EndPoint{O_i}", memory=True)
 
-            rob_x,rob_y = self.create_rob_coordinates(closest.x,closest.y,0.15)
+
+            rob_x,rob_y = self.create_rob_coordinates((closest.x,closest.y),(prev_rob_x,prev_rob_y),0.1)
             x = closest.x
             y = closest.y
             yaw = 0.0
@@ -468,7 +483,7 @@ class ExploreMaster(Node):
             )
 
             drop_service = ArmClient(
-                name=f"PickupObject",
+                name=f"DropObject",
                 x=x,
                 y=y,
                 z=0.0,
@@ -490,7 +505,7 @@ class ExploreMaster(Node):
 
             retry_on_endpoint_failure.add_children([pathing_service, retry_endpoint])
             service_check_sequence.add_child(retry_on_endpoint_failure)
-            service_check_sequence.add_child(pick_service)
+            service_check_sequence.add_child(drop_service)
 
             fallback = py_trees.behaviours.Success(name=f"SkipToNext{O_i}")
 
