@@ -40,7 +40,7 @@ class ExamineImage(Node):
         self.get_logger().info(f"Init detection")
 
         self.tfBuffer = tf2_ros.Buffer()
-        self.listener = tf2_ros.TransformListener(self.tfBuffer, self)
+        self.listener = tf2_ros.TransformListener(self.tfBuffer, self, spin_thread=True)
 
         self.object_list_broadcaster = tf2_ros.TransformBroadcaster(self)
 
@@ -206,7 +206,7 @@ class ExamineImage(Node):
         lower_green1, upper_green1 = np.array([81, 100, 44]), np.array([84, 255, 105])
         lower_green2, upper_green2 = np.array([73, 210, 90]), np.array([74, 240, 120])
         lower_blue, upper_blue = np.array([99, 254, 75]), np.array([99, 255, 80])
-        lower_brown, upper_brown = np.array([15, 68, 137]), np.array([17, 76, 134])
+        #lower_brown, upper_brown = np.array([15, 68, 137]), np.array([17, 76, 134])
 
         # Iterate over each cluster
         for cluster_label in unique_labels:
@@ -227,13 +227,13 @@ class ExamineImage(Node):
             green_mask = (hsv_colors[:, 0] >= lower_green1[0]) & (hsv_colors[:, 0] <= upper_green1[0]) | \
                          ((hsv_colors[:, 0] >= lower_green2[0]) & (hsv_colors[:, 0] <= upper_green2[0]))
             blue_mask = (hsv_colors[:, 0] >= lower_blue[0]) & (hsv_colors[:, 0] <= upper_blue[0])
-            brown_mask = (hsv_colors[:, 0] >= lower_brown[0]) & (hsv_colors[:, 0] <= upper_brown[0])
+            #brown_mask = (hsv_colors[:, 0] >= lower_brown[0]) & (hsv_colors[:, 0] <= upper_brown[0])
 
             # Apply masks for the current cluster
             red_points = cluster_points[red_mask]
             green_points = cluster_points[green_mask]
             blue_points = cluster_points[blue_mask]
-            brown_points = cluster_points[brown_mask]
+            #brown_points = cluster_points[brown_mask]
 
             # Calculate the total number of points in the cluster
             total_points = len(cluster_points)
@@ -242,31 +242,31 @@ class ExamineImage(Node):
             red_ratio = len(red_points) / total_points
             green_ratio = len(green_points) / total_points
             blue_ratio = len(blue_points) / total_points
-            brown_ratio = len(brown_points) / total_points
+            #brown_ratio = len(brown_points) / total_points
 
             #self.get_logger().info(f"Brown {red_ratio} {blue_ratio} {green_ratio} {brown_ratio}")
 
-            pure_red = pure_green = pure_blue = pure_brown = False
+            pure_red = pure_green = pure_blue = False
 
             # Check if the cluster is predominantly red, green, or blue
             if red_ratio > 0.001 and green_ratio == 0.0 and blue_ratio == 0.0:
                 pure_red = True
-            elif green_ratio > 0.001 and red_ratio == 0.0 and blue_ratio == 0.0 and brown_ratio == 0.0:
+            elif green_ratio > 0.001 and red_ratio == 0.0 and blue_ratio == 0.0:
                 pure_green = True
-            elif blue_ratio > 0.001 and red_ratio == 0.0 and green_ratio == 0.0 and brown_ratio < 0.01:
+            elif blue_ratio > 0.001 and red_ratio == 0.0 and green_ratio == 0.0:
                 pure_blue = True
-            elif brown_ratio > 0.1 and red_ratio == 0.0 and green_ratio == 0.0 and blue_ratio == 0.0:
-                pure_brown = True
+            #elif brown_ratio > 0.1 and red_ratio == 0.0 and green_ratio == 0.0 and blue_ratio == 0.0:
+                #pure_brown = True
 
             # Classify based on floor contact points for the current cluster
             object_type = self.classify_based_on_floor_contact(cluster_points)
 
             x, y, z = np.mean(cluster_points, axis=0)
 
-            if pure_brown:
-                if object_type == "cube":
+            #if pure_brown:
+            #    if object_type == "cube":
                     #self.get_logger().info(f'🟫 Cluster {cluster_label} is a cube!')
-                    self.publish_object(x, z + 0.02, 0.0, Object.CUBE, msg.header.stamp)
+            #        self.publish_object(x, z + 0.02, 0.0, Object.CUBE, msg.header.stamp)
 
             if pure_red or pure_green or pure_blue:
                 if object_type == "sphere":
@@ -308,9 +308,9 @@ class ExamineImage(Node):
                 #self.get_logger().info(f'🧸 Cluster {cluster_label} is a plushie!')
                 self.publish_object(x + 0.01, z, 0.0, Object.PLUSHIE, msg.header.stamp)
 
-            else:
-                if pure_brown:
-                    continue
+            #else:
+                #if pure_brown:
+                 #   continue
                 #else:
                     #self.get_logger().info(f'Cluster {cluster_label} is NOT a recognized object.')
 
@@ -535,7 +535,7 @@ class ExamineImage(Node):
             transform = self.tfBuffer.lookup_transform(
                 'map',  # Target frame
                 point_in.header.frame_id,  # Source frame
-                rclpy.time.Time(),  # Time of the transform
+                point_in.header.stamp,
                 rclpy.duration.Duration(seconds=1.0)  # Timeout
             )
 
@@ -552,39 +552,60 @@ class ExamineImage(Node):
             is_in = self.is_within_workspace(x_transformed, y_transformed)
             #self.get_logger().info(f"Published new object list now includes: {is_out} at ({x_transformed:.2f}, {y_transformed:.2f})")
 
-            for obj in self.object_list:
-                distance = np.sqrt((x_transformed - obj.x)**2 + (y_transformed - obj.y)**2)
-                if obj.object_type == "box":
-                    if distance < 0.15:  # If the object is within 1 cm of an existing object
+            if is_in:
+                initial_object_msg = Object()
+                initial_object_msg.x = x_transformed
+                initial_object_msg.y = y_transformed
+                initial_object_msg.angle = angle
+                initial_object_msg.object_type = object_type
+                self.initial_object_list.append(initial_object_msg)
+
+                initial_list_msg = ObjectList()
+                initial_list_msg.header.frame_id = "map"
+                initial_list_msg.header.stamp = stamp
+                initial_list_msg.length = len(self.initial_object_list)
+                initial_list_msg.objects = self.initial_object_list
+                self.object_list_publisher.publish(initial_list_msg)
+
+                for obj in self.initial_list_msg:
+                    distance = np.sqrt((x_transformed - obj.x)**2 + (y_transformed - obj.y)**2)
+                    if obj.object_type == "box":
+                        if distance < 0.18: # If the object is within 1 cm of an existing object
+                            is_duplicate = True
+                            break
+                    elif distance < 0.05: # If the object is within 1 cm of an existing object
                         is_duplicate = True
                         break
-                elif distance < 0.04:  # If the object is within 1 cm of an existing object
-                    is_duplicate = True
-                    break
 
-            # If not a duplicate, add the new object to the list
-            if not is_duplicate and is_in:
-                # Create new object message
-                object_msg = Object()
-                object_msg.x = x_transformed
-                object_msg.y = y_transformed
-                object_msg.angle = angle
-                object_msg.object_type = object_type
+                # If not a duplicate, add the new object to the list
+                if not is_duplicate:
+                    # Create new object message
+                    object_msg = Object()
+                    object_msg.x = x_transformed
+                    object_msg.y = y_transformed
+                    object_msg.angle = angle
+                    object_msg.object_type = object_type
 
-                self.object_list.append(object_msg)
+                    self.object_list.append(object_msg)
 
-                object_list_msg = ObjectList()
-                object_list_msg.header.frame_id = "map"
-                object_list_msg.header.stamp = stamp
-                object_list_msg.length = len(self.object_list)
-                object_list_msg.objects = self.object_list
-                self.object_list_publisher.publish(object_list_msg)
+                    object_list_msg = ObjectList()
+                    object_list_msg.header.frame_id = "map"
+                    object_list_msg.header.stamp = stamp
+                    object_list_msg.length = len(self.object_list)
+                    object_list_msg.objects = self.object_list
+                    self.object_list_publisher.publish(object_list_msg)
 
-                self.get_logger().info(f"Published new object list now includes: {object_type} at ({x_transformed:.2f}, {y_transformed:.2f})")
+                    self.get_logger().info(f"Published new object list now includes: {object_type} at ({x_transformed:.2f}, {y_transformed:.2f})")
+
+
+            
 
         except TransformException as e:
             self.get_logger().error(f"Failed coordinate transform for newly {object_type} detected object: {e}")
 
+
+
+    
 
     def broadcast_object_list(self):
         for i, object_msg in enumerate(self.object_list):
