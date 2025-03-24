@@ -21,46 +21,22 @@ class Mapping(Node):
     def __init__(self):
         super().__init__("mapping")
 
-        self.map_publisher = self.create_publisher(OccupancyGrid, "/map", 10)
-
         qos_profile = QoSProfile(
             depth=1,
             history=HistoryPolicy.KEEP_LAST,
             reliability=ReliabilityPolicy.BEST_EFFORT
         )
 
-        self.create_subscription(
-            ObjectList,
-            "/detected_objects",
-            self.objects_callback,
-            qos_profile
-        )
-
-        self.create_subscription(
-            Workspace,
-            "/workspace",
-            self.workspace_callback,
-            10
-        )
-
-        self.create_timer(0.5, self.update_map)
+        self.create_subscription(Workspace, "/workspace", self.workspace_callback, 10)
+        self.map_publisher = self.create_publisher(OccupancyGrid, "/map", 10)
 
         # Parameters
         self.resolution = 0.05  # 5 cm per cell
-        self.objects = None
         self.map = Map(self.resolution)
-
         self.workspace_vertices = []
 
+        self.create_timer(0.5, self.update_map)
 
-    def objects_callback(self, msg):
-        for object_msg in msg.objects:
-            x = object_msg.x
-            y = object_msg.y
-            angle = object_msg.angle
-            object_type = object_msg.object_type
-            self.map.add_object(x, y, angle, object_type)
-        self.get_logger().info(f"Object List length: {msg.length}")
 
     def workspace_callback(self, msg):
         if self.map.grid is not None:

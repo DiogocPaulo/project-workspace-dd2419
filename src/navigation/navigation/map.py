@@ -216,7 +216,7 @@ class Map:
         circular_footprint[mask] = 1
 
         inflated_grid = maximum_filter(self.grid, footprint=circular_footprint, mode="constant", cval=-1)
-        return inflated_grid
+        self.grid = inflated_grid
 
     def inflate_grid_in_region(self, inflation_radius, region_radius, robot_x, robot_y):
         # Returns a grid that has inflated occupied cells by an inflation radius within a region radius around to robot
@@ -254,4 +254,4 @@ class Map:
 
         inflated_region = maximum_filter(region, footprint=circular_footprint, mode="constant", cval=-1)
         inflated_grid[y_min:y_max, x_min:x_max] = inflated_region
-        return inflated_grid
+        self.grid = inflated_grid
