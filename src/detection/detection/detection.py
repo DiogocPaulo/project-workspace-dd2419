@@ -49,6 +49,8 @@ class ExamineImage(Node):
             reliability=ReliabilityPolicy.BEST_EFFORT
         )
 
+        self.create_subscription(Workspace, "/workspace", self.workspace_callback, 10)
+
         self.sub2 = self.create_subscription(
             PointCloud2,
             '/camera/camera/depth/color/points',
@@ -68,6 +70,12 @@ class ExamineImage(Node):
 
         # Initialize an empty list to store detected objects
         self.object_list = []
+
+        self.workspace_vertices = None
+        self.workspace_x_min = None
+        self.workspace_x_max = None
+        self.workspace_y_min = None
+        self.workspace_y_max = None
 
         # Publishers for detected objects as a list
         self.object_list_publisher = self.create_publisher(ObjectList, "/detected_objects", 10)
@@ -129,7 +137,21 @@ class ExamineImage(Node):
         object_list_msg.length = len(self.object_list)
         object_list_msg.objects = self.object_list
         self.object_list_publisher.publish(object_list_msg)
+
+    def workspace_callback(self, msg):
+        if self.workspace_vertices is not None:
+            return
+        for point_msg in msg.points:
+            x = point_msg.x
+            y = point_msg.y
+            self.workspace_vertices.append((x, y))
         
+        x_list = [vertex[0] for vertex in workspace_vertices]
+        y_list = [vertex[1] for vertex in workspace_vertices]
+        self.workspace_x_min = min(x_list)
+        self.workspace_x_max = max(x_list)
+        self.workspace_y_min = min(x_list)
+        self.workspace_y_max = max(y_list)
 
     def cloud_callback(self, msg: PointCloud2):
         # Increment the message counter
@@ -496,10 +518,9 @@ class ExamineImage(Node):
 
     def is_within_workspace(self, x, y):
         """Checks if a point (x, y) is within a simple rectangular boundary."""
-        x_min, x_max = -2.0, 2.0  # Set your boundary values for x
-        y_min, y_max = -1.1, 0.96  # Set your boundary values for y
-
-        return x_min <= x <= x_max and y_min <= y <= y_max
+        if self.workspace_vertices is None:
+            return False
+        return self.workspace_x_min < x < self.workspace_x_max and self.workspace_y_min < y < self.workspace_y_max
 
 
     def publish_object(self, x, y, angle, object_type, stamp):
