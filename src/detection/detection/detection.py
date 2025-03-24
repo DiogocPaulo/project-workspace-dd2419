@@ -140,15 +140,15 @@ class ExamineImage(Node):
         self.object_list_publisher.publish(object_list_msg)
 
     def workspace_callback(self, msg):
-        if self.workspace_vertices is not None:
+        if self.workspace_vertices:
             return
         for point_msg in msg.points:
             x = point_msg.x
             y = point_msg.y
             self.workspace_vertices.append((x, y))
         
-        x_list = [vertex[0] for vertex in workspace_vertices]
-        y_list = [vertex[1] for vertex in workspace_vertices]
+        x_list = [vertex[0] for vertex in self.workspace_vertices]
+        y_list = [vertex[1] for vertex in self.workspace_vertices]
         self.workspace_x_min = min(x_list)
         self.workspace_x_max = max(x_list)
         self.workspace_y_min = min(x_list)
@@ -519,7 +519,7 @@ class ExamineImage(Node):
 
     def is_within_workspace(self, x, y):
         """Checks if a point (x, y) is within a simple rectangular boundary."""
-        if self.workspace_vertices is None:
+        if not self.workspace_vertices:
             return False
         return self.workspace_x_min < x < self.workspace_x_max and self.workspace_y_min < y < self.workspace_y_max
 

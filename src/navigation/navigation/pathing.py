@@ -79,10 +79,10 @@ class Pathing(Node):
 
         if not self.pathing_failed:
             response.success = True
-            response.message = f"Pathing end point set: ({self.end_point[0]}, {self.end_point[1]})"
+            response.message = f"Pathing end point set: ({self.end_point[0]:.2f}, {self.end_point[1]:.2f})"
         else:
             response.success = False
-            response.message = f"Failed to find path to end point: ({self.end_point[0]}, {self.end_point[1]})"
+            response.message = f"Failed to find path to end point: ({self.end_point[0]:.2f}, {self.end_point[1]:.2f})"
 
         return response
 

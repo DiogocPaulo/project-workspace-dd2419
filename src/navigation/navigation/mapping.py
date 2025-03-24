@@ -45,7 +45,7 @@ class Mapping(Node):
 
 
     def workspace_callback(self, msg: Workspace):
-        if self.workspace_vertices is not None:
+        if self.workspace_vertices:
             return
         for point_msg in msg.points:
             x = point_msg.x
@@ -91,7 +91,7 @@ class Mapping(Node):
             angle += msg.angle_increment
 
     def update_map(self):
-        if self.workspace_vertices is None or self.map.grid is None:
+        if not self.workspace_vertices:
             return
         map_msg = OccupancyGrid()
         map_msg.header.stamp = self.get_clock().now().to_msg()
