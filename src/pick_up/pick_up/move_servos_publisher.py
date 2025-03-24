@@ -117,7 +117,7 @@ class MultiServoPublisher(Node):
 
 
         if base_arm == -1:
-            self.get_logger().info(f'COULD NOT FIND KINEMATIC SOLUTION FOR POSITION: {request.point}')
+            self.get_logger().info(f'COULD NOT FIND KINEMATIC SOLUTION FOR POSITION: {position}')
             return 1
 
 
@@ -144,6 +144,8 @@ class MultiServoPublisher(Node):
         self.publisher.publish(msg)
 
         self.get_logger().info(f"PICKUP COMPLETE")
+
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
 
         return 0
 
@@ -189,7 +191,7 @@ class MultiServoPublisher(Node):
 
 
         if base_arm == -1:
-            self.get_logger().info(f'COULD NOT FIND KINEMATIC SOLUTION FOR POSITION: {request.point}')
+            self.get_logger().info(f'COULD NOT FIND KINEMATIC SOLUTION FOR POSITION: {position}')
             return 1
 
 
@@ -216,6 +218,8 @@ class MultiServoPublisher(Node):
         self.publisher.publish(msg)
 
         self.get_logger().info(f"DROPOFF COMPLETE")
+
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
 
         return 0
 

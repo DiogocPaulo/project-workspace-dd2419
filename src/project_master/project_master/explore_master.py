@@ -12,6 +12,10 @@ from rclpy.qos import QoSProfile, HistoryPolicy, ReliabilityPolicy
 from project_interfaces.srv import GoToPoint, Trigger
 from nav_msgs.msg import Odometry
 from project_interfaces.msg import Point, Workspace
+from project_interfaces.srv import PickObject
+from std_msgs.msg import Header
+import rclpy.time
+from geometry_msgs.msg import Point as GeometryPoint
 
 from project_master import behaviours
 
@@ -67,6 +71,77 @@ class ServiceClient(py_trees.behaviour.Behaviour):
                     return py_trees.common.Status.SUCCESS
                 else:
                     self.node.get_logger().info(f"{self.name} - Service call response: {response.success}, {response.message}")
+                    return py_trees.common.Status.FAILURE
+            except Exception as e:
+                self.node.get_logger().error(f"{self.name} - Service call failed with exception: {e}")
+                return py_trees.common.Status.FAILURE
+        else:
+            return py_trees.common.Status.RUNNING
+        
+class ArmClient(py_trees.behaviour.Behaviour):
+    def __init__(self, name, x, y, z, task, **kwargs):
+        super().__init__(name)
+
+
+        self.x = x
+        self.y = y
+        self.z = z
+        self.task = task
+        self.client = None
+        self.future = None
+        self.sent_request = False
+        self.request_args = kwargs
+        self.clock = None
+
+    def setup(self, **kwargs):
+        try:
+            self.node = kwargs.get("node")
+        except Exception as e:
+            self.logger.error(f"{self.name} - Setup failed: {e}")
+            return False
+
+        self.client = self.node.create_client(PickObject, 'PickObject')
+        self.clock = self.node.get_clock()
+        return True
+
+    def initialise(self):
+        self.sent_request = False
+        self.future = None
+
+    def update(self):
+        if not self.client.service_is_ready():
+            self.node.get_logger().info(f"{self.name} - Waiting for service PickObject ...")
+            return py_trees.common.Status.RUNNING
+            
+        if not self.sent_request:
+            try:
+                request = PickObject.Request()
+
+                request.header = Header()
+                request.header.stamp = self.node.get_clock().now().to_msg()
+                request.header.frame_id = "map"
+                request.point = GeometryPoint()
+                request.point.x = self.x
+                request.point.y = self.y
+                request.point.z = self.z
+                request.description = self.task
+
+                self.future = self.client.call_async(request)
+                self.sent_request = True
+                self.node.get_logger().info(f"{self.name} - Sent request to PickObject")
+                return py_trees.common.Status.RUNNING
+            except Exception as e:
+                self.node.get_logger().error(f"{self.name} - Failed to send request: {e}")
+                return py_trees.common.Status.FAILURE
+
+        if self.future.done():
+            try:
+                response = self.future.result()
+                if response == 0:
+                    self.node.get_logger().info(f"{self.name} - Service call response: {response}, task successful")
+                    return py_trees.common.Status.SUCCESS
+                else:
+                    self.node.get_logger().info(f"{self.name} - Service call response: {response}, task failed")
                     return py_trees.common.Status.FAILURE
             except Exception as e:
                 self.node.get_logger().error(f"{self.name} - Service call failed with exception: {e}")
@@ -180,10 +255,14 @@ class ExploreMaster(Node):
         self.workspace_publisher = self.create_publisher(Workspace, "/workspace", 10)
         self.end_points_broadcaster = TransformBroadcaster(self)
 
-        self.end_points = create_offset_end_points(self.workspace_vertices, 0.5)
-        self.collection_points = [(1.0,1.0,0.0),(-1.0,1.0,0.0),(-1.0,-1.0,0.0)]
+        self.i = 0
 
-        root = self.create_exploration_tree()
+        self.end_points = create_offset_end_points(self.workspace_vertices, 0.5)
+        self.collection_points = [(1.0,1.0,0.0)]
+        self.collection_points.append((2.0,1.0,0.0))
+        self.collection_points.append((0.0,0.0,0.0))
+
+        root = self.create_collection_tree()
         self.tree = py_trees_ros.trees.BehaviourTree(root=root)
         tree_string = py_trees.display.ascii_tree(root)
         self.get_logger().info(f"Behavior Tree Structure:\n{tree_string}")
@@ -265,48 +344,79 @@ class ExploreMaster(Node):
             point_selector.add_children([service_check_sequence, fallback])
             exploration_sequence.add_child(point_selector)
 
-        def create_collection_tree(self):
-            root = py_trees.composites.Selector("CollectionRoot", memory=True)
-            Collection_sequence = py_trees.composites.Sequence("Collection", memory=True)
-
-            for i, (x, y, yaw) in enumerate(self.collection_points):
-                point_selector = py_trees.composites.Selector(f"EndPoint{i}", memory=True)
-
-                service_check_sequence = py_trees.composites.Sequence(f"ServiceCheck{i}", memory=True)
-
-                pathing_service = ServiceClient(
-                    name=f"GoToPoint{i}",
-                    service_type=GoToPoint,
-                    service_name="/pathing_end_point",
-                    x=x,
-                    y=y,
-                    yaw=yaw
-                )
-
-                retry_on_endpoint_failure = py_trees.composites.Sequence(f"RetryOnEndpointFailure{i}", memory=False)
-                
-                end_point_check = ReachedEndPoint(
-                    name=f"ReachedEndPoint{i}",
-                    x=x,
-                    y=y
-                )
-
-                retry_endpoint = py_trees.decorators.FailureIsRunning(
-                    name=f"RetryEndpoint{i}",
-                    child=end_point_check
-                )
-
-                retry_on_endpoint_failure.add_children([pathing_service, retry_endpoint])
-                service_check_sequence.add_child(retry_on_endpoint_failure)
-
-                fallback = py_trees.behaviours.Success(name=f"SkipToNext{i}")
-
-                point_selector.add_children([service_check_sequence, fallback])
-                exploration_sequence.add_child(point_selector)
-
         repeater = py_trees.decorators.Repeat(
             name="RepeatExploration", 
             child=exploration_sequence,
+            num_success=2
+        )
+        
+        root.add_child(repeater)
+        return root
+    
+    def create_collection_tree(self):
+        root = py_trees.composites.Selector("CollectionRoot", memory=True)
+        Collection_sequence = py_trees.composites.Sequence("Collection", memory=True)
+
+        for i, (x, y, yaw) in enumerate(self.collection_points):
+            point_selector = py_trees.composites.Selector(f"EndPoint{i}", memory=True)
+
+            service_check_sequence = py_trees.composites.Sequence(f"ServiceCheck{i}", memory=True)
+
+            pathing_service = ServiceClient(
+                name=f"GoToPoint{i}",
+                service_type=GoToPoint,
+                service_name="/pathing_end_point",
+                x=x,
+                y=y,
+                yaw=yaw
+            )
+
+            pick_service = ArmClient(
+                name=f"PickupObject",
+                x=x+0.1,
+                y=y-0.1,
+                z=-0.05,
+                task='PICKUP'
+            )
+
+            drop_service = ArmClient(
+                name=f"PickupObject",
+                x=x+0.1,
+                y=y-0.15,
+                z=0.2,
+                task='DROPOFF'
+            )
+
+            retry_on_endpoint_failure = py_trees.composites.Sequence(f"RetryOnEndpointFailure{i}", memory=False)
+            
+            end_point_check = ReachedEndPoint(
+                name=f"ReachedEndPoint{i}",
+                x=x,
+                y=y
+            )
+
+            retry_endpoint = py_trees.decorators.FailureIsRunning(
+                name=f"RetryEndpoint{i}",
+                child=end_point_check
+            )
+
+            retry_on_endpoint_failure.add_children([pathing_service, retry_endpoint])
+            service_check_sequence.add_child(retry_on_endpoint_failure)
+            if(self.i%2==0):
+                service_check_sequence.add_child(pick_service)
+            else:
+                service_check_sequence.add_child(drop_service)
+
+            self.i = self.i + 1
+
+            fallback = py_trees.behaviours.Success(name=f"SkipToNext{i}")
+
+            point_selector.add_children([service_check_sequence, fallback])
+            Collection_sequence.add_child(point_selector)
+    
+        repeater = py_trees.decorators.Repeat(
+            name="RepeatCollection", 
+            child=Collection_sequence,
             num_success=2
         )
         
