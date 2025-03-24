@@ -82,8 +82,9 @@ class LidarAggregator(Node):
 
     def _laser_scan_to_points(self, msg):
         """Convert LaserScan to list of [x, y, z] points."""
-        angles = np.arange(msg.angle_min, msg.angle_max + msg.angle_increment, msg.angle_increment)
         ranges = np.array(msg.ranges)
+        num_points = len(ranges)
+        angles = np.linspace(msg.angle_min, msg.angle_max, num_points)  # Match length of ranges
         valid = (msg.range_min < ranges) & (ranges < msg.range_max)
         x = ranges[valid] * np.cos(angles[valid])
         y = ranges[valid] * np.sin(angles[valid])
