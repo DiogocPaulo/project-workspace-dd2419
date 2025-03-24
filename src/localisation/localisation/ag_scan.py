@@ -25,6 +25,8 @@ from tf_transformations import euler_from_quaternion
 import numpy as np
 # Deque for a bounded, efficient buffer to store aggregated points
 from collections import deque
+# Standard message type for headers with stamp and frame_id
+from std_msgs.msg import Header
 
 class LidarAggregator(Node):
     def __init__(self):
@@ -42,6 +44,7 @@ class LidarAggregator(Node):
         self.current_pose = np.array([0.0, 0.0, 0.0])          # [x, y, yaw]
         self.linear_vel = 0.0
         self.angular_vel = 0.0
+        self.last_scan_header = None                            # Store last LaserScan header
 
         # TF2 Setup
         self.tf_buffer = tf2_ros.Buffer()
@@ -76,9 +79,10 @@ class LidarAggregator(Node):
     def scan_callback(self, msg):
         """Process incoming laser scans and transform points."""
         points = self._laser_scan_to_points(msg)
-        transformed_points = self._transform_points(points, 'odom', msg.header.frame_id, msg.header.stamp)
+        transformed_points = self._transform_points(points, 'map', msg.header.frame_id, msg.header.stamp)
         if transformed_points is not None:
             self.aggregated_points.extend(transformed_points)
+        self.last_scan_header = msg.header  # Store the latest header
 
     def _laser_scan_to_points(self, msg):
         """Convert LaserScan to list of [x, y, z] points."""
@@ -117,12 +121,14 @@ class LidarAggregator(Node):
         return np.stack((x, y, z), axis=-1).tolist()
 
     def publish_aggregated_cloud(self):
-        """Publish the aggregated point cloud."""
-        if not self.aggregated_points:
+        """Publish the aggregated point cloud with the last scan's timestamp."""
+        if not self.aggregated_points or self.last_scan_header is None:
             return
 
-        header = self.get_clock().now().to_msg()
-        header.frame_id = 'odom'
+        # Use the header from the last laser scan, but update frame_id to 'map'
+        header = Header()
+        header.stamp = self.last_scan_header.stamp  # Reuse timestamp from last scan
+        header.frame_id = 'map'                     # Set frame_id to 'map'
         cloud_msg = pc2.create_cloud_xyz32(header, list(self.aggregated_points))
         self.cloud_pub.publish(cloud_msg)
         self.get_logger().info(f"Published aggregated cloud with {len(self.aggregated_points)} points")
