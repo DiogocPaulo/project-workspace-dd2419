@@ -121,7 +121,7 @@ class ExamineImage(Node):
 
             #self.get_logger().info(f"Published new object list now includes: {object_type} at ({x:.2f}, {y:.2f})")
 
-            self.get_logger().info(f"Published TF for object: {object_type} at ({x:.2f}, {y:.2f})")
+            #self.get_logger().info(f"Published TF for object: {object_type} at ({x:.2f}, {y:.2f})")
 
         object_list_msg = ObjectList()
         object_list_msg.header.frame_id = "map"
@@ -154,7 +154,7 @@ class ExamineImage(Node):
         # Create a boolean mask to filter points:
         # - Points within max_dist from the sensor
         # - Points above the floor (y < 0.09) (y-axis points downwards)
-        mask = (distances > 0.04) & (distances < 0.9) & (points[:, 1] < 0.085) & (0.01 < points[:, 1])
+        mask = (distances > 0.04) & (distances < 0.9) & (points[:, 1] < 0.080) & (0.01 < points[:, 1])
 
         # Apply the mask to filter points before processing colors
         points = points[mask]
@@ -221,7 +221,7 @@ class ExamineImage(Node):
             blue_ratio = len(blue_points) / total_points
             brown_ratio = len(brown_points) / total_points
 
-            self.get_logger().info(f"red: {red_ratio} blue: {blue_ratio} green:{green_ratio} brown:{brown_ratio}")
+            #self.get_logger().info(f"Brown {red_ratio} {blue_ratio} {green_ratio} {brown_ratio}")
 
             pure_red = pure_green = pure_blue = pure_brown = False
 
@@ -232,7 +232,7 @@ class ExamineImage(Node):
                 pure_green = True
             elif blue_ratio > 0.001 and red_ratio == 0.0 and green_ratio == 0.0 and brown_ratio < 0.01:
                 pure_blue = True
-            elif brown_ratio > 0.001 and red_ratio == 0.0 and green_ratio == 0.0 and blue_ratio == 0.0:
+            elif brown_ratio > 0.1 and red_ratio == 0.0 and green_ratio == 0.0 and blue_ratio == 0.0:
                 pure_brown = True
 
             # Classify based on floor contact points for the current cluster
@@ -242,7 +242,7 @@ class ExamineImage(Node):
 
             if pure_brown:
                 if object_type == "cube":
-                    self.get_logger().info(f'🟫 Cluster {cluster_label} is a cube!')
+                    #self.get_logger().info(f'🟫 Cluster {cluster_label} is a cube!')
                     self.publish_object(x, z + 0.02, 0.0, Object.CUBE, msg.header.stamp)
 
             if pure_red or pure_green or pure_blue:
@@ -253,7 +253,7 @@ class ExamineImage(Node):
                         emoji = "🟢"  # Green circle emoji
                     elif pure_blue:
                         emoji = "🔵"  # Blue circle emoji
-                    self.get_logger().info(f'{emoji} Cluster {cluster_label} is a sphere!')
+                    #self.get_logger().info(f'{emoji} Cluster {cluster_label} is a sphere!')
                     self.publish_object(x, z + 0.02, 0.0, Object.SPHERE, msg.header.stamp)
                 elif object_type == "cube":
                     if pure_red:
@@ -262,17 +262,13 @@ class ExamineImage(Node):
                         emoji = "🟩"  # Green square emoji
                     elif pure_blue:
                         emoji = "🟦"  # Blue square emoji
-                    self.get_logger().info(f'{emoji} Cluster {cluster_label} is a cube!')
+                    #self.get_logger().info(f'{emoji} Cluster {cluster_label} is a cube!')
                     self.publish_object(x, z + 0.02, 0.0, Object.CUBE, msg.header.stamp)
-                elif object_type == "unknown":
-                    self.get_logger().info(f'Object not identified :(!')
-
-            elif self.is_plushie(cluster_points):
-                self.get_logger().info(f'🧸 Cluster {cluster_label} is a plushie!')
-                self.publish_object(x + 0.01, z, 0.0, Object.PLUSHIE, msg.header.stamp)
+                #elif object_type == "unknown":
+                    #self.get_logger().info(f'Object not identified :(!')
 
             elif self.is_box(cluster_points):  # If detected object is a box
-                self.get_logger().info(f'📦 Cluster {cluster_label} is a box!')
+                #self.get_logger().info(f'📦 Cluster {cluster_label} is a box!')
 
                 # Compute the orientation angle of the box
                 angle = self.estimate_box_orientation(cluster_points)
@@ -285,11 +281,15 @@ class ExamineImage(Node):
                 else:
                     self.publish_object(x, z + 0.08, angle, Object.BOX, msg.header.stamp)
 
+            elif self.is_plushie(cluster_points):
+                #self.get_logger().info(f'🧸 Cluster {cluster_label} is a plushie!')
+                self.publish_object(x + 0.01, z, 0.0, Object.PLUSHIE, msg.header.stamp)
+
             else:
                 if pure_brown:
                     continue
-                else:
-                    self.get_logger().info(f'Cluster {cluster_label} is NOT a recognized object.')
+                #else:
+                    #self.get_logger().info(f'Cluster {cluster_label} is NOT a recognized object.')
 
             # ------------ TIMER FOR EFFICIENCY CHECK (move where desired) ------------
             end_time = time.time()
@@ -340,7 +340,7 @@ class ExamineImage(Node):
         elif 0.17 < length < 0.25:
             angle_deg = 0.0
 
-        self.get_logger().info(f"angle: {angle_deg}")
+        #self.get_logger().info(f"angle: {angle_deg}")
 
         return angle_deg
 
@@ -431,6 +431,8 @@ class ExamineImage(Node):
 
         ratio = num_middle_layer_points / num_highest_layer_points
 
+        #self.get_logger().info(f"ratio: {ratio}")
+
         # Classification based on the ratio
         if 1 < ratio <= 6.5:  # Cube: ratio is approximately 1
             return "cube"
@@ -492,6 +494,14 @@ class ExamineImage(Node):
         # Publish the clusters
         self.cluster_publisher.publish(cluster_msg)
 
+    def is_within_workspace(self, x, y):
+        """Checks if a point (x, y) is within a simple rectangular boundary."""
+        x_min, x_max = -2.0, 2.0  # Set your boundary values for x
+        y_min, y_max = -1.1, 0.96  # Set your boundary values for y
+
+        return x_min <= x <= x_max and y_min <= y <= y_max
+
+
     def publish_object(self, x, y, angle, object_type, stamp):
         # Create a PointStamped message for the input coordinates
         point_in = PointStamped()
@@ -500,11 +510,10 @@ class ExamineImage(Node):
         point_in.point = Point(x=x, y=0.09, z=y)  # Set the point coordinates
 
         try:
-            # Lookup the transform from camera_depth_optical_frame to map
             transform = self.tfBuffer.lookup_transform(
                 'map',  # Target frame
                 point_in.header.frame_id,  # Source frame
-                point_in.header.stamp,  # Time of the transform
+                rclpy.time.Time(),  # Time of the transform
                 rclpy.duration.Duration(seconds=1.0)  # Timeout
             )
 
@@ -518,14 +527,21 @@ class ExamineImage(Node):
 
             # Check if the new object is a duplicate based on proximity
             is_duplicate = False
+            is_in = self.is_within_workspace(x_transformed, y_transformed)
+            #self.get_logger().info(f"Published new object list now includes: {is_out} at ({x_transformed:.2f}, {y_transformed:.2f})")
+
             for obj in self.object_list:
                 distance = np.sqrt((x_transformed - obj.x)**2 + (y_transformed - obj.y)**2)
-                if distance < 0.01:  # If the object is within 1 cm of an existing object
+                if obj.object_type == "box":
+                    if distance < 0.15:  # If the object is within 1 cm of an existing object
+                        is_duplicate = True
+                        break
+                elif distance < 0.04:  # If the object is within 1 cm of an existing object
                     is_duplicate = True
                     break
 
             # If not a duplicate, add the new object to the list
-            if not is_duplicate:
+            if not is_duplicate and is_in:
                 # Create new object message
                 object_msg = Object()
                 object_msg.x = x_transformed
@@ -542,10 +558,10 @@ class ExamineImage(Node):
                 object_list_msg.objects = self.object_list
                 self.object_list_publisher.publish(object_list_msg)
 
-                #self.get_logger().info(f"Published new object list now includes: {object_type} at ({x_transformed:.2f}, {y_transformed:.2f})")
+                self.get_logger().info(f"Published new object list now includes: {object_type} at ({x_transformed:.2f}, {y_transformed:.2f})")
 
         except TransformException as e:
-            self.get_logger().error(f"Failed coordinate transform for newly detected object: {e}")
+            self.get_logger().error(f"Failed coordinate transform for newly {object_type} detected object: {e}")
 
 
     def broadcast_object_list(self):
