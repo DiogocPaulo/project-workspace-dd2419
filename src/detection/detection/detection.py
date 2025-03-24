@@ -145,8 +145,8 @@ class ExamineImage(Node):
             y = point_msg.y
             self.workspace_vertices.append((x, y))
 
-        x_list = [vertex[0] for vertex in workspace_vertices]
-        y_list = [vertex[1] for vertex in workspace_vertices]
+        x_list = [vertex[0] for vertex in self.workspace_vertices]
+        y_list = [vertex[1] for vertex in self.workspace_vertices]
         self.workspace_x_min = min(x_list)
         self.workspace_x_max = max(x_list)
         self.workspace_y_min = min(x_list)
