@@ -27,7 +27,7 @@ from sensor_msgs_py.point_cloud2 import create_cloud
 import time
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-from project_interfaces.msg import Object, ObjectList
+from project_interfaces.msg import Object, ObjectList, Point, Workspace
 
 class ExamineImage(Node):
 
@@ -68,6 +68,9 @@ class ExamineImage(Node):
 
         # Initialize an empty list to store detected objects
         self.object_list = []
+
+        self.create_subscription(Workspace, "/workspace", self.workspace_callback, 10)
+        self.workspace_vertices = []
 
         # Publishers for detected objects as a list
         self.object_list_publisher = self.create_publisher(ObjectList, "/detected_objects", 10)
@@ -129,6 +132,14 @@ class ExamineImage(Node):
         object_list_msg.length = len(self.object_list)
         object_list_msg.objects = self.object_list
         self.object_list_publisher.publish(object_list_msg)
+
+    def workspace_callback(self, msg: Workspace):
+        if self.workspace_vertices:
+            return
+        for point_msg in msg.points:
+            x = point_msg.x
+            y = point_msg.y
+            self.workspace_vertices.append((x, y))
         
 
     def cloud_callback(self, msg: PointCloud2):
@@ -496,8 +507,10 @@ class ExamineImage(Node):
 
     def is_within_workspace(self, x, y):
         """Checks if a point (x, y) is within a simple rectangular boundary."""
-        x_min, x_max = -2.0, 2.0  # Set your boundary values for x
-        y_min, y_max = -1.1, 0.96  # Set your boundary values for y
+        x_min = float(np.min(self.workspace_vertices[:, 0]))
+        x_max = float(np.max(self.workspace_vertices[:, 0]))
+        y_min = float(np.min(self.workspace_vertices[:, 1]))
+        y_max = float(np.max(self.workspace_vertices[:, 1]))
 
         return x_min <= x <= x_max and y_min <= y <= y_max
 
