@@ -20,14 +20,15 @@ from geometry_msgs.msg import PointStamped, TransformStamped
 import os
 from scipy.spatial import cKDTree
 from sklearn.cluster import DBSCAN
-from geometry_msgs.msg import Pose, Quaternion, Vector3
+from geometry_msgs.msg import Point, Pose, Quaternion, Vector3
 from sklearn.decomposition import PCA
 from itertools import permutations
 from sensor_msgs_py.point_cloud2 import create_cloud
 import time
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-from project_interfaces.msg import Object, ObjectList, Point, Workspace
+from project_interfaces.msg import Object, ObjectList
+from project_interfaces.msg import Point, Workspace
 
 class ExamineImage(Node):
 
@@ -39,7 +40,7 @@ class ExamineImage(Node):
         self.get_logger().info(f"Init detection")
 
         self.tfBuffer = tf2_ros.Buffer()
-        self.listener = tf2_ros.TransformListener(self.tfBuffer, self)
+        self.listener = tf2_ros.TransformListener(self.tfBuffer, self, spin_thread=True)
 
         self.object_list_broadcaster = tf2_ros.TransformBroadcaster(self)
 
@@ -48,6 +49,8 @@ class ExamineImage(Node):
             history=HistoryPolicy.KEEP_LAST,
             reliability=ReliabilityPolicy.BEST_EFFORT
         )
+
+        self.create_subscription(Workspace, "/workspace", self.workspace_callback, 10)
 
         self.sub2 = self.create_subscription(
             PointCloud2,
@@ -69,8 +72,11 @@ class ExamineImage(Node):
         # Initialize an empty list to store detected objects
         self.object_list = []
 
-        self.create_subscription(Workspace, "/workspace", self.workspace_callback, 10)
         self.workspace_vertices = []
+        self.workspace_x_min = None
+        self.workspace_x_max = None
+        self.workspace_y_min = None
+        self.workspace_y_max = None
 
         # Publishers for detected objects as a list
         self.object_list_publisher = self.create_publisher(ObjectList, "/detected_objects", 10)
@@ -133,7 +139,7 @@ class ExamineImage(Node):
         object_list_msg.objects = self.object_list
         self.object_list_publisher.publish(object_list_msg)
 
-    def workspace_callback(self, msg: Workspace):
+    def workspace_callback(self, msg):
         if self.workspace_vertices:
             return
         for point_msg in msg.points:
@@ -141,6 +147,12 @@ class ExamineImage(Node):
             y = point_msg.y
             self.workspace_vertices.append((x, y))
         
+        x_list = [vertex[0] for vertex in self.workspace_vertices]
+        y_list = [vertex[1] for vertex in self.workspace_vertices]
+        self.workspace_x_min = min(x_list)
+        self.workspace_x_max = max(x_list)
+        self.workspace_y_min = min(y_list)
+        self.workspace_y_max = max(y_list)
 
     def cloud_callback(self, msg: PointCloud2):
         # Increment the message counter
@@ -507,12 +519,9 @@ class ExamineImage(Node):
 
     def is_within_workspace(self, x, y):
         """Checks if a point (x, y) is within a simple rectangular boundary."""
-        x_min = float(np.min(self.workspace_vertices[:, 0]))
-        x_max = float(np.max(self.workspace_vertices[:, 0]))
-        y_min = float(np.min(self.workspace_vertices[:, 1]))
-        y_max = float(np.max(self.workspace_vertices[:, 1]))
-
-        return x_min <= x <= x_max and y_min <= y <= y_max
+        if not self.workspace_vertices:
+            return False
+        return self.workspace_x_min < x < self.workspace_x_max and self.workspace_y_min < y < self.workspace_y_max
 
 
     def publish_object(self, x, y, angle, object_type, stamp):
@@ -520,15 +529,13 @@ class ExamineImage(Node):
         point_in = PointStamped()
         point_in.header.frame_id = 'camera_depth_optical_frame'  # Input frame
         point_in.header.stamp = stamp  # Timestamp of the original point cloud
-        point_in.point.x = x
-        point_in.point.y = 0.09
-        point_in.point.z = y
+        point_in.point = Point(x=x, y=0.09, z=y)  # Set the point coordinates
 
         try:
             transform = self.tfBuffer.lookup_transform(
                 'map',  # Target frame
                 point_in.header.frame_id,  # Source frame
-                rclpy.time.Time(),  # Time of the transform
+                point_in.header.stamp,  # Time of the transform
                 rclpy.duration.Duration(seconds=1.0)  # Timeout
             )
 
