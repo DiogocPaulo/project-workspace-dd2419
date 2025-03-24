@@ -151,7 +151,7 @@ class ExamineImage(Node):
         y_list = [vertex[1] for vertex in self.workspace_vertices]
         self.workspace_x_min = min(x_list)
         self.workspace_x_max = max(x_list)
-        self.workspace_y_min = min(x_list)
+        self.workspace_y_min = min(y_list)
         self.workspace_y_max = max(y_list)
 
     def cloud_callback(self, msg: PointCloud2):
