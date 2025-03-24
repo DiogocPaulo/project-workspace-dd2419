@@ -1,6 +1,7 @@
 import math
 import numpy as np
 import matplotlib.pyplot as plt
+import time
 
 from laser_scan_storage import LaserScanStorage, LaserScanData
 from icp import icp
@@ -50,11 +51,16 @@ if __name__ == '__main__':
     storage.add_scan(scan2)
 
     # Run ICP
+    start_time = time.time()
     rotation, translation, aligned_points = icp(scan1.points, scan2.points)
+    end_time = time.time()
+    duration = end_time - start_time
 
     # Print the results
     print(f"Rotation: {rotation}")
     print(f"Translation: {translation}")
+    print(f"Boundary extraction took {duration:.4f} seconds.")
+
 
     # Plot the results
     plt.plot(reference_points[:, 0], reference_points[:, 1], 'rx', label='reference points')

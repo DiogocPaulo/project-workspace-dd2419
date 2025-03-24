@@ -54,6 +54,7 @@ class Localisation(Node):
 
     def scan_callback(self, msg):
         """Callback for laser scan messages."""
+        return
         new_scan = LaserScanData()
         current_pose = self.get_current_pose()
         

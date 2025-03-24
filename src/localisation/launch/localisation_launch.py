@@ -36,4 +36,16 @@ def generate_launch_description():
             name="robot_localisation",
             output="screen",
         ),
+        Node(
+            package="localisation",
+            executable="ag_scan",
+            name="aggregated_scan",
+            output="screen",
+        ),
     ])
+
+""" 
+
+
+
+"""
