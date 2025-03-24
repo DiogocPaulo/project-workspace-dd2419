@@ -13,7 +13,8 @@ import sensor_msgs_py.point_cloud2 as pc2
 # TF2
 import tf2_ros
 from tf2_ros import TransformException
-from tf2_geometry_msgs import do_transform_point, quaternion_from_euler, euler_from_quaternion
+from tf2_geometry_msgs import do_transform_point
+from tf_transformations import quaternion_from_euler, euler_from_quaternion
 
 # Math
 import numpy as np
