@@ -25,6 +25,7 @@ setup(
         'console_scripts': [
             'localisation = localisation.localisation:main',
             'odometry = localisation.odometry:main',
+            'ag_scan = localisation.ag_scan:main',
         ],
     },
 )
