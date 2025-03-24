@@ -8,8 +8,9 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, HistoryPolicy, ReliabilityPolicy
 
-from tf2_ros import TransformBroadcaster
+from tf2_ros import TransformException
 from tf2_ros.buffer import Buffer
+from tf2_ros.transform_listener import TransformListener
 import tf2_geometry_msgs
 
 from nav_msgs.msg import OccupancyGrid
@@ -35,6 +36,10 @@ class Mapping(Node):
         self.create_subscription(Workspace, "/workspace", self.workspace_callback, 10)
         self.create_subscription(LaserScan, "/scan", self.scan_callback, 10)
         self.map_publisher = self.create_publisher(OccupancyGrid, "/map", 10)
+
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self, spin_thread=True)
+
 
         # Parameters
         self.resolution = 0.05  # 5 cm per cell
