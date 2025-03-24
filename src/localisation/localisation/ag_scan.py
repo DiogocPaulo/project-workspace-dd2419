@@ -6,7 +6,7 @@ from rclpy.node import Node
 
 # ROS Messages
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import Pose, PoseStamped, TransformStamped
+from geometry_msgs.msg import Pose, PointStamped, TransformStamped
 from sensor_msgs.msg import LaserScan, PointCloud2
 import sensor_msgs_py.point_cloud2 as pc2
 
