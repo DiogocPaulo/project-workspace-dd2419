@@ -333,10 +333,10 @@ class ExploreMaster(Node):
         object_number = 0
         box_number = 0
         for object in self.objects:
-            self.publish_transform(object.type+str(object_number),object.x,object.y,0)
+            self.publish_transform(object.type+"-"+str(object_number),object.x,object.y,0)
             object_number+=1
         for box in self.boxes:
-            self.publish_transform(box.type+str(box_number),box.x,box.y,0)
+            self.publish_transform(box.type+"-"+str(box_number),box.x,box.y,0)
             box_number+=1
 
 
@@ -395,19 +395,19 @@ class ExploreMaster(Node):
                     distance = distance_O
                     O_i = i
 
-            point_selector = py_trees.composites.Selector(f"EndPoint{O_i}", memory=True)
+            point_selector = py_trees.composites.Selector(f"EndPoint{self.i}", memory=True)
 
 
 
-            rob_x,rob_y = self.create_rob_coordinates((closest.x,closest.y),(prev_rob_x,prev_rob_y),0.1)
+            rob_x,rob_y = self.create_rob_coordinates((closest.x,closest.y),(prev_rob_x,prev_rob_y),0.05)
             x = closest.x
             y = closest.y
             yaw = 0.0
 
-            service_check_sequence = py_trees.composites.Sequence(f"ServiceCheck{O_i}", memory=True)
+            service_check_sequence = py_trees.composites.Sequence(f"ServiceCheck{self.i}", memory=True)
 
             pathing_service = ServiceClient(
-                name=f"GoToPoint{O_i}",
+                name=f"GoToPoint{self.i}",
                 service_type=GoToPoint,
                 service_name="/pathing_end_point",
                 x=rob_x,
@@ -423,16 +423,16 @@ class ExploreMaster(Node):
                 task='PICKUP'
             )
 
-            retry_on_endpoint_failure = py_trees.composites.Sequence(f"RetryOnEndpointFailure{O_i}", memory=False)
+            retry_on_endpoint_failure = py_trees.composites.Sequence(f"RetryOnEndpointFailure{self.i}", memory=False)
             
             end_point_check = ReachedEndPoint(
-                name=f"ReachedEndPoint{O_i}",
+                name=f"ReachedEndPoint{self.i}",
                 x=x,
                 y=y
             )
 
             retry_endpoint = py_trees.decorators.FailureIsRunning(
-                name=f"RetryEndpoint{O_i}",
+                name=f"RetryEndpoint{self.i}",
                 child=end_point_check
             )
 
@@ -440,7 +440,7 @@ class ExploreMaster(Node):
             service_check_sequence.add_child(retry_on_endpoint_failure)
             service_check_sequence.add_child(pick_service)
 
-            fallback = py_trees.behaviours.Success(name=f"SkipToNext{O_i}")
+            fallback = py_trees.behaviours.Success(name=f"SkipToNext{self.i}")
 
             point_selector.add_children([service_check_sequence, fallback])
             Collection_sequence.add_child(point_selector)
@@ -449,6 +449,8 @@ class ExploreMaster(Node):
 
             prev_rob_x = rob_x
             prev_rob_y = rob_y
+
+            self.i += 1
 
             ################# Drop Off Phase ##################
 
@@ -463,18 +465,18 @@ class ExploreMaster(Node):
                     distance = distance_O
                     O_i = i
 
-            point_selector = py_trees.composites.Selector(f"EndPoint{O_i}", memory=True)
+            point_selector = py_trees.composites.Selector(f"EndPoint{self.i}", memory=True)
 
 
-            rob_x,rob_y = self.create_rob_coordinates((closest.x,closest.y),(prev_rob_x,prev_rob_y),0.1)
+            rob_x,rob_y = self.create_rob_coordinates((closest.x,closest.y),(prev_rob_x,prev_rob_y),0.05)
             x = closest.x
             y = closest.y
             yaw = 0.0
 
-            service_check_sequence = py_trees.composites.Sequence(f"ServiceCheck{O_i}", memory=True)
+            service_check_sequence = py_trees.composites.Sequence(f"ServiceCheck{self.i}", memory=True)
 
             pathing_service = ServiceClient(
-                name=f"GoToPoint{O_i}",
+                name=f"GoToPoint{self.i}",
                 service_type=GoToPoint,
                 service_name="/pathing_end_point",
                 x=rob_x,
@@ -490,30 +492,32 @@ class ExploreMaster(Node):
                 task='DROPOFF'
             )
 
-            retry_on_endpoint_failure = py_trees.composites.Sequence(f"RetryOnEndpointFailure{O_i}", memory=False)
+            retry_on_endpoint_failure = py_trees.composites.Sequence(f"RetryOnEndpointFailure{self.i}", memory=False)
             
             end_point_check = ReachedEndPoint(
-                name=f"ReachedEndPoint{O_i}",
+                name=f"ReachedEndPoint{self.i}",
                 x=x,
                 y=y
             )
 
             retry_endpoint = py_trees.decorators.FailureIsRunning(
-                name=f"RetryEndpoint{O_i}",
-                child=end_point_check
+                name=f"RetryEndpoint{self.i}",
+                child=end_point_check        
             )
 
             retry_on_endpoint_failure.add_children([pathing_service, retry_endpoint])
             service_check_sequence.add_child(retry_on_endpoint_failure)
             service_check_sequence.add_child(drop_service)
 
-            fallback = py_trees.behaviours.Success(name=f"SkipToNext{O_i}")
+            fallback = py_trees.behaviours.Success(name=f"SkipToNext{self.i}")
 
             point_selector.add_children([service_check_sequence, fallback])
             Collection_sequence.add_child(point_selector)
 
-            prev_rob_x = rob_x 
+            prev_rob_x = rob_x
             prev_rob_y = rob_y
+
+            self.i += 1
 
             
     
