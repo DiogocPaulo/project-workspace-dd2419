@@ -71,6 +71,10 @@ class ExamineImage(Node):
 
         self.create_subscription(Workspace, "/workspace", self.workspace_callback, 10)
         self.workspace_vertices = []
+        self.workspace_x_min = None
+        self.workspace_x_max = None
+        self.workspace_y_min = None
+        self.workspace_y_max = None
 
         # Publishers for detected objects as a list
         self.object_list_publisher = self.create_publisher(ObjectList, "/detected_objects", 10)
@@ -140,7 +144,13 @@ class ExamineImage(Node):
             x = point_msg.x
             y = point_msg.y
             self.workspace_vertices.append((x, y))
-        
+
+        x_list = [vertex[0] for vertex in workspace_vertices]
+        y_list = [vertex[1] for vertex in workspace_vertices]
+        self.workspace_x_min = min(x_list)
+        self.workspace_x_max = max(x_list)
+        self.workspace_y_min = min(x_list)
+        self.workspace_y_max = max(y_list)
 
     def cloud_callback(self, msg: PointCloud2):
         # Increment the message counter
@@ -507,12 +517,9 @@ class ExamineImage(Node):
 
     def is_within_workspace(self, x, y):
         """Checks if a point (x, y) is within a simple rectangular boundary."""
-        x_min = float(np.min(self.workspace_vertices[:, 0]))
-        x_max = float(np.max(self.workspace_vertices[:, 0]))
-        y_min = float(np.min(self.workspace_vertices[:, 1]))
-        y_max = float(np.max(self.workspace_vertices[:, 1]))
-
-        return x_min <= x <= x_max and y_min <= y <= y_max
+        if self.workspace_vertices is None:
+            return False
+        return self.workspace_x_min < x < self.workspace_x_max and self.workspace_y_min < y < self.workspace_y_max
 
 
     def publish_object(self, x, y, angle, object_type, stamp):
