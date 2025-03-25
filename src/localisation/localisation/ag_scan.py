@@ -73,7 +73,6 @@ class LidarAggregator(Node):
         if not transformed_points:
             self.get_logger().warn("Transformed points are empty")
         if transformed_points:
-            self.get_logger().info(f"Transformed points: {transformed_points}")
             localised_points = self._localise_points(transformed_points)
             self.get_logger().info(f"Localised points: {localised_points}")
             if localised_points:
@@ -127,8 +126,11 @@ class LidarAggregator(Node):
         """Localise the transformed points using ICP."""
         # Compute the localised points by applying ICP to the transformed points and using the aggregated cloud as reference
         # Begin by ensuring that the current scan is usable for ICP
-        if abs(self.angular_vel) > 0.1 or self.current_scan_index < 4: # Ignore scans when turning
+        if abs(self.angular_vel) > 0.1: # Ignore scans when turning
             return
+        
+        if self.current_scan_index < 4:
+            return new_points
 
         aggregated_points = np.vstack(self.scan_buffer)
         try:
