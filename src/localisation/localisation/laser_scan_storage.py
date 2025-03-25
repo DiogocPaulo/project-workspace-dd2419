@@ -5,7 +5,7 @@ class LaserScanData:
     def __init__(self):
         """Initialize with empty points, pose, and timestamp."""
         self.points = np.array([])  # Use NumPy array for consistency
-        self.pose = None
+        self.pose = np.zeros(3)  # [x, y, yaw]
         self.timestamp = None
 
     def store_scan(self, ranges, angles, pose, timestamp=None, max_range=10.0):

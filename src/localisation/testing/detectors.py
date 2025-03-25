@@ -6,7 +6,7 @@ from laser_scan_structs import LaserScan, Keypoint
 from laser_scan_utils import polar_to_cartesian, euclidean_distance
 
 class FALKOKeypointDetector:
-    def __init__(self, neighbor_radius_factor=0.05, min_neighbors=2, triangle_height_factor=0.5, polar_sectors=16, nms_radius=0.20):
+    def __init__(self, neighbor_radius_factor=0.5, min_neighbors=2, triangle_height_factor=0.05, polar_sectors=8, nms_radius=0.5):
         self.neighbor_radius_factor = neighbor_radius_factor
         self.min_neighbors = min_neighbors
         self.triangle_height_factor = triangle_height_factor

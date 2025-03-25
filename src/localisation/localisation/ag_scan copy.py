@@ -1,17 +1,32 @@
 #!/usr/bin/env python3
 
+# ROS 2 core library for node creation and spinning
 import rclpy
+# Base class for creating ROS 2 nodes
 from rclpy.node import Node
+# Utility for handling ROS 2 time and timestamps
+from rclpy.time import Time
+
+# ROS 2 message types for odometry data
 from nav_msgs.msg import Odometry
+# ROS 2 message types for laser scans and point clouds
 from sensor_msgs.msg import LaserScan, PointCloud2
+# Helper module for creating and manipulating PointCloud2 messages
 import sensor_msgs_py.point_cloud2 as pc2
-from geometry_msgs.msg import TransformStamped
+
+# TF2 library for handling transforms between coordinate frames
 import tf2_ros
+# Utility for transforming geometry messages (e.g., points) using TF2
 from tf2_geometry_msgs import do_transform_point
-from tf_transformations import quaternion_from_euler, euler_from_quaternion
+# Functions for converting between quaternions and Euler angles
+from tf_transformations import euler_from_quaternion
+
+# NumPy for efficient numerical computations and vectorized operations
 import numpy as np
+# Deque for a bounded, efficient buffer to store aggregated points
+from collections import deque
+# Standard message type for headers with stamp and frame_id
 from std_msgs.msg import Header
-from localisation.icp import icp
 
 class LidarAggregator(Node):
     def __init__(self):
@@ -19,18 +34,17 @@ class LidarAggregator(Node):
         self.get_logger().info('LidarAggregator node initialized')
 
         # Parameters
-        self.declare_parameter('max_scans', 5)           # Number of scans to store
+        self.declare_parameter('aggregation_rate', 5.0)  # Hz
         self.declare_parameter('max_points', 10000)     # Limit aggregated points
-        self.max_scans = self.get_parameter('max_scans').value
+        self.aggregation_rate = self.get_parameter('aggregation_rate').value
         self.max_points = self.get_parameter('max_points').value
 
         # State
-        self.scan_buffer = np.zeros((self.max_scans, self.max_points, 3))  # Store last 5 scans with x, y, z
-        self.current_scan_index = 0  # Index to track where the next scan will be inserted
-        self.current_pose = np.array([0.0, 0.0, 0.0])  # [x, y, yaw]
+        self.aggregated_points = deque(maxlen=self.max_points)  # Bounded buffer
+        self.current_pose = np.array([0.0, 0.0, 0.0])          # [x, y, yaw]
         self.linear_vel = 0.0
         self.angular_vel = 0.0
-        self.last_scan_header = None  # Store last LaserScan header
+        self.last_scan_header = None                            # Store last LaserScan header
 
         # TF2 Setup
         self.tf_buffer = tf2_ros.Buffer()
@@ -42,7 +56,9 @@ class LidarAggregator(Node):
 
         # Publisher
         self.cloud_pub = self.create_publisher(PointCloud2, '/ag_scan', 10)
-        self.create_timer(0.1, self.broadcast_transform)  # Repeat every 0.1s
+
+        # Timer for aggregation
+        self.timer = self.create_timer(1.0 / self.aggregation_rate, self.publish_aggregated_cloud)
 
     def odom_callback(self, msg):
         """Update robot pose and velocities from odometry."""
@@ -65,11 +81,8 @@ class LidarAggregator(Node):
         points = self._laser_scan_to_points(msg)
         transformed_points = self._transform_points(points, 'map', msg.header.frame_id, msg.header.stamp)
         if transformed_points is not None:
-            localised_points = self._localise_points(transformed_points)
-            if localised_points is not None:
-                self._update_scan_buffer(transformed_points)
-                self.publish_aggregated_cloud()  # Publish aggregated cloud after each scan update
-                self.last_scan_header = msg.header  # Store the latest header
+            self.aggregated_points.extend(transformed_points)
+        self.last_scan_header = msg.header  # Store the latest header
 
     def _laser_scan_to_points(self, msg):
         """Convert LaserScan to list of [x, y, z] points."""
@@ -81,12 +94,6 @@ class LidarAggregator(Node):
         y = ranges[valid] * np.sin(angles[valid])
         z = np.zeros_like(x)
         return np.stack((x, y, z), axis=-1).tolist()
-
-    def _update_scan_buffer(self, points):
-        """Store the incoming points in the circular buffer."""
-        # Update the buffer by storing the new scan at the current index
-        self.scan_buffer[self.current_scan_index] = points
-        self.current_scan_index = (self.current_scan_index + 1) % self.max_scans  # Increment index with wrapping
 
     def _transform_points(self, points, target_frame, source_frame, timestamp):
         """Transform points to target frame using TF2."""
@@ -112,65 +119,19 @@ class LidarAggregator(Node):
         y = points_np[:, 0] * sin_yaw + points_np[:, 1] * cos_yaw + trans.y
         z = points_np[:, 2] + trans.z
         return np.stack((x, y, z), axis=-1).tolist()
-    
-    def _localise_points(self, new_points):
-        """Localise the transformed points using ICP."""
-        # Compute the localised points by applying ICP to the transformed points and using the aggregated cloud as reference
-        # Begin by ensuring that the current scan is usable for ICP
-        if abs(self.angular_vel) > 0.1: # Ignore scans when turning
-            return
-
-        aggregated_points = np.vstack(self.scan_buffer)
-        try:
-            rotation_matrix, translation_vector, localised_points = icp(aggregated_points, new_points)
-        except Exception as e:
-            self.get_logger().error(f"ICP failed: {str(e)}")
-            return
-        
-        # Update map to odom transform
-        """
-        rotation = np.arctan2(rotation_matrix[1, 0], rotation_matrix[0, 0])
-        self.transform_x = translation_vector[0]
-        self.transform_y = translation_vector[1]
-        self.transform_theta = rotation
-        self.get_logger().info(f"Updated map → odom (x={self.transform_x}, y={self.transform_y}, theta={self.transform_theta})")
-        """
-        
-        return localised_points
 
     def publish_aggregated_cloud(self):
         """Publish the aggregated point cloud with the last scan's timestamp."""
-        # Aggregate all points from the circular buffer
-        aggregated_points = np.vstack(self.scan_buffer)
-
-        if aggregated_points.size == 0 or self.last_scan_header is None:
+        if not self.aggregated_points or self.last_scan_header is None:
             return
 
         # Use the header from the last laser scan, but update frame_id to 'map'
         header = Header()
         header.stamp = self.last_scan_header.stamp  # Reuse timestamp from last scan
         header.frame_id = 'map'                     # Set frame_id to 'map'
-        cloud_msg = pc2.create_cloud_xyz32(header, aggregated_points.tolist())
+        cloud_msg = pc2.create_cloud_xyz32(header, list(self.aggregated_points))
         self.cloud_pub.publish(cloud_msg)
-        self.get_logger().info(f"Published aggregated cloud with {len(aggregated_points)} points")
-
-    def broadcast_transform(self):
-        """Broadcast the map to odom transform."""
-        t = TransformStamped()
-        t.header.stamp = self.get_clock().now().to_msg()
-        t.header.frame_id = "map"
-        t.child_frame_id = "odom"
-        t.transform.translation.x = self.transform_x
-        t.transform.translation.y = self.transform_y
-        t.transform.translation.z = 0.0
-        
-        q = quaternion_from_euler(0, 0, self.transform_theta)
-        t.transform.rotation.x = q[0]
-        t.transform.rotation.y = q[1]
-        t.transform.rotation.z = q[2]
-        t.transform.rotation.w = q[3]
-        
-        self.map_odom_broadcaster.sendTransform(t)
+        self.get_logger().info(f"Published aggregated cloud with {len(self.aggregated_points)} points")
 
 def main(args=None):
     rclpy.init(args=args)

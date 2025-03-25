@@ -40,7 +40,7 @@ def point_based_matching(point_pairs):
 
     return rot_angle, translation[0], translation[1]
 
-def icp(reference_points, points, max_iterations=100, distance_threshold=0.3,
+def icp(reference_points, points, max_iterations=100,
         convergence_translation_threshold=1e-3, convergence_rotation_threshold=1e-4, 
         point_pairs_threshold=10):
 
@@ -55,7 +55,8 @@ def icp(reference_points, points, max_iterations=100, distance_threshold=0.3,
 
         # Find the closest points
         distances, indices = nbrs.kneighbors(points)
-        mask = distances.flatten() < distance_threshold  # Filter valid point pairs
+        median_distance = np.median(distances)
+        mask = distances.flatten() < median_distance  # Filter valid point pairs
         if np.sum(mask) < point_pairs_threshold:
             break
 
