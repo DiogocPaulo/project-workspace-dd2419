@@ -1,16 +1,13 @@
 import rclpy
 from rclpy.node import Node
-from nav_msgs.msg import Odometry
-from sensor_msgs.msg import LaserScan, PointCloud2
-import sensor_msgs_py.point_cloud2 as pc2
-from geometry_msgs.msg import TransformStamped
-import tf2_ros
-from tf2_geometry_msgs import do_transform_point
-from tf_transformations import quaternion_from_euler, euler_from_quaternion
+from sensor_msgs.msg import LaserScan
+from tf_transformations import euler_from_quaternion
 import numpy as np
 from std_msgs.msg import Header
-from localisation.icp import icp
-from collections import defaultdict
+from visualization_msgs.msg import Marker
+import geometry_msgs.msg
+import tf2_ros
+from scipy.signal import savgol_filter
 
 class LidarAggregator(Node):
     def __init__(self):
@@ -18,194 +15,288 @@ class LidarAggregator(Node):
         self.get_logger().info('LidarAggregator node initialized')
 
         # Parameters
-        self.declare_parameter('num_scans', 5)           # Number of scans to store
-        self.declare_parameter('num_scan_points', 360)     # Limit aggregated points
-        self.declare_parameter('grid_size', 0.2)          # Size of the grid cells for density-based storage
-        self.declare_parameter('max_points_per_cell', 0.0)        # Initial transform x
-        self.num_scans = self.get_parameter('num_scans').value
-        self.num_scan_points = self.get_parameter('num_scan_points').value
-        self.grid_size = self.get_parameter('grid_size').value
-        self.max_points_per_cell = self.get_parameter('max_points_per_cell').value
+        self.declare_parameter('distance_threshold', 0.5)
+        self.declare_parameter('match_threshold', 0.4)
+
+        self.distance_threshold = self.get_parameter('distance_threshold').value
+        self.match_threshold = self.get_parameter('match_threshold').value
+        self.min_point_density = 0.02
+        self.max_point_density = 0.1
 
         # State
-        self.scan_buffer = []  # Store the aggregated scan points
-        self.grid_map = defaultdict(list)  # Grid map to store points in each cell
-        self.current_pose = np.array([0.0, 0.0, 0.0])  # [x, y, yaw]
-        self.linear_vel = 0.0
-        self.angular_vel = 0.0
-        self.last_scan_header = None  # Store last LaserScan header
-
-        # Transform variables
-        self.map_odom_broadcaster = tf2_ros.TransformBroadcaster(self)
-        self.transform_x = 0.0
-        self.transform_y = 0.0
+        self.last_scan_header = None
         self.transform_z = 0.0
-        self.transform_theta = 0.0
+        self.previous_segments = []
 
         # TF2 Setup
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
         # Subscriptions
-        self.create_subscription(Odometry, '/odom', self.odom_callback, 10)
         self.create_subscription(LaserScan, '/scan', self.scan_callback, 10)
 
         # Publisher
-        self.cloud_pub = self.create_publisher(PointCloud2, '/ag_scan', 10)
-        self.create_timer(0.1, self.broadcast_transform)  # Repeat every 0.1s
-
-    def odom_callback(self, msg):
-        """Update robot pose and velocities from odometry."""
-        self.current_pose = self._pose_to_xy_yaw(msg.pose.pose)
-        self.linear_vel = msg.twist.twist.linear.x
-        self.angular_vel = msg.twist.twist.angular.z
-
-    def _pose_to_xy_yaw(self, pose):
-        """Convert Pose to [x, y, yaw] numpy array."""
-        x = pose.position.x
-        y = pose.position.y
-        _, _, yaw = euler_from_quaternion([
-            pose.orientation.x, pose.orientation.y,
-            pose.orientation.z, pose.orientation.w
-        ])
-        return np.array([x, y, yaw])
+        self.marker_pub = self.create_publisher(Marker, '/line_segments_markers', 10)
 
     def scan_callback(self, msg):
-        """Process incoming laser scans and transform points."""
         points = self._laser_scan_to_points(msg)
-        # Log shape of points
-        self.get_logger().info(f"Received {len(points)} points from scan")
         transformed_points = self._transform_points(points, 'map', msg.header.frame_id, msg.header.stamp)
-        if not transformed_points:
-            self.get_logger().warn("Transformed points are empty")
-        if transformed_points:
-            self.get_logger().info(f"Transformed {len(transformed_points)} points with dimensions: {np.array(transformed_points).shape}")
-            localised_points = self._localise_points(transformed_points)
-            if localised_points:
-                self.get_logger().info(f"Localised {len(localised_points)} points with dimensions: {np.array(localised_points).shape}")
-                self._update_scan_buffer(localised_points)
-                self.publish_aggregated_cloud()  # Publish aggregated cloud after each scan update
-                self.last_scan_header = msg.header  # Store the latest header
+
+        if transformed_points is None:
+            #self.get_logger().warn("Transformed points are None, skipping line segment extraction")
+            return
+
+        if transformed_points.size == 0:
+            #self.get_logger().warn("Transformed points are empty, skipping line segment extraction")
+            return
+
+        current_segments = self._extract_line_segments(transformed_points)
+        current_segments = self._smooth_line_segments(current_segments)
+
+        if not self.previous_segments:  # First scan
+            self.previous_segments = current_segments
+        else:
+            self.previous_segments = self._merge_segments(self.previous_segments, current_segments)
+
+        self.publish_line_segments(self.previous_segments, msg.header)
+        self.last_scan_header = msg.header
 
     def _laser_scan_to_points(self, msg):
-        """Convert LaserScan to list of [x, y] points (2D)."""
-        ranges = np.array(msg.ranges)
+        ranges = np.array(msg.ranges, dtype=np.float64)
         num_points = len(ranges)
-        angles = np.linspace(msg.angle_min, msg.angle_max, num_points)  # Match length of ranges
+        angles = np.linspace(msg.angle_min, msg.angle_max, num_points)
         valid = (msg.range_min < ranges) & (ranges < msg.range_max)
         x = ranges[valid] * np.cos(angles[valid])
         y = ranges[valid] * np.sin(angles[valid])
-        return np.stack((x, y), axis=-1).tolist()  # Only x and y
-
-    def _update_scan_buffer(self, points):
-        """Store points in a density-based grid."""
-        for point in points:
-            grid_cell = self._get_grid_cell(point)
-            if self._is_low_density(grid_cell, point):
-                self.grid_map[grid_cell].append(point)
-        # Convert grid map to scan buffer by flattening grid into points
-        self.scan_buffer = [p for cell in self.grid_map.values() for p in cell]
-
-    def _get_grid_cell(self, point):
-        """Return the grid cell coordinates based on the point's position."""
-        x, y = point
-        grid_x = int(np.floor(x / self.grid_size))
-        grid_y = int(np.floor(y / self.grid_size))
-        return (grid_x, grid_y)
-
-    def _is_low_density(self, grid_cell, point):
-        """Check if the density in the grid cell is below a threshold."""
-        if len(self.grid_map[grid_cell]) < self.max_points_per_cell:
-            return True
-        return False
+        return np.column_stack((x, y))
 
     def _transform_points(self, points, target_frame, source_frame, timestamp):
-        """Transform points to target frame using TF2."""
         try:
-            transform = self.tf_buffer.lookup_transform(
-                target_frame, source_frame, timestamp, timeout=rclpy.duration.Duration(seconds=0.1))
+            # Define a time tolerance
+            tolerance = rclpy.duration.Duration(seconds=0)
+
+            # Check if the transform is available within the tolerance
+            if self.tf_buffer.can_transform(target_frame, source_frame, timestamp, tolerance):
+                transform = self.tf_buffer.lookup_transform(target_frame, source_frame, timestamp)
+                if points.size == 0:
+                    return np.empty((0, 2), dtype=np.float64)
+
+                trans = transform.transform.translation
+                rot = transform.transform.rotation
+                yaw = euler_from_quaternion([rot.x, rot.y, rot.z, rot.w])[2]
+                cos_yaw, sin_yaw = np.cos(yaw), np.sin(yaw)
+
+                x = points[:, 0] * cos_yaw - points[:, 1] * sin_yaw + trans.x
+                y = points[:, 0] * sin_yaw + points[:, 1] * cos_yaw + trans.y
+                self.transform_z = trans.z
+                return np.column_stack((x, y))
+            else:
+                return
+                self.get_logger().warn(f"Transform unavailable at {timestamp} with tolerance")
+
         except tf2_ros.TransformException as ex:
-            self.get_logger().warn(f"Transform failed: {ex}")
-            return None
+            self.get_logger().warn(f"Could not transform: {ex}")
 
-        # Vectorized transformation for 2D
-        points_np = np.array(points)
-        if points_np.size == 0:
-            return []
+    def _extract_line_segments(self, points):
+        line_segments = []
+        current_segment = []
 
-        # Apply transform (simplified for 2D planar case)
-        trans = transform.transform.translation
-        rot = transform.transform.rotation
-        yaw = euler_from_quaternion([rot.x, rot.y, rot.z, rot.w])[2]
-        cos_yaw, sin_yaw = np.cos(yaw), np.sin(yaw)
+        for i, point in enumerate(points):
+            if not current_segment:
+                current_segment.append(point)
+            else:
+                if np.linalg.norm(point - current_segment[-1]) < self.distance_threshold:
+                    current_segment.append(point)
+                else:
+                    if len(current_segment) > 1:
+                        line_segments.append(np.array(current_segment))
+                    current_segment = [point]
 
-        x = points_np[:, 0] * cos_yaw - points_np[:, 1] * sin_yaw + trans.x
-        y = points_np[:, 0] * sin_yaw + points_np[:, 1] * cos_yaw + trans.y
-        return np.stack((x, y), axis=-1).tolist()  # Only x and y
+        if len(current_segment) > 1:
+            line_segments.append(np.array(current_segment))
 
-    def _localise_points(self, new_points):
-        """Localise the transformed points using ICP."""
-        # Compute the localised points by applying ICP to the transformed points and using the aggregated cloud as reference
-        if abs(self.angular_vel) > 0.1:  # Ignore scans when turning
+        return line_segments
+
+    def _smooth_line_segments(self, line_segments):
+        smoothed_segments = []
+        for segment in line_segments:
+            if len(segment) >= 5:  # Check if the segment has at least 5 points
+                x = savgol_filter(segment[:, 0], 5, 3)
+                y = savgol_filter(segment[:, 1], 5, 3)
+                smoothed_segments.append(np.column_stack((x, y)))
+            else:
+                smoothed_segments.append(segment)
+
+        return smoothed_segments
+
+    def _merge_segments(self, previous_segments, current_segments):
+        merged_segments = []
+        matched_indices = set()
+        min_deviation = 0.05  # Minimum deviation threshold to keep a point (in meters)
+
+        for current_segment in current_segments:
+            best_match_index = None
+            best_match_score = float('inf')
+
+            for prev_index, prev_segment in enumerate(previous_segments):
+                if prev_index in matched_indices:
+                    continue
+                match_score, points_within_range = self._calculate_match_score(current_segment, prev_segment)
+                if match_score < best_match_score and match_score < self.match_threshold:
+                    best_match_score = match_score
+                    best_match_index = prev_index
+
+            if best_match_index is not None and points_within_range.size > 0:
+                combined_points = np.vstack((previous_segments[best_match_index], points_within_range))
+                ordered_points = self._order_points(combined_points)
+                smoothed_segment = self._smooth_segment(ordered_points)
+                #simplified_segment = self._resample_segment(smoothed_segment, self.point_density)
+                merged_segments.append(smoothed_segment)
+                matched_indices.add(best_match_index)
+            else:
+                smoothed_segment = self._smooth_segment(current_segment)
+                #simplified_segment = self._resample_segment(smoothed_segment, self.point_density)
+                merged_segments.append(smoothed_segment)
+
+        return merged_segments
+
+    def _resample_segment(self, segment, point_density):
+        """Resamples a segment to achieve a desired point density."""
+        if len(segment) < 2:
+            return segment
+
+        min_distance = 1.0 / point_density  # Minimum distance between points
+
+        new_points = [segment[0]]  # Always keep the first point
+        last_kept_index = 0
+
+        for i in range(1, len(segment)):
+            distance = np.linalg.norm(segment[i] - new_points[-1])
+            if distance >= min_distance:
+                new_points.append(segment[i])
+                last_kept_index = i
+
+        if last_kept_index != len(segment) - 1 and len(segment) > 1:
+            new_points.append(segment[-1])  # Always keep the last point
+
+        return np.array(new_points)
+
+    def _simplify_segment_distance(self, segment, min_deviation):
+        if len(segment) < 3:
+            return segment
+
+        keep_points = [segment[0]]  # Always keep the first point
+        for i in range(1, len(segment) - 1):
+            prev_point = keep_points[-1]
+            curr_point = segment[i]
+            next_point = segment[i + 1]
+            
+            # Calculate the perpendicular distance from curr_point to the line prev_point -> next_point
+            line_vec = next_point - prev_point
+            point_vec = curr_point - prev_point
+            line_len = np.linalg.norm(line_vec)
+            
+            if line_len == 0:
+                continue
+            
+            # Distance from point to line
+            distance = np.linalg.norm(point_vec - (np.dot(point_vec, line_vec) / (line_len ** 2)) * line_vec)
+            
+            if distance >= min_deviation:  # Keep point if it deviates enough
+                keep_points.append(curr_point)
+        
+        keep_points.append(segment[-1])  # Always keep the last point
+        return np.array(keep_points)
+
+    def _calculate_match_score(self, segment1, segment2):
+        """
+        Calculates the average distance between points in segment1 and segment2.
+        """
+        if len(segment1) == 0 or len(segment2) == 0:
+            return float('inf')  # Return infinity if either segment is empty
+
+        total_dist = 0.0
+        points_within_range = []
+        for point1 in segment1:
+            min_dist = float('inf')
+            for point2 in segment2:
+                dist = np.linalg.norm(point1 - point2)
+                min_dist = min(min_dist, dist)
+            total_dist += min_dist
+            # Only include points within max_distance
+            if self.min_point_density < min_dist < self.max_point_density:
+                points_within_range.append(point1)
+
+        points_within_range = np.array(points_within_range) if points_within_range else np.array([])
+
+        return (total_dist / len(segment1)), points_within_range  # Return the average distance and points_within_range
+
+    def _smooth_segment(self, segment):
+        if len(segment) >= 5:
+            x = savgol_filter(segment[:, 0], 4, 3)
+            y = savgol_filter(segment[:, 1], 4, 3)
+            return np.column_stack((x, y))
+        else:
+            return segment
+
+    def _order_points(self, points):
+        """Order points along their principal direction using PCA."""
+        if len(points) < 2:
+            return points
+
+        # Center the points
+        centroid = np.mean(points, axis=0)
+        centered_points = points - centroid
+
+        # Compute PCA (principal direction) using SVD
+        _, _, vt = np.linalg.svd(centered_points)
+        principal_direction = vt[0]  # First principal component
+
+        # Project points onto the principal direction
+        projections = centered_points.dot(principal_direction)
+        
+        # Sort points based on their projection values
+        sorted_indices = np.argsort(projections)
+        ordered_points = points[sorted_indices]
+
+        return ordered_points
+
+    def publish_line_segments(self, line_segments, header_msg):
+        if not line_segments:
+            self.get_logger().warn("No line segments, skipping publish")
             return
-        
-        if len(self.scan_buffer) < 200:
-            return new_points
 
-        aggregated_points = np.vstack(self.scan_buffer)
-        aggregated_points = aggregated_points[~np.isnan(aggregated_points).any(axis=1)]  # Remove NaNs
-        try:
-            rotation_matrix, translation_vector, localised_points = icp(aggregated_points, new_points)
-            self.get_logger().info(f"ICP: Rotation={rotation_matrix}, Translation={translation_vector}")
-        except Exception as e:
-            self.get_logger().error(f"ICP failed: {str(e)}")
-            return
-        
-        return localised_points
+        marker = Marker()
+        marker.header.frame_id = "map"
+        marker.header.stamp = header_msg.stamp
+        marker.ns = "line_segments"
+        marker.id = 0
+        marker.type = Marker.LINE_LIST
+        marker.action = Marker.ADD
+        marker.scale.x = 0.05
+        marker.color.r = 1.0
+        marker.color.g = 0.0
+        marker.color.b = 0.0
+        marker.color.a = 1.0
 
-    def publish_aggregated_cloud(self):
-        """Publish the aggregated point cloud with the last scan's timestamp."""
-        aggregated_points = np.vstack(self.scan_buffer)
-        aggregated_points = aggregated_points[~np.isnan(aggregated_points).any(axis=1)]  # Remove NaNs
+        for segment in line_segments:
+            for i in range(len(segment) - 1):
+                p1 = segment[i]
+                p2 = segment[i + 1]
+                marker.points.append(geometry_msgs.msg.Point(x=p1[0], y=p1[1], z=self.transform_z))
+                marker.points.append(geometry_msgs.msg.Point(x=p2[0], y=p2[1], z=self.transform_z))
 
-        if aggregated_points.size == 0 or self.last_scan_header is None:
-            return
-
-        # Use the header from the last laser scan, but update frame_id to 'map'
-        header = Header()
-        header.stamp = self.last_scan_header.stamp  # Reuse timestamp from last scan
-        header.frame_id = 'map'                     # Set frame_id to 'map'
-        aggregated_points_3d = np.hstack((aggregated_points, np.full((aggregated_points.shape[0], 1), self.transform_z)))
-        cloud_msg = pc2.create_cloud_xyz32(header, aggregated_points_3d.tolist())
-        self.cloud_pub.publish(cloud_msg)
-        self.get_logger().info(f"Published aggregated cloud with {len(aggregated_points)} points")
-
-    def broadcast_transform(self):
-        """Broadcast the map to odom transform."""
-        t = TransformStamped()
-        t.header.stamp = self.get_clock().now().to_msg()
-        t.header.frame_id = "map"
-        t.child_frame_id = "odom"
-        t.transform.translation.x = self.transform_x
-        t.transform.translation.y = self.transform_y
-        t.transform.translation.z = 0.0
-        
-        q = quaternion_from_euler(0, 0, self.transform_theta)
-        t.transform.rotation.x = q[0]
-        t.transform.rotation.y = q[1]
-        t.transform.rotation.z = q[2]
-        t.transform.rotation.w = q[3]
-        
-        self.map_odom_broadcaster.sendTransform(t)
+        self.marker_pub.publish(marker)
+        self.get_logger().info(f"Published {len(line_segments)} line segments as markers")
 
 def main(args=None):
-    rclpy.init(args=args)
+    rclpy.init()
     node = LidarAggregator()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass
-    node.destroy_node()
+
     rclpy.shutdown()
 
 if __name__ == '__main__':
