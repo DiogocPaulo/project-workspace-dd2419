@@ -152,6 +152,7 @@ class LidarAggregator(Node):
         aggregated_points = aggregated_points[~np.isnan(aggregated_points).any(axis=1)]  # Remove NaNs
         try:
             rotation_matrix, translation_vector, localised_points = icp(aggregated_points, new_points)
+            self.get_logger().info(f"ICP: Rotation={rotation_matrix}, Translation={translation_vector}")
         except Exception as e:
             self.get_logger().error(f"ICP failed: {str(e)}")
             return
