@@ -21,7 +21,7 @@ class LidarAggregator(Node):
         self.declare_parameter('num_scans', 5)           # Number of scans to store
         self.declare_parameter('num_scan_points', 360)     # Limit aggregated points
         self.declare_parameter('grid_size', 0.2)          # Size of the grid cells for density-based storage
-        self.declare_parameter('max_points_per_ceel', 0.0)        # Initial transform x
+        self.declare_parameter('max_points_per_cell', 0.0)        # Initial transform x
         self.num_scans = self.get_parameter('num_scans').value
         self.num_scan_points = self.get_parameter('num_scan_points').value
         self.grid_size = self.get_parameter('grid_size').value
