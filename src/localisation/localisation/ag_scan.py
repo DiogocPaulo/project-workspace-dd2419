@@ -76,10 +76,10 @@ class LidarAggregator(Node):
         # Log shape of points
         self.get_logger().info(f"Received {len(points)} points from scan")
         transformed_points = self._transform_points(points, 'map', msg.header.frame_id, msg.header.stamp)
-        self.get_logger().info(f"Transformed {len(transformed_points)} points with dimensions: {np.array(transformed_points).shape}")
         if not transformed_points:
             self.get_logger().warn("Transformed points are empty")
         if transformed_points:
+            self.get_logger().info(f"Transformed {len(transformed_points)} points with dimensions: {np.array(transformed_points).shape}")
             localised_points = self._localise_points(transformed_points)
             if localised_points:
                 self.get_logger().info(f"Localised {len(localised_points)} points with dimensions: {np.array(localised_points).shape}")
