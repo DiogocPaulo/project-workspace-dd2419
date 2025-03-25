@@ -19,13 +19,13 @@ class LidarAggregator(Node):
         self.get_logger().info('LidarAggregator node initialized')
 
         # Parameters
-        self.declare_parameter('max_scans', 5)           # Number of scans to store
-        self.declare_parameter('max_points', 10000)     # Limit aggregated points
-        self.max_scans = self.get_parameter('max_scans').value
-        self.max_points = self.get_parameter('max_points').value
+        self.declare_parameter('num_scans', 5)           # Number of scans to store
+        self.declare_parameter('num_points', 10000)     # Limit aggregated points
+        self.num_scans = self.get_parameter('num_scans').value
+        self.num_points = self.get_parameter('num_points').value # Number of points in LaserScan
 
         # State
-        self.scan_buffer = np.zeros((self.max_scans, self.max_points, 3))  # Store last 5 scans with x, y, z
+        self.scan_buffer = np.zeros((self.num_scans, self.num_points, 3))  # Store last 5 scans with x, y, z
         self.current_scan_index = 0  # Index to track where the next scan will be inserted
         self.current_pose = np.array([0.0, 0.0, 0.0])  # [x, y, yaw]
         self.linear_vel = 0.0
@@ -94,8 +94,11 @@ class LidarAggregator(Node):
     def _update_scan_buffer(self, points):
         """Store the incoming points in the circular buffer."""
         # Update the buffer by storing the new scan at the current index
+        num_points = len(points)
+        padding = np.full((self.max_points - num_points, 3), np.nan)
+        points = np.vstack((points, padding))
         self.scan_buffer[self.current_scan_index] = points
-        self.current_scan_index = (self.current_scan_index + 1) % self.max_scans  # Increment index with wrapping
+        self.current_scan_index = (self.current_scan_index + 1) % self.num_scans  # Increment index with wrapping
 
     def _transform_points(self, points, target_frame, source_frame, timestamp):
         """Transform points to target frame using TF2."""
@@ -133,6 +136,7 @@ class LidarAggregator(Node):
             return new_points
 
         aggregated_points = np.vstack(self.scan_buffer)
+        aggregated_points = aggregated_points[~np.isnan(aggregated_points).any(axis=1)] # Remove NaNs
         try:
             rotation_matrix, translation_vector, localised_points = icp(aggregated_points, new_points)
         except Exception as e:
@@ -154,6 +158,7 @@ class LidarAggregator(Node):
         """Publish the aggregated point cloud with the last scan's timestamp."""
         # Aggregate all points from the circular buffer
         aggregated_points = np.vstack(self.scan_buffer)
+        aggregated_points = aggregated_points[~np.isnan(aggregated_points).any(axis=1)]  # Remove NaNs
 
         if aggregated_points.size == 0 or self.last_scan_header is None:
             return
