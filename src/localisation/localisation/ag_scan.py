@@ -20,12 +20,12 @@ class LidarAggregator(Node):
 
         # Parameters
         self.declare_parameter('num_scans', 5)           # Number of scans to store
-        self.declare_parameter('num_points', 10000)     # Limit aggregated points
+        self.declare_parameter('num_scan_points', 360)     # Limit aggregated points
         self.num_scans = self.get_parameter('num_scans').value
-        self.num_points = self.get_parameter('num_points').value # Number of points in LaserScan
+        self.num_scan_points = self.get_parameter('num_scan_points').value # Number of points in LaserScan
 
         # State
-        self.scan_buffer = np.zeros((self.num_scans, self.num_points, 3))  # Store last 5 scans with x, y, z
+        self.scan_buffer = np.zeros((self.num_scans, self.num_scan_points, 3))  # Store last 5 scans with x, y, z
         self.current_scan_index = 0  # Index to track where the next scan will be inserted
         self.current_pose = np.array([0.0, 0.0, 0.0])  # [x, y, yaw]
         self.linear_vel = 0.0
@@ -95,7 +95,7 @@ class LidarAggregator(Node):
         """Store the incoming points in the circular buffer."""
         # Update the buffer by storing the new scan at the current index
         num_points = len(points)
-        padding = np.full((self.max_points - num_points, 3), np.nan)
+        padding = np.full((self.num_scan_points - num_points, 3), np.nan)
         points = np.vstack((points, padding))
         self.scan_buffer[self.current_scan_index] = points
         self.current_scan_index = (self.current_scan_index + 1) % self.num_scans  # Increment index with wrapping
