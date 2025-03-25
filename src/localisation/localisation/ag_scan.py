@@ -33,6 +33,7 @@ class LidarAggregator(Node):
         self.last_scan_header = None  # Store last LaserScan header
 
         # Transform variables
+        self.map_odom_broadcaster = tf2_ros.TransformBroadcaster(self)
         self.transform_x = 0.0
         self.transform_y = 0.0
         self.transform_theta = 0.0
