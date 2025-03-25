@@ -333,7 +333,7 @@ class ExploreMaster(Node):
         object_number = 0
         box_number = 0
         for object in self.objects:
-            self.publish_transform(object.type+"-"+str(object_number),object.x,object.y,0)
+            self.publish_transform("O-"+str(object_number),object.x,object.y,0)
             object_number+=1
         for box in self.boxes:
             self.publish_transform(box.type+"-"+str(box_number),box.x,box.y,0)
@@ -388,18 +388,19 @@ class ExploreMaster(Node):
             distance = 100000
             closest = None
             O_i = 0
-            for i, O in enumerate(objects_copy):
-                distance_O = np.linalg.norm(np.array([O.x,O.y]) - np.array([prev_rob_x,prev_rob_y]))
-                if distance_O < distance:
-                    closest = O
-                    distance = distance_O
-                    O_i = i
+            closest = self.objects[O_i]
+            # for i, O in enumerate(objects_copy):
+            #     distance_O = np.linalg.norm(np.array([O.x,O.y]) - np.array([prev_rob_x,prev_rob_y]))
+            #     if distance_O < distance:
+            #         closest = O
+            #         distance = distance_O
+            #         O_i = i
 
             point_selector = py_trees.composites.Selector(f"EndPoint{self.i}", memory=True)
 
 
 
-            rob_x,rob_y = self.create_rob_coordinates((closest.x,closest.y),(prev_rob_x,prev_rob_y),0.05)
+            rob_x,rob_y = self.create_rob_coordinates((closest.x,closest.y),(prev_rob_x,prev_rob_y),0.0)
             x = closest.x
             y = closest.y
             yaw = 0.0
@@ -443,7 +444,7 @@ class ExploreMaster(Node):
             fallback = py_trees.behaviours.Success(name=f"SkipToNext{self.i}")
 
             point_selector.add_children([service_check_sequence, fallback])
-            Collection_sequence.add_child(point_selector)
+            # Collection_sequence.add_child(point_selector)
 
             objects_copy.pop(O_i)
 
@@ -469,8 +470,8 @@ class ExploreMaster(Node):
 
 
             rob_x,rob_y = self.create_rob_coordinates((closest.x,closest.y),(prev_rob_x,prev_rob_y),0.05)
-            x = closest.x
-            y = closest.y
+            x = rob_x
+            y = rob_y
             yaw = 0.0
 
             service_check_sequence = py_trees.composites.Sequence(f"ServiceCheck{self.i}", memory=True)
