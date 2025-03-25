@@ -36,7 +36,7 @@ class Localisation(Node):
         self.transform_x = 0.0
         self.transform_y = 0.0
         self.transform_theta = 0.0
-        self.create_timer(0.1, self.broadcast_transform)  # Repeat every 0.1s
+        #self.create_timer(0.1, self.broadcast_transform)  # Repeat every 0.1s
         
         # Subscriptions
         self.create_subscription(Odometry, "/odom", self.odom_callback, 10)

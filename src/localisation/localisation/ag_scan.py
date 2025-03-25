@@ -32,6 +32,11 @@ class LidarAggregator(Node):
         self.angular_vel = 0.0
         self.last_scan_header = None  # Store last LaserScan header
 
+        # Transform variables
+        self.transform_x = 0.0
+        self.transform_y = 0.0
+        self.transform_theta = 0.0
+
         # TF2 Setup
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
