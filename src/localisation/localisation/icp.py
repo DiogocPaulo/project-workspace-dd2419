@@ -61,7 +61,10 @@ def icp(reference_points, points, max_iterations=100,
             break
 
         # Extract valid matched pairs
-        closest_point_pairs = np.hstack((points[mask], reference_points[indices[mask].flatten()]))
+        #closest_point_pairs = np.hstack((points[mask], reference_points[indices[mask].flatten()]))
+        valid_indices = indices[mask.flatten(), 0]  # Convert to 1D array of integer indices
+        closest_point_pairs = np.hstack((points[mask], reference_points[valid_indices]))
+
 
         # Compute transformation using point-based matching
         closest_rot_angle, closest_translation_x, closest_translation_y = point_based_matching(closest_point_pairs)
