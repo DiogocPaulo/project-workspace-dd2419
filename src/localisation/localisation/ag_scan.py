@@ -123,7 +123,7 @@ class LidarAggregator(Node):
         """Localise the transformed points using ICP."""
         # Compute the localised points by applying ICP to the transformed points and using the aggregated cloud as reference
         # Begin by ensuring that the current scan is usable for ICP
-        if abs(self.angular_vel) > 0.1: # Ignore scans when turning
+        if abs(self.angular_vel) > 0.1 or self.current_scan_index < 4: # Ignore scans when turning
             return
 
         aggregated_points = np.vstack(self.scan_buffer)
