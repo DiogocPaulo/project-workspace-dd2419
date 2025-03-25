@@ -14,7 +14,6 @@ from tf2_ros.transform_listener import TransformListener
 import tf2_geometry_msgs
 
 from nav_msgs.msg import OccupancyGrid
-from project_interfaces.msg import Object, ObjectList
 from visualization_msgs.msg import Marker, MarkerArray
 from geometry_msgs.msg import PointStamped, Pose, Quaternion, Vector3
 from sensor_msgs.msg import LaserScan
