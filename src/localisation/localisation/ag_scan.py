@@ -73,12 +73,16 @@ class LidarAggregator(Node):
     def scan_callback(self, msg):
         """Process incoming laser scans and transform points."""
         points = self._laser_scan_to_points(msg)
+        # Log shape of points
+        self.get_logger().info(f"Received {len(points)} points from scan")
         transformed_points = self._transform_points(points, 'map', msg.header.frame_id, msg.header.stamp)
+        self.get_logger().info(f"Transformed {len(transformed_points)} points with dimensions: {np.array(transformed_points).shape}")
         if not transformed_points:
             self.get_logger().warn("Transformed points are empty")
         if transformed_points:
             localised_points = self._localise_points(transformed_points)
             if localised_points:
+                self.get_logger().info(f"Localised {len(localised_points)} points with dimensions: {np.array(localised_points).shape}")
                 self._update_scan_buffer(localised_points)
                 self.publish_aggregated_cloud()  # Publish aggregated cloud after each scan update
                 self.last_scan_header = msg.header  # Store the latest header
