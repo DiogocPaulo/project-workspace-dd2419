@@ -20,10 +20,12 @@ class LidarAggregator(Node):
         # Parameters
         self.declare_parameter('num_scans', 5)           # Number of scans to store
         self.declare_parameter('num_scan_points', 360)     # Limit aggregated points
-        self.declare_parameter('grid_size', 0.5)          # Size of the grid cells for density-based storage
+        self.declare_parameter('grid_size', 0.2)          # Size of the grid cells for density-based storage
+        self.declare_parameter('max_points_per_ceel', 0.0)        # Initial transform x
         self.num_scans = self.get_parameter('num_scans').value
         self.num_scan_points = self.get_parameter('num_scan_points').value
         self.grid_size = self.get_parameter('grid_size').value
+        self.max_points_per_cell = self.get_parameter('max_points_per_cell').value
 
         # State
         self.scan_buffer = []  # Store the aggregated scan points
@@ -109,8 +111,7 @@ class LidarAggregator(Node):
 
     def _is_low_density(self, grid_cell, point):
         """Check if the density in the grid cell is below a threshold."""
-        threshold = 10  # Maximum number of points per grid cell
-        if len(self.grid_map[grid_cell]) < threshold:
+        if len(self.grid_map[grid_cell]) < self.max_points_per_cell:
             return True
         return False
 
@@ -144,7 +145,8 @@ class LidarAggregator(Node):
         if abs(self.angular_vel) > 0.1:  # Ignore scans when turning
             return
         
-        return new_points
+        if len(self.scan_buffer) < 200:
+            return new_points
 
         aggregated_points = np.vstack(self.scan_buffer)
         aggregated_points = aggregated_points[~np.isnan(aggregated_points).any(axis=1)]  # Remove NaNs
