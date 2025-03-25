@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import Odometry
@@ -12,6 +10,7 @@ from tf_transformations import quaternion_from_euler, euler_from_quaternion
 import numpy as np
 from std_msgs.msg import Header
 from localisation.icp import icp
+from collections import defaultdict
 
 class LidarAggregator(Node):
     def __init__(self):
@@ -21,12 +20,14 @@ class LidarAggregator(Node):
         # Parameters
         self.declare_parameter('num_scans', 5)           # Number of scans to store
         self.declare_parameter('num_scan_points', 360)     # Limit aggregated points
+        self.declare_parameter('grid_size', 0.5)          # Size of the grid cells for density-based storage
         self.num_scans = self.get_parameter('num_scans').value
-        self.num_scan_points = self.get_parameter('num_scan_points').value # Number of points in LaserScan
+        self.num_scan_points = self.get_parameter('num_scan_points').value
+        self.grid_size = self.get_parameter('grid_size').value
 
         # State
-        self.scan_buffer = np.zeros((self.num_scans, self.num_scan_points, 2))  # Store last 5 scans with x, y (no z)
-        self.current_scan_index = 0  # Index to track where the next scan will be inserted
+        self.scan_buffer = []  # Store the aggregated scan points
+        self.grid_map = defaultdict(list)  # Grid map to store points in each cell
         self.current_pose = np.array([0.0, 0.0, 0.0])  # [x, y, yaw]
         self.linear_vel = 0.0
         self.angular_vel = 0.0
@@ -76,7 +77,7 @@ class LidarAggregator(Node):
         if transformed_points:
             localised_points = self._localise_points(transformed_points)
             if localised_points:
-                self._update_scan_buffer(transformed_points)
+                self._update_scan_buffer(localised_points)
                 self.publish_aggregated_cloud()  # Publish aggregated cloud after each scan update
                 self.last_scan_header = msg.header  # Store the latest header
 
@@ -91,13 +92,27 @@ class LidarAggregator(Node):
         return np.stack((x, y), axis=-1).tolist()  # Only x and y
 
     def _update_scan_buffer(self, points):
-        """Store the incoming points in the circular buffer."""
-        # Update the buffer by storing the new scan at the current index
-        num_points = len(points)
-        padding = np.full((self.num_scan_points - num_points, 2), np.nan)  # 2D points (x, y)
-        points = np.vstack((points, padding))
-        self.scan_buffer[self.current_scan_index] = points
-        self.current_scan_index = (self.current_scan_index + 1) % self.num_scans  # Increment index with wrapping
+        """Store points in a density-based grid."""
+        for point in points:
+            grid_cell = self._get_grid_cell(point)
+            if self._is_low_density(grid_cell, point):
+                self.grid_map[grid_cell].append(point)
+        # Convert grid map to scan buffer by flattening grid into points
+        self.scan_buffer = [p for cell in self.grid_map.values() for p in cell]
+
+    def _get_grid_cell(self, point):
+        """Return the grid cell coordinates based on the point's position."""
+        x, y = point
+        grid_x = int(np.floor(x / self.grid_size))
+        grid_y = int(np.floor(y / self.grid_size))
+        return (grid_x, grid_y)
+
+    def _is_low_density(self, grid_cell, point):
+        """Check if the density in the grid cell is below a threshold."""
+        threshold = 10  # Maximum number of points per grid cell
+        if len(self.grid_map[grid_cell]) < threshold:
+            return True
+        return False
 
     def _transform_points(self, points, target_frame, source_frame, timestamp):
         """Transform points to target frame using TF2."""
@@ -129,7 +144,7 @@ class LidarAggregator(Node):
         if abs(self.angular_vel) > 0.1:  # Ignore scans when turning
             return
         
-        if self.current_scan_index < 4:
+        if len(self.scan_buffer) < 4:
             return new_points
 
         aggregated_points = np.vstack(self.scan_buffer)
