@@ -120,11 +120,11 @@ class ReachedEndPoint(py_trees.behaviour.Behaviour):
             self.node.get_logger().info(f"{self.name}: Distance to end point is {distance:.2f}")
             return py_trees.common.Status.RUNNING
 
-def create_offset_end_points(workspace_vertices, offset_distance=0.5):
+def offset_workspace_vertices(workspace_vertices, offset_distance):
     vertices = [np.array(vertex) for vertex in workspace_vertices]
     num_vertices = len(vertices)
 
-    end_points = []
+    offset_vertices = []
 
     def compute_offset_normal(p, q):
         edge_vector = q - p
@@ -159,28 +159,61 @@ def create_offset_end_points(workspace_vertices, offset_distance=0.5):
             t = np.cross((p2 - p1), d2) / denom
             offset_vertex = p1 + t * d1
 
-        end_points.append((offset_vertex[0], offset_vertex[1], 0.0))
+        offset_vertices.append((offset_vertex[0], offset_vertex[1]))
 
-        edge_vector = nxt - current
-        midpoint = (current + nxt) / 2.0
+    return offset_vertices
 
-        normal_vector = compute_offset_normal(current, nxt)
-        offset_mid = midpoint + normal_vector * offset_distance
-        end_points.append((offset_mid[0], offset_mid[1], 0.0))
+def generate_waypoints(workspace_vertices, resolution):
 
-    return end_points
+    x_min = min(vertex[0] for vertex in workspace_vertices)
+    x_max = max(vertex[0] for vertex in workspace_vertices)
+    y_min = min(vertex[1] for vertex in workspace_vertices)
+    y_max = max(vertex[1] for vertex in workspace_vertices)
+
+    waypoints = []
+
+    x = x_min + (resolution / 2)
+    while x < x_max:
+        y = y_min + (resolution / 2)
+        while y < y_max:
+            if is_within_workspace(x, y, workspace_vertices):
+                waypoints.append((x, y, 0.0))
+            y += resolution
+        x += resolution
+    
+    return waypoints
+
+def is_within_workspace(x, y, workspace_vertices):
+    counter = 0
+    for i in range(len(workspace_vertices)):
+        x_current, y_current = workspace_vertices[i]
+        x_next, y_next = workspace_vertices[(i + 1) % len(workspace_vertices)]
+
+        if y_current <= y:
+            if y_next > y:
+                if is_left(x, y, x_current, y_current, x_next, y_next) > 0: 
+                    counter += 1
+        else:
+            if y_next <= y:
+                if is_left(x, y, x_current, y_current, x_next, y_next) < 0:
+                    counter -= 1
+    return counter != 0
+
+def is_left(x, y, x_current, y_current, x_next, y_next):
+    return ((x_next - x_current) * (y - y_current) - (y_next - y_current) * (x - x_current))
 
 class ExploreMaster(Node):
 
     def __init__(self):
         super().__init__("explore_master")
 
-        workspace_file = "workspaces/small_workspace.tsv"
+        workspace_file = "workspaces/large_workspace.tsv"
         self.workspace_vertices = self.read_workspace(workspace_file, skip_header=True)
         self.workspace_publisher = self.create_publisher(Workspace, "/workspace", 10)
         self.end_points_broadcaster = TransformBroadcaster(self)
 
-        self.end_points = create_offset_end_points(self.workspace_vertices, 0.5)
+        self.to_broadcast_waypoints = False
+        self.end_points = generate_waypoints(offset_workspace_vertices(self.workspace_vertices, 0.4), 0.4)
 
         root = self.create_exploration_tree()
         self.tree = py_trees_ros.trees.BehaviourTree(root=root)
@@ -190,7 +223,8 @@ class ExploreMaster(Node):
 
         self.create_timer(0.1, self.tick_tree) # Tick tree every 100 ms
         self.create_timer(2, self.publish_workspace)
-        self.create_timer(2, self.broadcast_end_points)
+        if self.to_broadcast_waypoints:
+            self.create_timer(2, self.broadcast_waypoints)
 
     def publish_workspace(self):
         workspace_msg = Workspace()
@@ -206,7 +240,7 @@ class ExploreMaster(Node):
         self.workspace_publisher.publish(workspace_msg)
         self.get_logger().info("Published workspace vertices", once=True)
 
-    def broadcast_end_points(self):
+    def broadcast_waypoints(self):
         for i, point in enumerate(self.end_points):
             transform = TransformStamped()
             transform.header.frame_id = 'map'  # Change to your desired parent frame
