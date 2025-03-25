@@ -144,8 +144,7 @@ class LidarAggregator(Node):
         if abs(self.angular_vel) > 0.1:  # Ignore scans when turning
             return
         
-        if len(self.scan_buffer) < 4:
-            return new_points
+        return new_points
 
         aggregated_points = np.vstack(self.scan_buffer)
         aggregated_points = aggregated_points[~np.isnan(aggregated_points).any(axis=1)]  # Remove NaNs
