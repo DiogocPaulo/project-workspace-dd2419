@@ -36,6 +36,7 @@ class LidarAggregator(Node):
         self.map_odom_broadcaster = tf2_ros.TransformBroadcaster(self)
         self.transform_x = 0.0
         self.transform_y = 0.0
+        self.transform_z = 0.0
         self.transform_theta = 0.0
 
         # TF2 Setup
@@ -154,7 +155,8 @@ class LidarAggregator(Node):
         header = Header()
         header.stamp = self.last_scan_header.stamp  # Reuse timestamp from last scan
         header.frame_id = 'map'                     # Set frame_id to 'map'
-        cloud_msg = pc2.create_cloud_xyz32(header, aggregated_points.tolist())
+        aggregated_points_3d = np.hstack((aggregated_points, np.full((aggregated_points.shape[0], 1), self.transform_z)))
+        cloud_msg = pc2.create_cloud_xyz32(header, aggregated_points_3d.tolist())
         self.cloud_pub.publish(cloud_msg)
         self.get_logger().info(f"Published aggregated cloud with {len(aggregated_points)} points")
 
