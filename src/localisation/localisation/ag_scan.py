@@ -25,7 +25,7 @@ class LidarAggregator(Node):
         self.num_scan_points = self.get_parameter('num_scan_points').value # Number of points in LaserScan
 
         # State
-        self.scan_buffer = np.zeros((self.num_scans, self.num_scan_points, 3))  # Store last 5 scans with x, y, z
+        self.scan_buffer = np.zeros((self.num_scans, self.num_scan_points, 2))  # Store last 5 scans with x, y (no z)
         self.current_scan_index = 0  # Index to track where the next scan will be inserted
         self.current_pose = np.array([0.0, 0.0, 0.0])  # [x, y, yaw]
         self.linear_vel = 0.0
@@ -81,21 +81,20 @@ class LidarAggregator(Node):
                 self.last_scan_header = msg.header  # Store the latest header
 
     def _laser_scan_to_points(self, msg):
-        """Convert LaserScan to list of [x, y, z] points."""
+        """Convert LaserScan to list of [x, y] points (2D)."""
         ranges = np.array(msg.ranges)
         num_points = len(ranges)
         angles = np.linspace(msg.angle_min, msg.angle_max, num_points)  # Match length of ranges
         valid = (msg.range_min < ranges) & (ranges < msg.range_max)
         x = ranges[valid] * np.cos(angles[valid])
         y = ranges[valid] * np.sin(angles[valid])
-        z = np.zeros_like(x)
-        return np.stack((x, y, z), axis=-1).tolist()
+        return np.stack((x, y), axis=-1).tolist()  # Only x and y
 
     def _update_scan_buffer(self, points):
         """Store the incoming points in the circular buffer."""
         # Update the buffer by storing the new scan at the current index
         num_points = len(points)
-        padding = np.full((self.num_scan_points - num_points, 3), np.nan)
+        padding = np.full((self.num_scan_points - num_points, 2), np.nan)  # 2D points (x, y)
         points = np.vstack((points, padding))
         self.scan_buffer[self.current_scan_index] = points
         self.current_scan_index = (self.current_scan_index + 1) % self.num_scans  # Increment index with wrapping
@@ -109,7 +108,7 @@ class LidarAggregator(Node):
             self.get_logger().warn(f"Transform failed: {ex}")
             return None
 
-        # Vectorized transformation
+        # Vectorized transformation for 2D
         points_np = np.array(points)
         if points_np.size == 0:
             return []
@@ -122,41 +121,29 @@ class LidarAggregator(Node):
 
         x = points_np[:, 0] * cos_yaw - points_np[:, 1] * sin_yaw + trans.x
         y = points_np[:, 0] * sin_yaw + points_np[:, 1] * cos_yaw + trans.y
-        z = points_np[:, 2] + trans.z
-        return np.stack((x, y, z), axis=-1).tolist()
-    
+        return np.stack((x, y), axis=-1).tolist()  # Only x and y
+
     def _localise_points(self, new_points):
         """Localise the transformed points using ICP."""
         # Compute the localised points by applying ICP to the transformed points and using the aggregated cloud as reference
-        # Begin by ensuring that the current scan is usable for ICP
-        if abs(self.angular_vel) > 0.1: # Ignore scans when turning
+        if abs(self.angular_vel) > 0.1:  # Ignore scans when turning
             return
         
         if self.current_scan_index < 4:
             return new_points
 
         aggregated_points = np.vstack(self.scan_buffer)
-        aggregated_points = aggregated_points[~np.isnan(aggregated_points).any(axis=1)] # Remove NaNs
+        aggregated_points = aggregated_points[~np.isnan(aggregated_points).any(axis=1)]  # Remove NaNs
         try:
             rotation_matrix, translation_vector, localised_points = icp(aggregated_points, new_points)
         except Exception as e:
             self.get_logger().error(f"ICP failed: {str(e)}")
             return
         
-        # Update map to odom transform
-        """
-        rotation = np.arctan2(rotation_matrix[1, 0], rotation_matrix[0, 0])
-        self.transform_x = translation_vector[0]
-        self.transform_y = translation_vector[1]
-        self.transform_theta = rotation
-        self.get_logger().info(f"Updated map → odom (x={self.transform_x}, y={self.transform_y}, theta={self.transform_theta})")
-        """
-        
         return localised_points
 
     def publish_aggregated_cloud(self):
         """Publish the aggregated point cloud with the last scan's timestamp."""
-        # Aggregate all points from the circular buffer
         aggregated_points = np.vstack(self.scan_buffer)
         aggregated_points = aggregated_points[~np.isnan(aggregated_points).any(axis=1)]  # Remove NaNs
 
