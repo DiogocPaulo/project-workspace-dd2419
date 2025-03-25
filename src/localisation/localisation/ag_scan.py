@@ -75,7 +75,6 @@ class LidarAggregator(Node):
             self.get_logger().warn("Transformed points are empty")
         if transformed_points:
             localised_points = self._localise_points(transformed_points)
-            self.get_logger().info(f"Localised points: {localised_points}")
             if localised_points:
                 self._update_scan_buffer(transformed_points)
                 self.publish_aggregated_cloud()  # Publish aggregated cloud after each scan update
