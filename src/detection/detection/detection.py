@@ -597,7 +597,44 @@ class ExamineImage(Node):
 
                     self.get_logger().info(f"Published new object list now includes: {object_type} at ({x_transformed:.2f}, {y_transformed:.2f})")
 
+                 # Confidence-based correction
+                CONFIDENCE_RADIUS = 0.05  # 5cm
+                MIN_CONSISTENT = 2        # Need at least 2 consistent observations
+                
+                # Find all objects in this area
+                nearby = []
+                for obj in self.initial_object_list:
+                    dist = np.sqrt((x_transformed - obj.x)**2 + (y_transformed - obj.y)**2)
+                    if dist <= CONFIDENCE_RADIUS:
+                        nearby.append(obj)
+                
+                # Count object types in this area
+                type_counts = {}
+                for obj in nearby:
+                    type_counts[obj.object_type] = type_counts.get(obj.object_type, 0) + 1
+                
+                # Find most common type if we have enough consistent observations
+                if len(nearby) >= MIN_CONSISTENT:
+                    most_common, count = max(type_counts.items(), key=lambda x: x[1])
+                    if count >= MIN_CONSISTENT:
+                        for i, obj in enumerate(self.object_list):
+                            # Check if this object is in the nearby area
+                            for nearby_obj in nearby:
+                                dist = np.sqrt((obj.x - nearby_obj.x)**2 + (obj.y - nearby_obj.y)**2)
+                                if dist <= CONFIDENCE_RADIUS:
+                                    # Update the type in the main object list
+                                    self.object_list[i].object_type = most_common
+                                    break
 
+                        # Re-publish the corrected object list
+                        object_list_msg = ObjectList()
+                        object_list_msg.header.frame_id = "map"
+                        object_list_msg.header.stamp = stamp
+                        object_list_msg.length = len(self.object_list)
+                        object_list_msg.objects = self.object_list
+                        self.object_list_publisher.publish(object_list_msg)
+                        
+                        self.get_logger().info(f"Corrected object at ({x_transformed:.2f}, {y_transformed:.2f}) to {most_common}")
             
 
         except TransformException as e:
