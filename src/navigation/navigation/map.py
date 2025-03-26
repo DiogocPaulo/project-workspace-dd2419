@@ -41,7 +41,7 @@ class Map:
         self.grid_height = grid_height
         self.grid = grid
         self.workspace_vertices = None
-        self.occupancy_increase = 20
+        self.occupancy_increase = 25
         self.occupancy_decrease = 5
 
     def initialise_grid(self):
@@ -151,53 +151,49 @@ class Map:
         if not (0 <= grid_x < self.grid_width and 0 <= grid_y < self.grid_height):
             # Grid coordinates out of bounds
             return
-        self.grid[grid_y, grid_x] += 10
+        self.grid[grid_y, grid_x] += self.occupancy_increase
 
-    def point_to_line(start_x, start_y, end_x, end_y):
-        """
-        Uses bresenham to get all grid cells in a line between start and end grid points
-        """
-        cells = []
-        dx = abs(end_x - start_x)
-        dy = abs(end_y - start_y)
-        x_direction = 1 if start_x < end_x else -1
-        y_direction = 1 if start_y < end_y else -1
+    def point_to_line(self, x0, y0, x1, y1):
+        dx = abs(x1 - x0)
+        dy = abs(y1 - y0)
+        x, y = x0, y0
+        n = dx + dy
+        x_inc = 1 if x1 > x0 else -1
+        y_inc = 1 if y1 > y0 else -1
         error = dx - dy
-
-        x, y = start_x, start_y
-        while True:
+        cells = []
+        
+        for _ in range(n + 1):
             cells.append((x, y))
-            if x == end_x and y == end_y:
-                break
-            if (2 * error) > -dy:
+            if error > 0:
+                x += x_inc
                 error -= dy
-                x += x_direction
-            if (2 * error) < dx:
+            else:
+                y += y_inc
                 error += dx
-                y += y_direction
         return cells
 
-    def update_obstacles_in_line(start_x, start_y, end_x, end_y):
+    def update_obstacles_in_line(self, start_x, start_y, end_x, end_y, valid):
         start_x, start_y = self.world_to_grid(start_x, start_y)
         end_x, end_y = self.world_to_grid(end_x, end_y)
-        cells = point_to_line(start_x, start_y, end_x, end_y)
+        cells = self.point_to_line(start_x, start_y, end_x, end_y)
         if valid:
         # For valid readings increase occupancy of the last cell decrease the rest
             for cell in cells:
                 x, y = cell
-                if not (0 <= x < self.grid_width and 0 <= y < self.grid_height):
+                if not (0 < x < self.grid_width-1 and 0 < y < self.grid_height-1):
                     continue
                 if cell == cells[-1]:
-                    self.grid[x, y] = min(self.grid[x, y] + self.occupancy_increase, 100)
+                    self.grid[y, x] = min(self.grid[y, x] + self.occupancy_increase, 100)
                 else:
-                    self.grid[x, y] = max(self.grid[x, y] - self.occupancy_decrease, 0)
+                    self.grid[y, x] = max(self.grid[y, x] - self.occupancy_decrease, 0)
         else:
         # For invalid readings decrease occupancy of all cells
             for cell in cells:
                 x, y = cell
-                if not (0 <= x < self.grid_width and 0 <= y < self.grid_height):
+                if not (0 < x < self.grid_width-1 and 0 < y < self.grid_height-1):
                     continue
-                self.grid[x, y] = max(self.grid[x, y] - self.occupancy_decrease, 0)
+                self.grid[y, x] = max(self.grid[y, x] - self.occupancy_decrease, 0)
 
 
     def set_workspace_vertices(self, vertices):

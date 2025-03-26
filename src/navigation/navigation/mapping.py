@@ -33,7 +33,7 @@ class Mapping(Node):
         )
 
         self.create_subscription(Workspace, "/workspace", self.workspace_callback, 10)
-        # self.create_subscription(LaserScan, "/scan", self.scan_callback, 10)
+        self.create_subscription(LaserScan, "/scan", self.scan_callback, 10)
         self.map_publisher = self.create_publisher(OccupancyGrid, "/map", 10)
 
         self.tf_buffer = Buffer()
@@ -57,65 +57,67 @@ class Mapping(Node):
         # Initalise map based on workspace perimeter
         self.map.initalise_grid_with_workspace(self.workspace_vertices)
 
-    # def scan_callback(self, msg: LaserScan):
-    #     if self.map.grid is None:
-    #         return
-    #
-    #
-    #     # Lidar origin
-    #     lidar_origin = PointStamped()
-    #     lidar_origin.header.stamp = msg.header.stamp
-    #     lidar_origin.header.frame_id = msg.header.frame_id
-    #     lidar_origin.point.x = 0.0
-    #     lidar_origin.point.y = 0.0
-    #     lidar_origin.point.z = 0.0
-    #
-    #     try:
-    #         lidar_to_odom = self.tf_buffer.lookup_transform(
-    #             "odom",
-    #             msg.header.frame_id,
-    #             msg.header.stamp,
-    #             rclpy.duration.Duration(seconds=1.0)
-    #         )
-    #         lidar_origin_odom = tf2_geometry_msgs.do_transform_point(lidar_origin, lidar_to_odom)
-    #     except TransformException as ex:
-    #         self.get_logger().warn(f"Could not transform LaserScan reading point ({lidar_origin.point.x}, {lidar_origin.point.y}): {ex}")
-    #         return
-    #
-    #     # Starting angle for the scan
-    #     angle = msg.angle_min
-    #
-    #     # Process laser scan readings
-    #     for reading in msg.ranges:
-    #
-    #         valid = not (math.isinf(reading) or math.isnan(reading))
-    #         if not valid:
-    #             reading = msg.range_max
-    #
-    #         lidar_point = PointStamped()
-    #         lidar_point.header.stamp = msg.header.stamp
-    #         lidar_point.header.frame_id = msg.header.frame_id
-    #         lidar_point.point.x = reading * math.cos(angle)
-    #         lidar_point.point.y = reading * math.sin(angle)
-    #         lidar_point.point.z = 0.0
-    #
-    #         try:
-    #             lidar_to_odom = self.tf_buffer.lookup_transform(
-    #                 "odom",
-    #                 msg.header.frame_id,
-    #                 msg.header.stamp,
-    #                 rclpy.duration.Duration(seconds=1.0)
-    #             )
-    #             lidar_point_odom = tf2_geometry_msgs.do_transform_point(lidar_point, point_transform)
-    #
-    #         except TransformException as ex:
-    #             self.get_logger().warn(f"Could not transform LaserScan reading point ({lidar_point.point.x}, {lidar_point.point.y}): {ex}")
-    #             angle += msg.angle_increment
-    #             continue
-    #
-    #         self.map.update_obstacles_in_line(lidar_origin_odom.point.x, lidar_origin_odom.point.y,
-    #                                           lidar_point_odom.point.x, lidar_point_odom.point.y)
-    #         angle += msg.angle_increment
+    def scan_callback(self, msg: LaserScan):
+        if self.map.grid is None:
+            return
+
+        # Lidar origin
+        lidar_origin = PointStamped()
+        lidar_origin.header.stamp = msg.header.stamp
+        lidar_origin.header.frame_id = msg.header.frame_id
+        lidar_origin.point.x = 0.0
+        lidar_origin.point.y = 0.0
+        lidar_origin.point.z = 0.0
+
+        try:
+            origin_transform = self.tf_buffer.lookup_transform(
+                "odom",
+                msg.header.frame_id,
+                rclpy.time.Time(seconds=0),
+                rclpy.duration.Duration(seconds=1.0)
+            )
+            transformed_origin = tf2_geometry_msgs.do_transform_point(lidar_origin, origin_transform)
+        except TransformException as ex:
+            self.get_logger().warn(f"Could not transform lidar origin reading ({lidar_origin.point.x}, {lidar_origin.point.y}): {ex}")
+            return
+
+        angle = msg.angle_min
+
+        # Process laser scan readings
+        for reading in msg.ranges:
+            valid = not (math.isinf(reading) or math.isnan(reading))
+            if not valid:
+                reading = msg.range_max
+                
+
+            if not (angle > 0 and angle < (math.pi / 2)):
+                angle += msg.angle_increment
+                continue
+
+            # Lidar point
+            lidar_point = PointStamped()
+            lidar_point.header.stamp = msg.header.stamp
+            lidar_point.header.frame_id = msg.header.frame_id
+            lidar_point.point.x = reading * math.cos(angle)
+            lidar_point.point.y = reading * math.sin(angle)
+            lidar_point.point.z = 0.0
+
+            try:
+                point_transform = self.tf_buffer.lookup_transform(
+                    "odom",
+                    msg.header.frame_id,
+                    rclpy.time.Time(seconds=0),
+                    rclpy.duration.Duration(seconds=1.0)
+                )
+                transformed_point = tf2_geometry_msgs.do_transform_point(lidar_point, point_transform)
+
+            except TransformException as ex:
+                self.get_logger().warn(f"Could not transform lidar point reading ({lidar_point.point.x}, {lidar_point.point.y}): {ex}")
+                angle += msg.angle_increment
+                continue
+
+            self.map.update_obstacles_in_line(transformed_origin.point.x, transformed_origin.point.y, transformed_point.point.x, transformed_point.point.y, valid)
+            angle += msg.angle_increment
 
     def update_map(self):
         if not self.workspace_vertices:
