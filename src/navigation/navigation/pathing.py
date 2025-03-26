@@ -153,6 +153,7 @@ class Pathing(Node):
         path_msg.header.frame_id = "map"
 
         if path is not None:
+            path.append((self.end_point[0], self.end_point[1]))
             for point in path:
                 x, y = self.map.grid_to_world(point[1], point[0])
                 pose = PoseStamped()
