@@ -7,12 +7,14 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, HistoryPolicy, ReliabilityPolicy
 
-from tf2_ros import TransformBroadcaster
+from tf2_ros import TransformException, TransformBroadcaster
+from tf2_ros.buffer import Buffer
+from tf2_ros.transform_listener import TransformListener
+import tf2_geometry_msgs
 
-from geometry_msgs.msg import TransformStamped
 from robp_interfaces.msg import Encoders
 from nav_msgs.msg import Path, Odometry
-from geometry_msgs.msg import PoseStamped, Quaternion
+from geometry_msgs.msg import TransformStamped, PoseStamped, Quaternion
 from sensor_msgs.msg import Imu
 
 class DeadReckoning(Node):
@@ -53,6 +55,8 @@ class DeadReckoning(Node):
         self.path_publisher = self.create_publisher(Path, "/odom_path", 10)
         self.odom_path = Path()
         self.odom_broadcaster = TransformBroadcaster(self)
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self, spin_thread=True)
 
         self.create_timer(0.1, self.update_odometry)
 
@@ -71,11 +75,33 @@ class DeadReckoning(Node):
         self.last_encoder_right = msg.encoder_right
 
     def imu_callback(self, msg):
-        q = msg.orientation
-        siny_cosp = 2 * (q.w * q.z + q.x * q.y)
-        cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z)
-        self.imu_yaw = np.arctan2(siny_cosp, cosy_cosp)
-        self.imu_angular_velocity = msg.angular_velocity.z
+        try:
+            imu_pose = PoseStamped()
+            imu_pose.header.stamp = msg.header.stamp
+            imu_pose.header.frame_id = msg.header.frame_id
+            imu_pose.pose.position.x = 0
+            imu_pose.pose.position.y = 0
+            imu_pose.pose.position.z = 0
+            imu_pose.orientation.x = msg.orientation.x
+            imu_pose.orientation.y = msg.orientation.y
+            imu_pose.orientation.z = msg.orientation.z
+
+            imu_to_base = self.tf_buffer.lookup_transform(
+                "base_link",
+                msg.header.frame_id,
+                msg.header.stamp,
+                rclpy.duration.Duration(seconds=1.0),
+            )
+            imu_pose_base = tf2_geometry_msgs.do_transform_pose_stamped(imu_pose, imu_to_base)
+
+            q = imu_pose_base.orientation
+            siny_cosp = 2 * (q.w * q.z + q.x * q.y)
+            cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z)
+            self.imu_yaw = np.arctan2(siny_cosp, cosy_cosp)
+            self.imu_angular_velocity = msg.angular_velocity.z
+        except TransformException as ex:
+            self.get_logger().warn(f"Could not transform IMU reading to base_link: {ex}")
+            return
 
     def update_odometry(self):
         # Wait for encoder init
