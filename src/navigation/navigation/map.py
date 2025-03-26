@@ -51,7 +51,7 @@ class Map:
         if self.origin_x is None or self.origin_y is None:
             raise ValueError("Grid origin not initialised")
 
-        self.grid = np.full((self.grid_height, self.grid_width), -1, dtype=np.int8)
+        self.grid = np.full((self.grid_height, self.grid_width), 0, dtype=np.int8)
 
     def initalise_grid_with_workspace(self, workspace_vertices):
         # Initialise grid based on a workspace perimeter
@@ -290,7 +290,7 @@ class Map:
         mask = tx**2 + ty**2 <= inflation_cells**2
         circular_footprint[mask] = 1
 
-        inflated_grid = maximum_filter(self.grid, footprint=circular_footprint, mode="constant", cval=-1)
+        inflated_grid = maximum_filter(self.grid, footprint=circular_footprint, mode="constant", cval=0)
         self.grid = inflated_grid
 
     def inflate_grid_in_region(self, inflation_radius, region_radius, robot_x, robot_y):

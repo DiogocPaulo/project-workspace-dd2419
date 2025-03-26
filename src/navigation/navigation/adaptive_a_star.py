@@ -22,10 +22,10 @@ class AdaptiveAStar:
         for dy, dx in [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)]:  # Include diagonals
             next_y, next_x = y + dy, x + dx
             if 0 <= next_y < self.rows and 0 <= next_x < self.columns:
-                if self.grid[next_y, next_x] < 100:  # Ensure traversability
+                if self.grid[next_y, next_x] < 50:  # Ensure traversability
                     # Check for diagonal movement
                     if abs(dy) == 1 and abs(dx) == 1:
-                        if self.grid[y + dy, x] < 100 and self.grid[y, x + dx] < 100:  # Ensure both adjacent cells are free
+                        if self.grid[y + dy, x] < 50 and self.grid[y, x + dx] < 50:  # Ensure both adjacent cells are free
                             neighbours.append((next_y, next_x))
                     else:
                         neighbours.append((next_y, next_x))
