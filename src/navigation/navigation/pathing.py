@@ -153,7 +153,6 @@ class Pathing(Node):
         path_msg.header.frame_id = "map"
 
         if path is not None:
-            path.append((self.end_point[0], self.end_point[1]))
             for point in path:
                 x, y = self.map.grid_to_world(point[1], point[0])
                 pose = PoseStamped()
@@ -162,6 +161,12 @@ class Pathing(Node):
                 pose.pose.position.y = y
                 pose.pose.position.z = 0.0
                 path_msg.poses.append(pose)
+            pose = PoseStamped()
+            pose.header = path_msg.header
+            pose.pose.position.x = self.end_point[0]
+            pose.pose.position.y = self.end_point[1]
+            pose.pose.position.z = 0.0
+            path_msg.poses.append(pose)
         else:
             path_msg.poses = []
             self.get_logger().warn("Publishing empty path")
