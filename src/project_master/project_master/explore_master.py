@@ -160,7 +160,7 @@ def offset_workspace_vertices(workspace_vertices, offset_distance):
             t = np.cross((p2 - p1), d2) / denom
             offset_vertex = p1 + t * d1
 
-        offset_vertices.append((offset_vertex[0], offset_vertex[1]))
+        offset_vertices.append((offset_vertex[0], offset_vertex[1], 0.0))
 
     return offset_vertices
 
@@ -197,7 +197,8 @@ class ExploreMaster(Node):
         self.end_points_broadcaster = TransformBroadcaster(self)
 
         self.to_broadcast_waypoints = False
-        self.end_points = generate_waypoints(offset_workspace_vertices(self.workspace_vertices, 0.4), 0.4)
+        # self.end_points = generate_waypoints(offset_workspace_vertices(self.workspace_vertices, 0.4), 0.4)
+        self.end_points = offset_workspace_vertices(self.workspace_vertices, 0.6)
 
         root = self.create_exploration_tree()
         self.tree = py_trees_ros.trees.BehaviourTree(root=root)

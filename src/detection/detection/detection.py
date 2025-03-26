@@ -69,6 +69,7 @@ class ExamineImage(Node):
 
         # Initialize an empty list to store detected objects
         self.object_list = []
+        self.initial_object_list = []
 
         self.create_subscription(Workspace, "/workspace", self.workspace_callback, 10)
         self.workspace = None
@@ -513,8 +514,8 @@ class ExamineImage(Node):
         try:
             transform = self.tfBuffer.lookup_transform(
                 'map',  # Target frame
-                point_in.header.frame_id,  
-                point_in.header.stamp,  # Time of the transform
+                point_in.header.frame_id,  # Source frame
+                point_in.header.stamp,
                 rclpy.duration.Duration(seconds=1.0)  # Timeout
             )
 
@@ -535,39 +536,101 @@ class ExamineImage(Node):
 
             #self.get_logger().info(f"Published new object list now includes: {is_out} at ({x_transformed:.2f}, {y_transformed:.2f})")
 
-            for obj in self.object_list:
-                distance = np.sqrt((x_transformed - obj.x)**2 + (y_transformed - obj.y)**2)
-                if obj.object_type == "box":
-                    if distance < 0.15:  # If the object is within 1 cm of an existing object
+            if is_in:
+                initial_object_msg = Object()
+                initial_object_msg.x = x_transformed
+                initial_object_msg.y = y_transformed
+                initial_object_msg.angle = angle
+                initial_object_msg.object_type = object_type
+                self.initial_object_list.append(initial_object_msg)
+
+                initial_list_msg = ObjectList()
+                initial_list_msg.header.frame_id = "map"
+                initial_list_msg.header.stamp = stamp
+                initial_list_msg.length = len(self.initial_object_list)
+                initial_list_msg.objects = self.initial_object_list
+                self.object_list_publisher.publish(initial_list_msg)
+
+                for i, obj in enumerate(self.initial_object_list[:-1]):
+                    distance = np.sqrt((x_transformed - obj.x)**2 + (y_transformed - obj.y)**2)
+                    if obj.object_type == "box":
+                        if distance < 0.18: # If the object is within 1 cm of an existing object
+                            is_duplicate = True
+                            break
+                    elif distance < 0.05: # If the object is within 1 cm of an existing object
                         is_duplicate = True
                         break
-                elif distance < 0.04:  # If the object is within 1 cm of an existing object
-                    is_duplicate = True
-                    break
 
-            # If not a duplicate, add the new object to the list
-            if not is_duplicate and is_in:
-                # Create new object message
-                object_msg = Object()
-                object_msg.x = x_transformed
-                object_msg.y = y_transformed
-                object_msg.angle = angle
-                object_msg.object_type = object_type
+                self.get_logger().info(f"initial:{self.initial_object_list}")
 
-                self.object_list.append(object_msg)
+                # If not a duplicate, add the new object to the list
+                if not is_duplicate:
+                    # Create new object message
+                    object_msg = Object()
+                    object_msg.x = x_transformed
+                    object_msg.y = y_transformed
+                    object_msg.angle = angle
+                    object_msg.object_type = object_type
 
-                object_list_msg = ObjectList()
-                object_list_msg.header.frame_id = "map"
-                object_list_msg.header.stamp = stamp
-                object_list_msg.length = len(self.object_list)
-                object_list_msg.objects = self.object_list
-                self.object_list_publisher.publish(object_list_msg)
+                    self.object_list.append(object_msg)
 
-                self.get_logger().info(f"Published new object list now includes: {object_type} at ({x_transformed:.2f}, {y_transformed:.2f})")
+                    object_list_msg = ObjectList()
+                    object_list_msg.header.frame_id = "map"
+                    object_list_msg.header.stamp = stamp
+                    object_list_msg.length = len(self.object_list)
+                    object_list_msg.objects = self.object_list
+                    self.object_list_publisher.publish(object_list_msg)
+
+                    self.get_logger().info(f"Published new object list now includes: {object_type} at ({x_transformed:.2f}, {y_transformed:.2f})")
+
+                 # Confidence-based correction
+                CONFIDENCE_RADIUS = 0.05  # 5cm
+                MIN_CONSISTENT = 2        # Need at least 2 consistent observations
+                self.get_logger().info(f"obstacles:{self.object_list}")
+                
+                # Find all objects in this area
+                nearby = []
+                for obj in self.initial_object_list:
+                    dist = np.sqrt((x_transformed - obj.x)**2 + (y_transformed - obj.y)**2)
+                    if dist <= CONFIDENCE_RADIUS:
+                        nearby.append(obj)
+                
+                # Count object types in this area
+                type_counts = {}
+                for obj in nearby:
+                    type_counts[obj.object_type] = type_counts.get(obj.object_type, 0) + 1
+                
+                # Find most common type if we have enough consistent observations
+                if len(nearby) >= MIN_CONSISTENT:
+                    most_common, count = max(type_counts.items(), key=lambda x: x[1])
+                    if count >= MIN_CONSISTENT:
+                        for i, obj in enumerate(self.object_list):
+                            # Check if this object is in the nearby area
+                            for nearby_obj in nearby:
+                                dist = np.sqrt((obj.x - nearby_obj.x)**2 + (obj.y - nearby_obj.y)**2)
+                                if dist <= CONFIDENCE_RADIUS:
+                                    # Update the type in the main object list
+                                    self.object_list[i].object_type = most_common
+                                    break
+
+                        # Re-publish the corrected object list
+                        object_list_msg = ObjectList()
+                        object_list_msg.header.frame_id = "map"
+                        object_list_msg.header.stamp = stamp
+                        object_list_msg.length = len(self.object_list)
+                        object_list_msg.objects = self.object_list
+                        self.object_list_publisher.publish(object_list_msg)
+                        
+                        self.get_logger().info(f"final:{self.object_list}")
+                        self.get_logger().info(f"Corrected object at ({x_transformed:.2f}, {y_transformed:.2f}) to {most_common}")
+            
 
         except TransformException as e:
             self.get_logger().error(f"Failed coordinate transform for newly {object_type} detected object: {e}")
 
+
+
+    
 
     def broadcast_object_list(self):
         for i, object_msg in enumerate(self.object_list):
