@@ -12,6 +12,7 @@ from rclpy.qos import QoSProfile, HistoryPolicy, ReliabilityPolicy
 from project_interfaces.srv import GoToPoint, Trigger
 from nav_msgs.msg import Odometry
 from project_interfaces.msg import Point, Workspace
+from navigation.map import WorkspaceArea
 
 from project_master import behaviours
 
@@ -165,6 +166,8 @@ def offset_workspace_vertices(workspace_vertices, offset_distance):
 
 def generate_waypoints(workspace_vertices, resolution):
 
+    workspace = WorkspaceArea(workspace_vertices)
+
     x_min = min(vertex[0] for vertex in workspace_vertices)
     x_max = max(vertex[0] for vertex in workspace_vertices)
     y_min = min(vertex[1] for vertex in workspace_vertices)
@@ -176,31 +179,12 @@ def generate_waypoints(workspace_vertices, resolution):
     while x < x_max:
         y = y_min + (resolution / 2)
         while y < y_max:
-            if is_within_workspace(x, y, workspace_vertices):
+            if workspace.is_within_workspace(x, y):
                 waypoints.append((x, y, 0.0))
             y += resolution
         x += resolution
     
     return waypoints
-
-def is_within_workspace(x, y, workspace_vertices):
-    counter = 0
-    for i in range(len(workspace_vertices)):
-        x_current, y_current = workspace_vertices[i]
-        x_next, y_next = workspace_vertices[(i + 1) % len(workspace_vertices)]
-
-        if y_current <= y:
-            if y_next > y:
-                if is_left(x, y, x_current, y_current, x_next, y_next) > 0: 
-                    counter += 1
-        else:
-            if y_next <= y:
-                if is_left(x, y, x_current, y_current, x_next, y_next) < 0:
-                    counter -= 1
-    return counter != 0
-
-def is_left(x, y, x_current, y_current, x_next, y_next):
-    return ((x_next - x_current) * (y - y_current) - (y_next - y_current) * (x - x_current))
 
 class ExploreMaster(Node):
 

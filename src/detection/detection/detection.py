@@ -28,6 +28,7 @@ import time
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from project_interfaces.msg import Object, ObjectList, Point, Workspace
+from navigation.map import WorkspaceArea
 
 class ExamineImage(Node):
 
@@ -70,11 +71,7 @@ class ExamineImage(Node):
         self.object_list = []
 
         self.create_subscription(Workspace, "/workspace", self.workspace_callback, 10)
-        self.workspace_vertices = []
-        self.workspace_x_min = None
-        self.workspace_x_max = None
-        self.workspace_y_min = None
-        self.workspace_y_max = None
+        self.workspace = None
 
         # Publishers for detected objects as a list
         self.object_list_publisher = self.create_publisher(ObjectList, "/detected_objects", 10)
@@ -138,19 +135,15 @@ class ExamineImage(Node):
         self.object_list_publisher.publish(object_list_msg)
 
     def workspace_callback(self, msg: Workspace):
-        if self.workspace_vertices:
+        if self.workspace:
             return
+        workspace_vertices = []
         for point_msg in msg.points:
             x = point_msg.x
             y = point_msg.y
-            self.workspace_vertices.append((x, y))
+            workspace_vertices.append((x, y))
 
-        x_list = [vertex[0] for vertex in self.workspace_vertices]
-        y_list = [vertex[1] for vertex in self.workspace_vertices]
-        self.workspace_x_min = min(x_list)
-        self.workspace_x_max = max(x_list)
-        self.workspace_y_min = min(x_list)
-        self.workspace_y_max = max(y_list)
+        self.workspace = WorkspaceArea(workspace_vertices)
 
     def cloud_callback(self, msg: PointCloud2):
         # Increment the message counter
@@ -535,7 +528,11 @@ class ExamineImage(Node):
 
             # Check if the new object is a duplicate based on proximity
             is_duplicate = False
-            is_in = self.is_within_workspace(x_transformed, y_transformed)
+            if self.workspace is not None:
+                is_in = self.workspace.is_within_workspace(x_transformed, y_transformed)
+            else:
+                is_in = False
+
             #self.get_logger().info(f"Published new object list now includes: {is_out} at ({x_transformed:.2f}, {y_transformed:.2f})")
 
             for obj in self.object_list:

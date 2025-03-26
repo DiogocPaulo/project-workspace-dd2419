@@ -5,6 +5,29 @@ from scipy.ndimage import maximum_filter, rotate
 
 from project_interfaces.msg import Object, ObjectList
 
+class WorkspaceArea:
+    def __init__(self, workspace_vertices):
+        self.workspace_vertices = workspace_vertices
+    def is_within_workspace(self, x, y):
+        return self.winding_number(x, y)
+    def winding_number(self, x, y):
+        counter = 0
+        for i in range(len(self.workspace_vertices)):
+            x_current, y_current = self.workspace_vertices[i]
+            x_next, y_next = self.workspace_vertices[(i + 1) % len(self.workspace_vertices)]
+
+            if y_current <= y:
+                if y_next > y:
+                    if self.is_left(x, y, x_current, y_current, x_next, y_next) > 0: 
+                        counter += 1
+            else:
+                if y_next <= y:
+                    if self.is_left(x, y, x_current, y_current, x_next, y_next) < 0:
+                        counter -= 1
+        return counter != 0
+    def is_left(self, x, y, x_current, y_current, x_next, y_next):
+        return ((x_next - x_current) * (y - y_current) - (y_next - y_current) * (x - x_current))
+
 class Map:
     """
     Class provides by default the utility functions such as conversions, but also store the map.
