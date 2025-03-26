@@ -592,7 +592,10 @@ class ExamineImage(Node):
                 nearby = []
                 for obj in self.initial_object_list:
                     dist = np.sqrt((x_transformed - obj.x)**2 + (y_transformed - obj.y)**2)
-                    if dist <= CONFIDENCE_RADIUS:
+                    if obj.object_type == "box":
+                        if dist <= 0.18:
+                            nearby.append(obj)
+                    elif dist <= CONFIDENCE_RADIUS: # If the object is within 1 cm of an existing object
                         nearby.append(obj)
                 
                 # Count object types in this area
@@ -608,7 +611,11 @@ class ExamineImage(Node):
                             # Check if this object is in the nearby area
                             for nearby_obj in nearby:
                                 dist = np.sqrt((obj.x - nearby_obj.x)**2 + (obj.y - nearby_obj.y)**2)
-                                if dist <= CONFIDENCE_RADIUS:
+                                if obj.object_type == "box":
+                                    if dist <= 0.18:
+                                        self.object_list[i].object_type = most_common
+                                        break
+                                elif dist <= CONFIDENCE_RADIUS:
                                     # Update the type in the main object list
                                     self.object_list[i].object_type = most_common
                                     break

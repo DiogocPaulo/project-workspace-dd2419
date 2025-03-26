@@ -191,7 +191,7 @@ class ExploreMaster(Node):
     def __init__(self):
         super().__init__("explore_master")
 
-        workspace_file = "workspaces/large_workspace.tsv"
+        workspace_file = "workspaces/small_workspace.tsv"
         self.workspace_vertices = self.read_workspace(workspace_file, skip_header=True)
         self.workspace_publisher = self.create_publisher(Workspace, "/workspace", 10)
         self.end_points_broadcaster = TransformBroadcaster(self)
