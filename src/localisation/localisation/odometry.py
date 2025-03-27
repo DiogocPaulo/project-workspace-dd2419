@@ -2,6 +2,7 @@
 
 import numpy as np
 from math import cos, sin, pi
+import threading
 
 import rclpy
 from rclpy.node import Node
@@ -20,19 +21,22 @@ class Odometry(Node):
     def __init__(self):
         super().__init__("odometry")
 
-        self.create_timer(0.1, self.update_odometry)
+        # Thread synchronization
+        self.encoder_lock = threading.Lock()
 
-        # Parameters
+        # Constants
         self.ticks_per_revolution = 48 * 64
         self.wheel_radius = 0.04921
         self.base_width = 0.31
 
-        # Internal variables
-        self.then_time = self.get_clock().now()
+        # Variables protected by encoder lock
         self.accumulated_ticks_left = 0
         self.accumulated_ticks_right = 0
         self.last_encoder_left = 0
         self.last_encoder_right = 0
+
+        # Variables
+        self.then_time = self.get_clock().now()
         self.x = 0.0
         self.y = 0.0
         self.theta = 0.0
@@ -45,6 +49,8 @@ class Odometry(Node):
         self.odom_path = Path()
         self.odom_broadcaster = TransformBroadcaster(self)
 
+        self.create_timer(0.1, self.update_odometry)
+
     def update_odometry(self):
         now_time = self.get_clock().now()
         elapsed_time = now_time - self.then_time
@@ -52,10 +58,11 @@ class Odometry(Node):
         elapsed_time = elapsed_time.nanoseconds / 1e9
 
         # Consume and then reset the accumulated ticks
-        ticks_left = self.accumulated_ticks_left
-        ticks_right = self.accumulated_ticks_right
-        self.accumulated_ticks_left = 0
-        self.accumulated_ticks_right = 0
+        with self.encoder_lock:
+            ticks_left = self.accumulated_ticks_left
+            ticks_right = self.accumulated_ticks_right
+            self.accumulated_ticks_left = 0
+            self.accumulated_ticks_right = 0
 
         distance_left = (ticks_left / self.ticks_per_revolution) * (2 * pi * self.wheel_radius)
         distance_right = (ticks_right / self.ticks_per_revolution) * (2 * pi * self.wheel_radius)
@@ -132,12 +139,13 @@ class Odometry(Node):
 
     def encoder_callback(self, msg):
         # Accumulate ticks based on delta of measured ticks
-        delta_left = msg.encoder_left - self.last_encoder_left
-        delta_right = msg.encoder_right - self.last_encoder_right
-        self.accumulated_ticks_left += delta_left
-        self.accumulated_ticks_right += delta_right
-        self.last_encoder_left = msg.encoder_left
-        self.last_encoder_right = msg.encoder_right
+        with self.encoder_lock:
+            delta_left = msg.encoder_left - self.last_encoder_left
+            delta_right = msg.encoder_right - self.last_encoder_right
+            self.accumulated_ticks_left += delta_left
+            self.accumulated_ticks_right += delta_right
+            self.last_encoder_left = msg.encoder_left
+            self.last_encoder_right = msg.encoder_right
 
 def main():
     rclpy.init()
