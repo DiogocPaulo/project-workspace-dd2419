@@ -16,7 +16,7 @@ def generate_launch_description():
             package="project_master",
             executable="explore_master",
             name="robot_master",
-            ros_arguments=["--log-level", "warn"]
+            ros_arguments=["--log-level", "info"]
         ),
         Node(
             package="navigation",

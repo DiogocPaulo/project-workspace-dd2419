@@ -199,6 +199,11 @@ class ExploreMaster(Node):
         self.to_broadcast_waypoints = False
         # self.end_points = generate_waypoints(offset_workspace_vertices(self.workspace_vertices, 0.4), 0.4)
         self.end_points = offset_workspace_vertices(self.workspace_vertices, 0.6)
+        self.end_points = [
+            (0.0, 0.0, 0.0),
+            (1.0, 0.0, 0.0),
+            (0.0, 1.0, 0.0),
+        ]
 
         root = self.create_exploration_tree()
         self.tree = py_trees_ros.trees.BehaviourTree(root=root)
