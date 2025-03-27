@@ -42,6 +42,10 @@ if __name__ == '__main__':
     # Create test data
     reference_points, points_to_be_aligned = create_test_data()
 
+    # Print shapes of the point sets
+    print(f"Reference points shape: {reference_points.shape}")
+    print(f"Points to be aligned shape: {points_to_be_aligned.shape}")
+
     # Store the points in the LaserScan objects
     scan1.store_points(reference_points, np.array([0, 0, 0]), 0)
     scan2.store_points(points_to_be_aligned, np.array([0, 0, 0]), 0)
