@@ -251,6 +251,22 @@ class Map:
             return self.grid[grid_y, grid_x] < value_threshold
         return False
 
+    def are_adjacent_cells_free(self, x, y, adjacent_radius, free_threshold):
+        if self.grid is None:
+            return False
+        grid_x, grid_y = self.world_to_grid(x, y)
+        if not (0 <= grid_x < self.grid_width and 0 <= grid_y < self.grid_height):
+            return False
+
+        for dy in range(-adjacent_radius, adjacent_radius + 1):
+            for dx in range(-adjacent_radius, adjacent_radius + 1):
+                nx, ny = grid_x + dx, grid_y + dy
+                if not (0 <= nx < self.grid_width and 0 <= ny < self.grid_height):
+                    continue
+                if self.grid[ny, nx] >= free_threshold:
+                    return False
+        return True
+
     def world_to_grid(self, x, y):
         # Convert world coordinates to grid indices
         grid_x = int((x - self.origin_x) / self.resolution)

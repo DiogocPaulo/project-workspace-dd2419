@@ -7,6 +7,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, HistoryPolicy, ReliabilityPolicy
 from sensor_msgs.msg import Image
 from sensor_msgs.msg import PointCloud2, PointField
+from nav_msgs.msg import OccupancyGrid
 import sensor_msgs_py.point_cloud2 as pc2
 import ctypes
 import struct
@@ -28,7 +29,7 @@ import time
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from project_interfaces.msg import Object, ObjectList, Point, Workspace
-from navigation.map import WorkspaceArea
+from navigation.map import WorkspaceArea, Map
 
 class ExamineImage(Node):
 
@@ -56,6 +57,8 @@ class ExamineImage(Node):
             self.cloud_callback,
             qos_profile
         )
+        self.create_subscription(Workspace, "/workspace", self.workspace_callback, 10)
+        self.create_subscription(OccupancyGrid, "/map", self.map_callback, 10)
 
         self.pub = self.create_publisher(PointCloud2, '/depth_points_filtered', 100)
 
@@ -71,8 +74,8 @@ class ExamineImage(Node):
         self.object_list = []
         self.initial_object_list = []
 
-        self.create_subscription(Workspace, "/workspace", self.workspace_callback, 10)
         self.workspace = None
+        self.map = None
 
         # Publishers for detected objects as a list
         self.object_list_publisher = self.create_publisher(ObjectList, "/detected_objects", 10)
@@ -145,6 +148,20 @@ class ExamineImage(Node):
             workspace_vertices.append((x, y))
 
         self.workspace = WorkspaceArea(workspace_vertices)
+
+    def map_callback(self, msg: OccupancyGrid):
+        width = msg.info.width
+        height = msg.info.height
+        grid = np.array(msg.data, dtype=np.int8).reshape((height, width))
+
+        # Create map or update map grid
+        if self.map is None:
+            resolution = msg.info.resolution
+            origin_x = msg.info.origin.position.x
+            origin_y = msg.info.origin.position.y
+            self.map = Map(resolution, origin_x, origin_y, width, height, grid)
+        else:
+            self.map.update_grid(grid)
 
     def cloud_callback(self, msg: PointCloud2):
         # Increment the message counter
@@ -561,10 +578,15 @@ class ExamineImage(Node):
                         is_duplicate = True
                         break
 
+                if self.map is None:
+                    free_from_obstacles = True
+                else:
+                    free_from_obstacles = self.map.are_adjacent_cells_free(x_transformed, y_transformed, 1, 50)
+
                 self.get_logger().info(f"initial:{self.initial_object_list}")
 
                 # If not a duplicate, add the new object to the list
-                if not is_duplicate:
+                if not is_duplicate and free_from_obstacles:
                     # Create new object message
                     object_msg = Object()
                     object_msg.x = x_transformed
