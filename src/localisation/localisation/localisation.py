@@ -56,8 +56,8 @@ class MapOdomPublisher(Node):
             return
 
         # Apply drift directly to the current transform
-        self.translation += self.drift_translation
-        self.rotation = quaternion_multiply(self.drift_quat, self.rotation)
+        #self.translation += self.drift_translation
+        #self.rotation = quaternion_multiply(self.drift_quat, self.rotation)
 
         # Create and publish the transform
         t = TransformStamped()
