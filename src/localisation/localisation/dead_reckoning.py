@@ -75,12 +75,12 @@ class DeadReckoning(Node):
         self.last_encoder_right = msg.encoder_right
 
     def imu_callback(self, msg):
-        q = imu_pose_base.orientation
+        q = msg.orientation
         siny_cosp = 2 * (q.w * q.z + q.x * q.y)
         cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z)
         imu_yaw = np.arctan2(siny_cosp, cosy_cosp)
         imu_angular_velocity = msg.angular_velocity.z
-        imu_linear_velocity = msg.linear_velocity.x
+        imu_linear_velocity = msg.linear_acceleration.x
         self.get_logger().info(f"Odometry vs IMU - Linear: {self.linear_velocity} vs {imu_linear_velocity}")
         self.get_logger().info(f"Odometry vs IMU - Angular: {self.angular_velocity} vs {imu_angular_velocity}")
         self.get_logger().info(f"Odometry vs IMU - Yaw: {self.theta} vs {imu_yaw}")
