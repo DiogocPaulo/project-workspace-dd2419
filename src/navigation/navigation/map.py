@@ -124,13 +124,13 @@ class Map:
             [-grid_half_width, grid_half_height]
         ])
 
-        # if angle is not None:
-        #     cos_angle = np.cos(angle)
-        #     sin_angle = np.sin(angle)
-        #
-        #     rotation_matrix = np.array([[cos_angle, -sin_angle],
-        #                                 [sin_angle,  cos_angle]])
-        #     object_vertices = (rotation_matrix @ object_vertices.T).T
+        if angle > 0.0:
+            cos_angle = np.cos(angle)
+            sin_angle = np.sin(angle)
+
+            rotation_matrix = np.array([[cos_angle, -sin_angle],
+                                        [sin_angle,  cos_angle]])
+            object_vertices = (rotation_matrix @ object_vertices.T).T
 
         object_vertices += np.array([grid_x, grid_y])
 
