@@ -296,7 +296,7 @@ class ExploreMaster(Node):
             transform = TransformStamped()
             transform.header.frame_id = 'map'
             transform.header.stamp = self.get_clock().now().to_msg()
-            transform.child_frame_id = f'EndPoint{i}'
+            transform.child_frame_id = f'EndP5oint{i}'
             
             transform.transform.translation.x = point[0]
             transform.transform.translation.y = point[1]
@@ -368,8 +368,8 @@ class ExploreMaster(Node):
         
         new_endpoint = np.array(point1) + unit_direction * offset
 
-        rob_x = point2[0] - new_endpoint[0]
-        rob_y = point2[1] - new_endpoint[1]
+        rob_x = new_endpoint[0]
+        rob_y = new_endpoint[1]
         
         return rob_x, rob_y
     
@@ -389,25 +389,25 @@ class ExploreMaster(Node):
             closest = None
             O_i = 0
             closest = self.objects[O_i]
-            # for i, O in enumerate(objects_copy):
-            #     distance_O = np.linalg.norm(np.array([O.x,O.y]) - np.array([prev_rob_x,prev_rob_y]))
-            #     if distance_O < distance:
-            #         closest = O
-            #         distance = distance_O
-            #         O_i = i
+            for i, O in enumerate(objects_copy):
+                distance_O = np.linalg.norm(np.array([O.x,O.y]) - np.array([prev_rob_x,prev_rob_y]))
+                if distance_O < distance:
+                    closest = O
+                    distance = distance_O
+                    O_i = i
 
             point_selector = py_trees.composites.Selector(f"EndPoint{self.i}", memory=True)
 
 
 
-            rob_x,rob_y = self.create_rob_coordinates((closest.x,closest.y),(prev_rob_x,prev_rob_y),0.0)
+            rob_x,rob_y = self.create_rob_coordinates((closest.x,closest.y),(prev_rob_x,prev_rob_y),0.1)
             x = closest.x
             y = closest.y
             yaw = 0.0
 
             service_check_sequence = py_trees.composites.Sequence(f"ServiceCheck{self.i}", memory=True)
 
-            pathing_service = ServiceClient(
+            pathing_service1 = ServiceClient(
                 name=f"GoToPoint{self.i}",
                 service_type=GoToPoint,
                 service_name="/pathing_end_point",
@@ -420,7 +420,7 @@ class ExploreMaster(Node):
                 name=f"PickupObject",
                 x=x,
                 y=y,
-                z=0.0,
+                z=-0.03,
                 task='PICKUP'
             )
 
@@ -437,14 +437,14 @@ class ExploreMaster(Node):
                 child=end_point_check
             )
 
-            retry_on_endpoint_failure.add_children([pathing_service, retry_endpoint])
+            retry_on_endpoint_failure.add_children([pathing_service1, retry_endpoint])
             service_check_sequence.add_child(retry_on_endpoint_failure)
             service_check_sequence.add_child(pick_service)
 
             fallback = py_trees.behaviours.Success(name=f"SkipToNext{self.i}")
 
             point_selector.add_children([service_check_sequence, fallback])
-            # Collection_sequence.add_child(point_selector)
+            Collection_sequence.add_child(point_selector)
 
             objects_copy.pop(O_i)
 
@@ -469,19 +469,19 @@ class ExploreMaster(Node):
             point_selector = py_trees.composites.Selector(f"EndPoint{self.i}", memory=True)
 
 
-            rob_x,rob_y = self.create_rob_coordinates((closest.x,closest.y),(prev_rob_x,prev_rob_y),0.05)
+            rob_x,rob_y = self.create_rob_coordinates((closest.x,closest.y),(prev_rob_x,prev_rob_y),0.1)
             x = rob_x
             y = rob_y
             yaw = 0.0
 
             service_check_sequence = py_trees.composites.Sequence(f"ServiceCheck{self.i}", memory=True)
 
-            pathing_service = ServiceClient(
+            pathing_service2 = ServiceClient(
                 name=f"GoToPoint{self.i}",
                 service_type=GoToPoint,
                 service_name="/pathing_end_point",
-                x=rob_x,
-                y=rob_y,
+                x=x,
+                y=y,
                 yaw=yaw
             )
 
@@ -506,7 +506,7 @@ class ExploreMaster(Node):
                 child=end_point_check        
             )
 
-            retry_on_endpoint_failure.add_children([pathing_service, retry_endpoint])
+            retry_on_endpoint_failure.add_children([pathing_service2, retry_endpoint])
             service_check_sequence.add_child(retry_on_endpoint_failure)
             service_check_sequence.add_child(drop_service)
 
