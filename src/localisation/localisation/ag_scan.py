@@ -77,9 +77,12 @@ class LidarAggregator(Node):
 
         current_segments = self._extract_line_segments(transformed_points)
         rotation, translation, current_segments = self._perform_icp(current_segments, self.previous_segments)
-        self._publish_transform(rotation, translation)
-
-        self.previous_segments = self._merge_segments(self.previous_segments, current_segments)
+        
+        if abs(self.angular_velocity) < 0.1:
+            self._publish_transform(rotation, translation)
+            self.previous_segments = self._merge_segments(self.previous_segments, current_segments) 
+        
+        
         self.publish_line_segments([seg['points'] for seg in self.previous_segments], self.last_odom_header)
 
     def _laser_scan_to_points(self, msg):
