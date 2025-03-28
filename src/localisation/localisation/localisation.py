@@ -34,22 +34,30 @@ class MapOdomPublisher(Node):
         self.time_stamp = msg.header.stamp
 
     def icp_callback(self, msg):
-        # Update with ICP transform (this should correct drift)
-        self.translation = np.array([
+        # Extract ICP transform (already in map frame)
+        icp_translation = np.array([
             msg.transform.translation.x,
             msg.transform.translation.y,
             msg.transform.translation.z
         ])
-        self.rotation = np.array([
+        icp_rotation = np.array([
             msg.transform.rotation.x,
             msg.transform.rotation.y,
             msg.transform.rotation.z,
             msg.transform.rotation.w
         ])
+
+        # Directly update translation (since it's in the map frame)
+        self.translation += icp_translation
+
+        # Correct order for updating rotation: new = correction * current
+        self.rotation = quaternion_multiply(icp_rotation, self.rotation)
+
         self.get_logger().info(
-            f"ICP transform received: translation={self.translation.tolist()}, "
+            f"ICP transform combined: translation={self.translation.tolist()}, "
             f"rotation={euler_from_quaternion(self.rotation)[2]:.3f} rad (yaw)"
         )
+
 
     def publish_transform(self):
         if self.time_stamp is None:
