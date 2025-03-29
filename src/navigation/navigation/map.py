@@ -245,11 +245,11 @@ class Map:
     def is_free(self, x, y, value_threshold):
         # Check if a grid cell is free based on a value threshold
         if self.grid is None:
-            raise ValueError("Grid is not initalised")
+            return False
         grid_x, grid_y = self.world_to_grid(x, y)
-        if 0 <= grid_x < self.grid_width and 0 <= grid_y < self.grid_height:
-            return self.grid[grid_y, grid_x] < value_threshold
-        return False
+        if not (0 <= grid_x < self.grid_width and 0 <= grid_y < self.grid_height):
+            return False
+        return self.grid[grid_y, grid_x] < value_threshold
 
     def are_adjacent_cells_free(self, x, y, adjacent_radius, free_threshold):
         if self.grid is None:
