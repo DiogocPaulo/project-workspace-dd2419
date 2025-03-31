@@ -110,7 +110,7 @@ class Navigation(Node):
             self.get_logger().warn("Recived empty path")
 
     def odom_path_callback(self, msg: Path):
-        if not self.backing_up:
+        if not self.backing_up and not self.waiting_for_path:
             return
         if len(msg.poses) > 0:
             self.waiting_for_path = False
@@ -152,7 +152,7 @@ class Navigation(Node):
 
     def control_loop(self):
         in_inflated_region = self.inflated_map is not None and not self.inflated_map.is_free(self.state.x, self.state.y, 50)
-        if in_inflated_region and not self.backing_up:
+        if in_inflated_region and not self.backing_up and self.waiting_for_path:
             self.get_logger().info("Entering backing up process")
             self.state.target_velocity = backing_velocity
             self.backing_up = True
