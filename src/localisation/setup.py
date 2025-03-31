@@ -25,6 +25,7 @@ setup(
         'console_scripts': [
             'localisation = localisation.localisation:main',
             'odometry = localisation.odometry:main',
+            'dead_reckoning = localisation.dead_reckoning:main',
             'navigation = localisation.navigation:main',
         ],
     },

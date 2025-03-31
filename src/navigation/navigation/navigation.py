@@ -21,9 +21,9 @@ from navigation.target_path import TargetPath
 base = 0.3                  # Wheelbase of the vehicle
 lookahead_gain = 0.1        # Look-ahead distance gain
 lookahead_min = 0.3         # Minimum look-ahead distance
-distance_threshold = 0.2    # Stop distance threshold
+distance_threshold = 0.15   # Stop distance threshold
 yaw_threshold = 0.2         # Stop yaw threshold
-target_velocity = 0.22      # Robot's target velocity
+target_velocity = 0.15      # Robot's target velocity
 
 def pure_pursuit_control(state, target_path):
     index, lookahead = target_path.search_target_index(state)

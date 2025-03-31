@@ -7,6 +7,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, HistoryPolicy, ReliabilityPolicy
 from sensor_msgs.msg import Image
 from sensor_msgs.msg import PointCloud2, PointField
+from nav_msgs.msg import OccupancyGrid
 import sensor_msgs_py.point_cloud2 as pc2
 import ctypes
 import struct
@@ -20,14 +21,15 @@ from geometry_msgs.msg import PointStamped, TransformStamped
 import os
 from scipy.spatial import cKDTree
 from sklearn.cluster import DBSCAN
-from geometry_msgs.msg import Point, Pose, Quaternion, Vector3
+from geometry_msgs.msg import Pose, Quaternion, Vector3
 from sklearn.decomposition import PCA
 from itertools import permutations
 from sensor_msgs_py.point_cloud2 import create_cloud
 import time
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-from project_interfaces.msg import Object, ObjectList
+from project_interfaces.msg import Object, ObjectList, Point, Workspace
+from navigation.map import WorkspaceArea, Map
 
 class ExamineImage(Node):
 
@@ -39,7 +41,7 @@ class ExamineImage(Node):
         self.get_logger().info(f"Init detection")
 
         self.tfBuffer = tf2_ros.Buffer()
-        self.listener = tf2_ros.TransformListener(self.tfBuffer, self)
+        self.listener = tf2_ros.TransformListener(self.tfBuffer, self, spin_thread=True)
 
         self.object_list_broadcaster = tf2_ros.TransformBroadcaster(self)
 
@@ -55,6 +57,8 @@ class ExamineImage(Node):
             self.cloud_callback,
             qos_profile
         )
+        self.create_subscription(Workspace, "/workspace", self.workspace_callback, 10)
+        self.create_subscription(OccupancyGrid, "/map", self.map_callback, 10)
 
         self.pub = self.create_publisher(PointCloud2, '/depth_points_filtered', 100)
 
@@ -68,6 +72,10 @@ class ExamineImage(Node):
 
         # Initialize an empty list to store detected objects
         self.object_list = []
+        self.initial_object_list = []
+
+        self.workspace = None
+        self.map = None
 
         # Publishers for detected objects as a list
         self.object_list_publisher = self.create_publisher(ObjectList, "/detected_objects", 10)
@@ -119,9 +127,9 @@ class ExamineImage(Node):
 
             self.read = 1
 
-            self.get_logger().info(f"Published new object list now includes: {object_type} at ({x:.2f}, {y:.2f})")
+            #self.get_logger().info(f"Published new object list now includes: {object_type} at ({x:.2f}, {y:.2f})")
 
-            self.get_logger().info(f"Published TF for object: {object_type} at ({x:.2f}, {y:.2f})")
+            #self.get_logger().info(f"Published TF for object: {object_type} at ({x:.2f}, {y:.2f})")
 
         object_list_msg = ObjectList()
         object_list_msg.header.frame_id = "map"
@@ -129,7 +137,31 @@ class ExamineImage(Node):
         object_list_msg.length = len(self.object_list)
         object_list_msg.objects = self.object_list
         self.object_list_publisher.publish(object_list_msg)
-        
+
+    def workspace_callback(self, msg: Workspace):
+        if self.workspace:
+            return
+        workspace_vertices = []
+        for point_msg in msg.points:
+            x = point_msg.x
+            y = point_msg.y
+            workspace_vertices.append((x, y))
+
+        self.workspace = WorkspaceArea(workspace_vertices)
+
+    def map_callback(self, msg: OccupancyGrid):
+        width = msg.info.width
+        height = msg.info.height
+        grid = np.array(msg.data, dtype=np.int8).reshape((height, width))
+
+        # Create map or update map grid
+        if self.map is None:
+            resolution = msg.info.resolution
+            origin_x = msg.info.origin.position.x
+            origin_y = msg.info.origin.position.y
+            self.map = Map(resolution, origin_x, origin_y, width, height, grid)
+        else:
+            self.map.update_grid(grid)
 
     def cloud_callback(self, msg: PointCloud2):
         # Increment the message counter
@@ -154,7 +186,7 @@ class ExamineImage(Node):
         # Create a boolean mask to filter points:
         # - Points within max_dist from the sensor
         # - Points above the floor (y < 0.09) (y-axis points downwards)
-        mask = (distances > 0.04) & (distances < 0.9) & (points[:, 1] < 0.085) & (0.01 < points[:, 1])
+        mask = (distances > 0.04) & (distances < 0.9) & (points[:, 1] < 0.080) & (0.01 < points[:, 1])
 
         # Apply the mask to filter points before processing colors
         points = points[mask]
@@ -183,7 +215,6 @@ class ExamineImage(Node):
         lower_green1, upper_green1 = np.array([81, 100, 44]), np.array([84, 255, 105])
         lower_green2, upper_green2 = np.array([73, 210, 90]), np.array([74, 240, 120])
         lower_blue, upper_blue = np.array([99, 254, 75]), np.array([99, 255, 80])
-        lower_brown, upper_brown = np.array([15, 68, 137]), np.array([17, 76, 134])
 
         # Iterate over each cluster
         for cluster_label in unique_labels:
@@ -204,13 +235,11 @@ class ExamineImage(Node):
             green_mask = (hsv_colors[:, 0] >= lower_green1[0]) & (hsv_colors[:, 0] <= upper_green1[0]) | \
                          ((hsv_colors[:, 0] >= lower_green2[0]) & (hsv_colors[:, 0] <= upper_green2[0]))
             blue_mask = (hsv_colors[:, 0] >= lower_blue[0]) & (hsv_colors[:, 0] <= upper_blue[0])
-            brown_mask = (hsv_colors[:, 0] >= lower_brown[0]) & (hsv_colors[:, 0] <= upper_brown[0])
 
             # Apply masks for the current cluster
             red_points = cluster_points[red_mask]
             green_points = cluster_points[green_mask]
             blue_points = cluster_points[blue_mask]
-            brown_points = cluster_points[brown_mask]
 
             # Calculate the total number of points in the cluster
             total_points = len(cluster_points)
@@ -219,29 +248,23 @@ class ExamineImage(Node):
             red_ratio = len(red_points) / total_points
             green_ratio = len(green_points) / total_points
             blue_ratio = len(blue_points) / total_points
-            brown_ratio = len(brown_points) / total_points
 
-            pure_red = pure_green = pure_blue = pure_brown = False
+            #self.get_logger().info(f"Color ratios: {red_ratio} {blue_ratio} {green_ratio}")
+
+            pure_red = pure_green = pure_blue = False
 
             # Check if the cluster is predominantly red, green, or blue
             if red_ratio > 0.001 and green_ratio == 0.0 and blue_ratio == 0.0:
                 pure_red = True
-            elif green_ratio > 0.001 and red_ratio == 0.0 and blue_ratio == 0.0 and brown_ratio == 0.0:
+            elif green_ratio > 0.001 and red_ratio == 0.0 and blue_ratio == 0.0:
                 pure_green = True
-            elif blue_ratio > 0.001 and red_ratio == 0.0 and green_ratio == 0.0 and brown_ratio < 0.01:
+            elif blue_ratio > 0.001 and red_ratio == 0.0 and green_ratio == 0.0:
                 pure_blue = True
-            elif brown_ratio > 0.001 and red_ratio == 0.0 and green_ratio == 0.0 and blue_ratio == 0.0:
-                pure_brown = True
 
             # Classify based on floor contact points for the current cluster
             object_type = self.classify_based_on_floor_contact(cluster_points)
 
             x, y, z = np.mean(cluster_points, axis=0)
-
-            if pure_brown:
-                if object_type == "cube":
-                    self.get_logger().info(f'🟫 Cluster {cluster_label} is a cube!')
-                    self.publish_object(x, z + 0.02, 0.0, Object.CUBE, msg.header.stamp)
 
             if pure_red or pure_green or pure_blue:
                 if object_type == "sphere":
@@ -251,7 +274,7 @@ class ExamineImage(Node):
                         emoji = "🟢"  # Green circle emoji
                     elif pure_blue:
                         emoji = "🔵"  # Blue circle emoji
-                    self.get_logger().info(f'{emoji} Cluster {cluster_label} is a sphere!')
+                    #self.get_logger().info(f'{emoji} Cluster {cluster_label} is a sphere!')
                     self.publish_object(x, z + 0.02, 0.0, Object.SPHERE, msg.header.stamp)
                 elif object_type == "cube":
                     if pure_red:
@@ -260,17 +283,13 @@ class ExamineImage(Node):
                         emoji = "🟩"  # Green square emoji
                     elif pure_blue:
                         emoji = "🟦"  # Blue square emoji
-                    self.get_logger().info(f'{emoji} Cluster {cluster_label} is a cube!')
+                    #self.get_logger().info(f'{emoji} Cluster {cluster_label} is a cube!')
                     self.publish_object(x, z + 0.02, 0.0, Object.CUBE, msg.header.stamp)
-                elif object_type == "unknown":
-                    self.get_logger().info(f'Object not identified :(!')
-
-            elif self.is_plushie(cluster_points):
-                self.get_logger().info(f'🧸 Cluster {cluster_label} is a plushie!')
-                self.publish_object(x + 0.01, z, 0.0, Object.PLUSHIE, msg.header.stamp)
+                #elif object_type == "unknown":
+                    #self.get_logger().info(f'Object not identified :(!')
 
             elif self.is_box(cluster_points):  # If detected object is a box
-                self.get_logger().info(f'📦 Cluster {cluster_label} is a box!')
+                #self.get_logger().info(f'📦 Cluster {cluster_label} is a box!')
 
                 # Compute the orientation angle of the box
                 angle = self.estimate_box_orientation(cluster_points)
@@ -283,11 +302,12 @@ class ExamineImage(Node):
                 else:
                     self.publish_object(x, z + 0.08, angle, Object.BOX, msg.header.stamp)
 
+            elif self.is_plushie(cluster_points):
+                #self.get_logger().info(f'🧸 Cluster {cluster_label} is a plushie!')
+                self.publish_object(x + 0.01, z, 0.0, Object.PLUSHIE, msg.header.stamp)
+
             else:
-                if pure_brown:
-                    continue
-                else:
-                    self.get_logger().info(f'Cluster {cluster_label} is NOT a recognized object.')
+                self.get_logger().warn(f'Cluster {cluster_label} is NOT a recognized object.')
 
             # ------------ TIMER FOR EFFICIENCY CHECK (move where desired) ------------
             end_time = time.time()
@@ -338,7 +358,7 @@ class ExamineImage(Node):
         elif 0.17 < length < 0.25:
             angle_deg = 0.0
 
-        self.get_logger().info(f"angle: {angle_deg}")
+        #self.get_logger().info(f"angle: {angle_deg}")
 
         return angle_deg
 
@@ -429,6 +449,8 @@ class ExamineImage(Node):
 
         ratio = num_middle_layer_points / num_highest_layer_points
 
+        self.get_logger().info(f"ratio: {ratio}")
+
         # Classification based on the ratio
         if 1 < ratio <= 6.5:  # Cube: ratio is approximately 1
             return "cube"
@@ -490,19 +512,27 @@ class ExamineImage(Node):
         # Publish the clusters
         self.cluster_publisher.publish(cluster_msg)
 
+    def is_within_workspace(self, x, y):
+        """Checks if a point (x, y) is within a simple rectangular boundary."""
+        if self.workspace_vertices is None:
+            return False
+        return self.workspace_x_min < x < self.workspace_x_max and self.workspace_y_min < y < self.workspace_y_max
+
+
     def publish_object(self, x, y, angle, object_type, stamp):
         # Create a PointStamped message for the input coordinates
         point_in = PointStamped()
         point_in.header.frame_id = 'camera_depth_optical_frame'  # Input frame
         point_in.header.stamp = stamp  # Timestamp of the original point cloud
-        point_in.point = Point(x=x, y=0.09, z=y)  # Set the point coordinates
+        point_in.point.x = x
+        point_in.point.y = 0.09
+        point_in.point.z = y
 
         try:
-            # Lookup the transform from camera_depth_optical_frame to map
             transform = self.tfBuffer.lookup_transform(
                 'map',  # Target frame
                 point_in.header.frame_id,  # Source frame
-                point_in.header.stamp,  # Time of the transform
+                point_in.header.stamp,
                 rclpy.duration.Duration(seconds=1.0)  # Timeout
             )
 
@@ -516,37 +546,157 @@ class ExamineImage(Node):
 
             # Check if the new object is a duplicate based on proximity
             is_duplicate = False
-            for obj in self.object_list:
-                distance = np.sqrt((x_transformed - obj.x)**2 + (y_transformed - obj.y)**2)
-                if distance < 0.01:  # If the object is within 1 cm of an existing object
-                    is_duplicate = True
-                    break
+            if self.workspace is not None:
+                is_in = self.workspace.is_within_workspace(x_transformed, y_transformed)
+            else:
+                is_in = False
 
-            # If not a duplicate, add the new object to the list
-            if not is_duplicate:
-                # Create new object message
-                object_msg = Object()
-                object_msg.x = x_transformed
-                object_msg.y = y_transformed
-                object_msg.angle = angle
-                object_msg.object_type = object_type
+            #self.get_logger().info(f"Published new object list now includes: {is_out} at ({x_transformed:.2f}, {y_transformed:.2f})")
 
-                self.object_list.append(object_msg)
+            if is_in:
+                initial_object_msg = Object()
+                initial_object_msg.x = x_transformed
+                initial_object_msg.y = y_transformed
+                initial_object_msg.angle = angle
+                initial_object_msg.object_type = object_type
+                self.initial_object_list.append(initial_object_msg)
 
-                object_list_msg = ObjectList()
-                object_list_msg.header.frame_id = "map"
-                object_list_msg.header.stamp = stamp
-                object_list_msg.length = len(self.object_list)
-                object_list_msg.objects = self.object_list
-                self.object_list_publisher.publish(object_list_msg)
+                initial_list_msg = ObjectList()
+                initial_list_msg.header.frame_id = "map"
+                initial_list_msg.header.stamp = stamp
+                initial_list_msg.length = len(self.initial_object_list)
+                initial_list_msg.objects = self.initial_object_list
+                self.object_list_publisher.publish(initial_list_msg)
 
-                self.get_logger().info(f"Published new object list now includes: {object_type} at ({x_transformed:.2f}, {y_transformed:.2f})")
+                for i, obj in enumerate(self.initial_object_list[:-1]):
+                    distance = np.sqrt((x_transformed - obj.x)**2 + (y_transformed - obj.y)**2)
+                    if object_type == "box" or obj.object_type == "box":
+                        if distance < 0.20:    #f the object is within 1 cm of an existing object
+                            is_duplicate = True
+                            break
+                    elif distance < 0.06:   # If the object is within 1 cm of an existing object
+                        is_duplicate = True
+                        break
+
+                if self.map is None:
+                    free_from_obstacles = True
+                else:
+                    free_from_obstacles = self.map.are_adjacent_cells_free(x_transformed, y_transformed, 1, 50)
+
+                self.get_logger().info(f"initial:{self.initial_object_list}")
+
+                # If not a duplicate, add the new object to the list
+                if not is_duplicate and free_from_obstacles:
+                    # Create new object message
+                    object_msg = Object()
+                    object_msg.x = x_transformed
+                    object_msg.y = y_transformed
+                    object_msg.angle = angle
+                    object_msg.object_type = object_type
+
+                    self.object_list.append(object_msg)
+
+                    object_list_msg = ObjectList()
+                    object_list_msg.header.frame_id = "map"
+                    object_list_msg.header.stamp = stamp
+                    object_list_msg.length = len(self.object_list)
+                    object_list_msg.objects = self.object_list
+                    self.object_list_publisher.publish(object_list_msg)
+
+                    self.get_logger().info(f"Published new object list now includes: {object_type} at ({x_transformed:.2f}, {y_transformed:.2f})")
+
+                 # Confidence-based correction
+                CONFIDENCE_RADIUS = 0.06 # 5cm
+                MIN_CONSISTENT = 2        # Need at least 2 consistent observations
+                self.get_logger().info(f"obstacles:{self.object_list}")
+                
+                # Find all objects in this area
+                nearby = []
+                for obj in self.initial_object_list:
+                    dist = np.sqrt((x_transformed - obj.x)**2 + (y_transformed - obj.y)**2)
+                    if object_type == "box" or obj.object_type == "box":
+                        if dist <= 0.20:
+                            nearby.append(obj)
+                    elif dist <= CONFIDENCE_RADIUS: # If the object is within 1 cm of an existing object
+                        nearby.append(obj)
+                
+                # Count object types in this area
+                type_counts = {}
+                for obj in nearby:
+                    type_counts[obj.object_type] = type_counts.get(obj.object_type, 0) + 1
+                
+                # Find most common type if we have enough consistent observations
+                if len(nearby) >= MIN_CONSISTENT:
+                    most_common, count = max(type_counts.items(), key=lambda x: x[1])
+                    if count >= MIN_CONSISTENT:
+                        for i, obj in enumerate(self.object_list):
+                            # Check if this object is in the nearby area
+                            for nearby_obj in nearby:
+                                dist = np.sqrt((obj.x - nearby_obj.x)**2 + (obj.y - nearby_obj.y)**2)
+                                if obj.object_type == "box":
+                                    if dist <= 0.20:
+                                        self.object_list[i].object_type = "box"
+                                        break
+                                elif dist <= CONFIDENCE_RADIUS:
+                                    # Update the type in the main object list
+                                    self.object_list[i].object_type = most_common
+                                    break
+
+                        # Re-publish the corrected object list
+                        object_list_msg = ObjectList()
+                        object_list_msg.header.frame_id = "map"
+                        object_list_msg.header.stamp = stamp
+                        object_list_msg.length = len(self.object_list)
+                        object_list_msg.objects = self.object_list
+                        self.object_list_publisher.publish(object_list_msg)
+                        
+                        self.get_logger().info(f"final:{self.object_list}")
+                        self.get_logger().info(f"Corrected object at ({x_transformed:.2f}, {y_transformed:.2f}) to {most_common}")
+            
 
         except TransformException as e:
-            self.get_logger().error(f"Failed coordinate transform for newly detected object: {e}")
+            self.get_logger().error(f"Failed coordinate transform for newly {object_type} detected object: {e}")
 
+    def check_duplicates(self):
+        duplicates_removed = 0
+        n = len(self.object_list)
+        to_remove = set()  # Stores indices of objects to remove
+
+        for i in range(n):
+            if i in to_remove:
+                continue  # Skip if already marked for removal
+            
+            obj1 = self.object_list[i]
+            
+            for j in range(i + 1, n):
+                if j in to_remove:
+                    continue  # Skip if already marked
+                
+                obj2 = self.object_list[j]
+                dx = obj1.x - obj2.x
+                dy = obj1.y - obj2.y
+                dist = np.sqrt(dx**2 + dy**2)
+
+                # Determine threshold based on types
+                if obj1.object_type == "box" or obj2.object_type == "box":
+                    threshold = 0.18  # Boxes need 18cm
+                else:
+                    threshold = 0.06 # Others need 5cm
+
+                # If too close, mark the second object for removal
+                if dist < threshold:
+                    to_remove.add(j)
+                    duplicates_removed += 1
+
+        # Rebuild the list, excluding duplicates
+        self.object_list = [obj for idx, obj in enumerate(self.object_list) if idx not in to_remove]
+        return
+
+    
 
     def broadcast_object_list(self):
+        self.check_duplicates()
+
         for i, object_msg in enumerate(self.object_list):
             transform = TransformStamped()
             transform.header.frame_id = 'map'  # Change to your desired parent frame

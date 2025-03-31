@@ -28,7 +28,7 @@ def generate_launch_description():
             package="navigation",
             executable="mapping",
             name="robot_mapping",
-            ros_arguments=["--log-level", "info"]
+            ros_arguments=["--log-level", "warn"]
         ),
         Node(
             package="navigation",
@@ -40,6 +40,6 @@ def generate_launch_description():
             package="detection",
             executable="detection",
             name="robot_detection",
-            ros_arguments=["--log-level", "warn"]
+            ros_arguments=["--log-level", "info"]
         ),
     ])
