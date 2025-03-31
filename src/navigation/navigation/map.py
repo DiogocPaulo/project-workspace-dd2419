@@ -1,7 +1,7 @@
 import numpy as np
 import math
 import matplotlib.pyplot as plt
-from scipy.ndimage import maximum_filter, rotate
+from scipy.ndimage import maximum_filter, rotate, convolve
 
 from project_interfaces.msg import Object, ObjectList
 
@@ -51,7 +51,7 @@ class Map:
         if self.origin_x is None or self.origin_y is None:
             raise ValueError("Grid origin not initialised")
 
-        self.grid = np.full((self.grid_height, self.grid_width), 0, dtype=np.int8)
+        self.grid = np.full((self.grid_height, self.grid_width), -1, dtype=np.int8)
 
     def initalise_grid_with_workspace(self, workspace_vertices):
         # Initialise grid based on a workspace perimeter
@@ -251,6 +251,15 @@ class Map:
             return False
         return self.grid[grid_y, grid_x] < value_threshold
 
+    def get_occupancy(self, x, y):
+        # Check if a grid cell is free based on a value threshold
+        if self.grid is None:
+            return 100
+        grid_x, grid_y = self.world_to_grid(x, y)
+        if not (0 <= grid_x < self.grid_width and 0 <= grid_y < self.grid_height):
+            return 100
+        return self.grid[grid_y, grid_x]
+
     def are_adjacent_cells_free(self, x, y, adjacent_radius, free_threshold):
         if self.grid is None:
             return False
@@ -287,10 +296,39 @@ class Map:
         # Converts a number of grid cells to world distance
         return float(cells * self.resolution)
 
-    def inflate_grid(self, inflation_radius):
-        # Returns a grid that has inflated occupied cells by an inflation radius
+    def inflate_grid_by_half(self, inflation_radius):
         if self.grid is None:
-            raise ValueError("Grid is not initialised")
+            return
+
+        inflation_cells = self.distance_to_cells(inflation_radius)
+
+        # Define a circular footprint using inflation radius
+        circular_footprint = np.zeros(
+            (2 * inflation_cells + 1, 2 * inflation_cells + 1),
+            dtype=int,
+        )
+        ty, tx = np.ogrid[
+            -inflation_cells : inflation_cells + 1,
+            -inflation_cells : inflation_cells + 1,
+        ]
+        mask = tx**2 + ty**2 <= inflation_cells**2
+        circular_footprint[mask] = 1
+
+        occupied_mask = self.grid > 0
+
+        inflated_values = maximum_filter(self.grid, footprint=circular_footprint, mode="constant", cval=0)
+
+        inflated_grid = np.where(
+            (occupied_mask > 0),
+            self.grid,
+            (inflated_values * 0.5).astype(int),
+        )
+
+        self.grid = inflated_grid
+
+    def inflate_grid(self, inflation_radius):
+        if self.grid is None:
+            return
 
         inflation_cells = self.distance_to_cells(inflation_radius)
 

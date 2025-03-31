@@ -8,12 +8,12 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, HistoryPolicy, ReliabilityPolicy
 
 from robp_interfaces.msg import Encoders
-from nav_msgs.msg import Path
-from nav_msgs.msg import Odometry
+from nav_msgs.msg import Path, OccupancyGrid, Odometry
 from geometry_msgs.msg import PoseStamped
 from robp_interfaces.msg import DutyCycles
 from project_interfaces.srv import GoToPoint, Trigger
 
+from navigation.map import Map
 from navigation.robot_state import RobotState
 from navigation.target_path import TargetPath
 
@@ -75,6 +75,7 @@ class Navigation(Node):
 
         self.create_subscription(Odometry, "/odom", self.odom_callback, qos_profile)
         self.create_subscription(Path, "/custom_path", self.path_callback, qos_profile)
+        self.create_subscription(OccupancyGrid, "/inflated_map", self.inflated_map_callback, qos_profile)
         self.motor_publisher = self.create_publisher(DutyCycles, "/motor/duty_cycles", 10)
 
         # Navigation parameters
@@ -82,6 +83,7 @@ class Navigation(Node):
         self.target_path = TargetPath(lookahead_gain, lookahead_min)
         self.previous_index = 0
         self.waiting_for_path = True
+        self.inflated_map = None
 
         self.create_timer(0.05, self.control_loop)
 
@@ -97,6 +99,20 @@ class Navigation(Node):
             self.waiting_for_path = True
             self.get_logger().warn("Recived empty path")
 
+    def inflated_map_callback(self, msg: OccupancyGrid):
+        width = msg.info.width
+        height = msg.info.height
+        grid = np.array(msg.data, dtype=np.int8).reshape((height, width))
+
+        # Create map or update map grid
+        if self.inflated_map is None:
+            resolution = msg.info.resolution
+            origin_x = msg.info.origin.position.x
+            origin_y = msg.info.origin.position.y
+            self.inflated_map = Map(resolution, origin_x, origin_y, width, height, grid)
+        else:
+            self.inflated_map.update_grid(grid)
+        
     def publish_duty_cycles(self, left_wheel, right_wheel):
         # Ensure left and right duty cycles are between -1 to 1
         max_value = max(abs(left_wheel), abs(right_wheel))
@@ -113,6 +129,11 @@ class Navigation(Node):
         self.motor_publisher.publish(duty_msg)
 
     def control_loop(self):
+        if self.inflated_map is not None and not self.inflated_map.is_free(self.state.x, self.state.y, 50):
+            self.get_logger().info("Backing within inflation radius")
+            self.publish_duty_cycles(-0.10, -0.10)
+            return
+
         if not self.target_path.x_points or self.waiting_for_path:
             self.get_logger().info("Waiting for path")
             self.publish_duty_cycles(0.0, 0.0)
@@ -132,7 +153,7 @@ class Navigation(Node):
                 return
 
         if abs(alpha) > (math.pi / 2):
-            angular_velocity = 0.15
+            angular_velocity = 0.10
             left_wheel = -angular_velocity
             right_wheel = angular_velocity
             self.get_logger().info(f"Velocity: {angular_velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
