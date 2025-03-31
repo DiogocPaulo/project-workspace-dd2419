@@ -24,7 +24,7 @@ lookahead_min = 0.3         # Minimum look-ahead distance
 distance_threshold = 0.15   # Stop distance threshold
 yaw_threshold = 0.2         # Stop yaw threshold
 target_velocity = 0.15      # Robot's target velocity
-backing_velocity = -0.15
+backing_velocity = -0.10
 
 def pure_pursuit_control(state, target_path):
     index, lookahead = target_path.search_target_index(state)
