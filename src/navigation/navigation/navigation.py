@@ -26,7 +26,7 @@ yaw_threshold = 0.2         # Stop yaw threshold
 target_velocity = 0.15      # Robot's target velocity
 backing_velocity = -0.10
 
-def pure_pursuit_control(state, target_path, reverse=False):
+def pure_pursuit_control(state, target_path):
     index, lookahead = target_path.search_target_index(state)
     
     if index is None:
@@ -40,12 +40,13 @@ def pure_pursuit_control(state, target_path, reverse=False):
         target_y = target_path.y_points[-1]
         index = len(target_path.x_points) - 1
 
-    alpha = math.atan2(target_y - state.y, target_x - state.x) - state.yaw
-    if not reverse:
-        alpha = math.atan2(math.sin(alpha), math.cos(alpha))
+    if state.velocity < 0:
+        effective_yaw = state.yaw + math.pi
     else:
-        alpha = math.atan2(-math.sin(alpha), -math.cos(alpha))
+        effective_yaw = state.yaw
 
+    alpha = math.atan2(target_y - state.y, target_x - state.x) - effective_yaw
+    alpha = math.atan2(math.sin(alpha), math.cos(alpha))
     kappa = 2.0 * math.sin(alpha) / lookahead
 
     omega = state.velocity * kappa
@@ -152,7 +153,7 @@ class Navigation(Node):
             return
 
         if self.backing_up:
-            omega, alpha, self.previous_index = pure_pursuit_control(self.state, self.target_path, reverse=True)
+            omega, alpha, self.previous_index = pure_pursuit_control(self.state, self.target_path)
 
             distance = self.state.distance_to_state(self.target_path.x_points[-1], self.target_path.y_points[-1])
             if distance <= distance_threshold:

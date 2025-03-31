@@ -49,7 +49,7 @@ class TargetPath:
             self.old_nearest_point_index = index
 
         # Compute the lookahead distance
-        lookahead = self.lookahead_gain * state.velocity + self.lookahead_min
+        lookahead = self.lookahead_gain * abs(state.velocity) + self.lookahead_min
 
         # Find index of target point within lookahead distance
         while lookahead > state.distance_to_state(self.x_points[index], self.y_points[index]):
