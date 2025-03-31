@@ -81,6 +81,7 @@ class Navigation(Node):
 
         self.create_subscription(Odometry, "/odom", self.odom_callback, qos_profile)
         self.create_subscription(Path, "/custom_path", self.path_callback, qos_profile)
+        self.create_subscription(Path, "/odom_path", self.odom_path_callback, qos_profile)
         self.create_subscription(OccupancyGrid, "/inflated_map", self.inflated_map_callback, qos_profile)
         self.motor_publisher = self.create_publisher(DutyCycles, "/motor/duty_cycles", 10)
 
@@ -107,6 +108,18 @@ class Navigation(Node):
         else:
             self.waiting_for_path = True
             self.get_logger().warn("Recived empty path")
+
+    def odom_path_callback(self, msg: Path):
+        if not self.backing_up:
+            return
+        if len(msg.poses) > 0:
+            self.waiting_for_path = False
+            self.target_path.update_path_in_reverse(msg)
+            self.get_logger().info(f"Reversing odom path for backing up")
+        else:
+            self.waiting_for_path = True
+            self.get_logger().warn("Recived empty path")
+
 
     def inflated_map_callback(self, msg: OccupancyGrid):
         width = msg.info.width
@@ -142,13 +155,11 @@ class Navigation(Node):
         if in_inflated_region and not self.backing_up:
             self.get_logger().info("Entering backing up process")
             self.state.target_velocity = backing_velocity
-            self.target_path.reverse_path()
             self.backing_up = True
             return
         elif not in_inflated_region and self.backing_up:
             self.get_logger().info("Exiting backing up process")
             self.state.target_velocity = target_velocity
-            self.target_path.reverse_path()
             self.backing_up = False
             return
 
@@ -167,7 +178,6 @@ class Navigation(Node):
                 if self.backing_up:
                     self.get_logger().info("Exiting backing up process")
                     self.state.target_velocity = target_velocity
-                    self.target_path.reverse_path()
                     self.backing_up = False
 
                 # Clear existing target path

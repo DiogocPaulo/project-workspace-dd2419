@@ -20,6 +20,14 @@ class TargetPath:
         
         self.old_nearest_point_index = None
 
+    def update_path_in_reverse(self, path_msg: Path):
+        self.x_points = [pose.pose.position.x for pose in path_msg.poses]
+        self.y_points = [pose.pose.position.y for pose in path_msg.poses]
+        self.x_points.reverse()
+        self.y_points.reverse()
+        
+        self.old_nearest_point_index = None
+
     def reverse_path(self):
         self.x_points.reverse()
         self.y_points.reverse()
