@@ -152,28 +152,6 @@ class Navigation(Node):
             self.backing_up = False
             return
 
-        if self.backing_up:
-            omega, alpha, self.previous_index = pure_pursuit_control(self.state, self.target_path)
-
-            distance = self.state.distance_to_state(self.target_path.x_points[-1], self.target_path.y_points[-1])
-            if distance <= distance_threshold:
-                self.get_logger().info("Reached end of target path when backing")
-                self.state.target_velocity = target_velocity
-                self.target_path.reverse_path()
-                self.backing_up = False
-                self.waiting_for_path = True
-
-                # Clear existing target path
-                self.target_path.x_points = []
-                self.target_path.y_points = []
-                return
-            command_velocity = self.state.velocity * np.exp(-2 * np.abs(alpha))
-            left_wheel = command_velocity - (base/2) * omega
-            right_wheel = command_velocity + (base/2) * omega
-            self.get_logger().info(f"Velocity: {command_velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
-            self.publish_duty_cycles(left_wheel, right_wheel)
-            return
-
         if not self.target_path.x_points or self.waiting_for_path:
             self.get_logger().info("Waiting for path")
             self.publish_duty_cycles(0.0, 0.0)
@@ -192,7 +170,7 @@ class Navigation(Node):
                 self.target_path.y_points = []
                 return
 
-        if abs(alpha) > (math.pi / 2):
+        if (abs(alpha) > (math.pi / 2)) and not self.backing_up:
             angular_velocity = 0.10
             left_wheel = -angular_velocity
             right_wheel = angular_velocity
