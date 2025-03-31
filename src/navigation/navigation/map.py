@@ -5,6 +5,29 @@ from scipy.ndimage import maximum_filter, rotate
 
 from project_interfaces.msg import Object, ObjectList
 
+class WorkspaceArea:
+    def __init__(self, workspace_vertices):
+        self.workspace_vertices = workspace_vertices
+    def is_within_workspace(self, x, y):
+        return self.winding_number(x, y)
+    def winding_number(self, x, y):
+        counter = 0
+        for i in range(len(self.workspace_vertices)):
+            x_current, y_current = self.workspace_vertices[i]
+            x_next, y_next = self.workspace_vertices[(i + 1) % len(self.workspace_vertices)]
+
+            if y_current <= y:
+                if y_next > y:
+                    if self.is_left(x, y, x_current, y_current, x_next, y_next) > 0: 
+                        counter += 1
+            else:
+                if y_next <= y:
+                    if self.is_left(x, y, x_current, y_current, x_next, y_next) < 0:
+                        counter -= 1
+        return counter != 0
+    def is_left(self, x, y, x_current, y_current, x_next, y_next):
+        return ((x_next - x_current) * (y - y_current) - (y_next - y_current) * (x - x_current))
+
 class Map:
     """
     Class provides by default the utility functions such as conversions, but also store the map.
@@ -18,6 +41,8 @@ class Map:
         self.grid_height = grid_height
         self.grid = grid
         self.workspace_vertices = None
+        self.occupancy_increase = 25
+        self.occupancy_decrease = 5
 
     def initialise_grid(self):
         # Initialise grid based map properties
@@ -26,7 +51,7 @@ class Map:
         if self.origin_x is None or self.origin_y is None:
             raise ValueError("Grid origin not initialised")
 
-        self.grid = np.full((self.grid_height, self.grid_width), -1, dtype=np.int8)
+        self.grid = np.full((self.grid_height, self.grid_width), 0, dtype=np.int8)
 
     def initalise_grid_with_workspace(self, workspace_vertices):
         # Initialise grid based on a workspace perimeter
@@ -66,7 +91,6 @@ class Map:
             # Grid is not yet initalised
             return
 
-
         if object_type == Object.CUBE:
             width = 0.05
             height = 0.05
@@ -74,10 +98,10 @@ class Map:
             width = 0.05
             height = 0.05
         elif object_type == Object.PLUSHIE:
-            width = 0.05
+            width = 0.10
             height = 0.10
         elif object_type == Object.BOX:
-            width = 0.15
+            width = 0.20
             height = 0.25
 
         grid_x, grid_y = self.world_to_grid(x, y)
@@ -100,13 +124,13 @@ class Map:
             [-grid_half_width, grid_half_height]
         ])
 
-        # if angle is not None:
-        #     cos_angle = np.cos(angle)
-        #     sin_angle = np.sin(angle)
-        #
-        #     rotation_matrix = np.array([[cos_angle, -sin_angle],
-        #                                 [sin_angle,  cos_angle]])
-        #     object_vertices = (rotation_matrix @ object_vertices.T).T
+        if angle > 0.0:
+            cos_angle = np.cos(angle)
+            sin_angle = np.sin(angle)
+
+            rotation_matrix = np.array([[cos_angle, -sin_angle],
+                                        [sin_angle,  cos_angle]])
+            object_vertices = (rotation_matrix @ object_vertices.T).T
 
         object_vertices += np.array([grid_x, grid_y])
 
@@ -121,6 +145,56 @@ class Map:
             for i in range(min_x, max_x):
                 if self.winding_number(i, j, object_vertices):
                     self.grid[j, i] = 100
+
+    def add_obstacle_point(self, x, y):
+        grid_x, grid_y = self.world_to_grid(x, y)
+        if not (0 <= grid_x < self.grid_width and 0 <= grid_y < self.grid_height):
+            # Grid coordinates out of bounds
+            return
+        self.grid[grid_y, grid_x] += self.occupancy_increase
+
+    def point_to_line(self, x0, y0, x1, y1):
+        dx = abs(x1 - x0)
+        dy = abs(y1 - y0)
+        x, y = x0, y0
+        n = dx + dy
+        x_inc = 1 if x1 > x0 else -1
+        y_inc = 1 if y1 > y0 else -1
+        error = dx - dy
+        cells = []
+        
+        for _ in range(n + 1):
+            cells.append((x, y))
+            if error > 0:
+                x += x_inc
+                error -= dy
+            else:
+                y += y_inc
+                error += dx
+        return cells
+
+    def update_obstacles_in_line(self, start_x, start_y, end_x, end_y, valid):
+        start_x, start_y = self.world_to_grid(start_x, start_y)
+        end_x, end_y = self.world_to_grid(end_x, end_y)
+        cells = self.point_to_line(start_x, start_y, end_x, end_y)
+        if valid:
+        # For valid readings increase occupancy of the last cell decrease the rest
+            for cell in cells:
+                x, y = cell
+                if not (0 < x < self.grid_width-1 and 0 < y < self.grid_height-1):
+                    continue
+                if cell == cells[-1]:
+                    self.grid[y, x] = min(self.grid[y, x] + self.occupancy_increase, 100)
+                else:
+                    self.grid[y, x] = max(self.grid[y, x] - self.occupancy_decrease, 0)
+        else:
+        # For invalid readings decrease occupancy of all cells
+            for cell in cells:
+                x, y = cell
+                if not (0 < x < self.grid_width-1 and 0 < y < self.grid_height-1):
+                    continue
+                self.grid[y, x] = max(self.grid[y, x] - self.occupancy_decrease, 0)
+
 
     def set_workspace_vertices(self, vertices):
         """Sets the workspace boundary as a list of (x, y) vertices and marks grid cells outside the workspace."""
@@ -171,11 +245,27 @@ class Map:
     def is_free(self, x, y, value_threshold):
         # Check if a grid cell is free based on a value threshold
         if self.grid is None:
-            raise ValueError("Grid is not initalised")
+            return False
         grid_x, grid_y = self.world_to_grid(x, y)
-        if 0 <= grid_x < self.grid_width and 0 <= grid_y < self.grid_height:
-            return self.grid[grid_y, grid_x] < value_threshold
-        return False
+        if not (0 <= grid_x < self.grid_width and 0 <= grid_y < self.grid_height):
+            return False
+        return self.grid[grid_y, grid_x] < value_threshold
+
+    def are_adjacent_cells_free(self, x, y, adjacent_radius, free_threshold):
+        if self.grid is None:
+            return False
+        grid_x, grid_y = self.world_to_grid(x, y)
+        if not (0 <= grid_x < self.grid_width and 0 <= grid_y < self.grid_height):
+            return False
+
+        for dy in range(-adjacent_radius, adjacent_radius + 1):
+            for dx in range(-adjacent_radius, adjacent_radius + 1):
+                nx, ny = grid_x + dx, grid_y + dy
+                if not (0 <= nx < self.grid_width and 0 <= ny < self.grid_height):
+                    continue
+                if self.grid[ny, nx] >= free_threshold:
+                    return False
+        return True
 
     def world_to_grid(self, x, y):
         # Convert world coordinates to grid indices
@@ -202,9 +292,22 @@ class Map:
         if self.grid is None:
             raise ValueError("Grid is not initialised")
 
-        cells = self.distance_to_cells(radius)  # Convert meters to grid cells
-        inflated_grid = maximum_filter(self.grid, size=(2 * cells + 1), mode="constant", cval=-1)
-        return inflated_grid
+        inflation_cells = self.distance_to_cells(inflation_radius)
+
+        # Define a circular footprint using inflation radius
+        circular_footprint = np.zeros(
+            (2 * inflation_cells + 1, 2 * inflation_cells + 1),
+            dtype=int,
+        )
+        ty, tx = np.ogrid[
+            -inflation_cells : inflation_cells + 1,
+            -inflation_cells : inflation_cells + 1,
+        ]
+        mask = tx**2 + ty**2 <= inflation_cells**2
+        circular_footprint[mask] = 1
+
+        inflated_grid = maximum_filter(self.grid, footprint=circular_footprint, mode="constant", cval=0)
+        self.grid = inflated_grid
 
     def inflate_grid_in_region(self, inflation_radius, region_radius, robot_x, robot_y):
         # Returns a grid that has inflated occupied cells by an inflation radius within a region radius around to robot
@@ -242,4 +345,4 @@ class Map:
 
         inflated_region = maximum_filter(region, footprint=circular_footprint, mode="constant", cval=-1)
         inflated_grid[y_min:y_max, x_min:x_max] = inflated_region
-        return inflated_grid
+        self.grid = inflated_grid

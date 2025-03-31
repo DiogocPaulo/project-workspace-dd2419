@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import math
 import numpy as np
 import sys
 
@@ -7,11 +8,16 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, HistoryPolicy, ReliabilityPolicy
 
-from tf2_ros import TransformBroadcaster
+from tf2_ros import TransformException
+from tf2_ros.buffer import Buffer
+from tf2_ros.transform_listener import TransformListener
+import tf2_geometry_msgs
+
 from nav_msgs.msg import OccupancyGrid
-from project_interfaces.msg import Object, ObjectList
 from visualization_msgs.msg import Marker, MarkerArray
-from geometry_msgs.msg import Point, Pose, Quaternion, Vector3
+from geometry_msgs.msg import PointStamped, Pose, Quaternion, Vector3
+from sensor_msgs.msg import LaserScan
+from project_interfaces.msg import Point, Workspace
 
 from navigation.map import Map
 
@@ -20,98 +26,102 @@ class Mapping(Node):
     def __init__(self):
         super().__init__("mapping")
 
-        self.map_publisher = self.create_publisher(OccupancyGrid, "/map", 10)
-        self.marker_publisher = self.create_publisher(Marker, "/workspace", 10)
-
         qos_profile = QoSProfile(
             depth=1,
             history=HistoryPolicy.KEEP_LAST,
             reliability=ReliabilityPolicy.BEST_EFFORT
         )
 
-        self.create_subscription(
-            ObjectList,
-            "/detected_objects",
-            self.objects_callback,
-            qos_profile
-        )
+        self.create_subscription(Workspace, "/workspace", self.workspace_callback, 10)
+        self.create_subscription(LaserScan, "/scan", self.scan_callback, 10)
+        self.map_publisher = self.create_publisher(OccupancyGrid, "/map", 10)
 
-        self.create_timer(0.5, self.update_map)
-        # self.create_timer(0.5, self.update_marker)
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self, spin_thread=True)
 
         # Parameters
         self.resolution = 0.05  # 5 cm per cell
-        self.objects = None
         self.map = Map(self.resolution)
+        self.workspace_vertices = []
 
-        # Exploration workspace perimeter
-        self.workspace_vertices = [
-            (-2.20, -1.30),
-            (2.20, -1.30),
-            (4.50, 0.66),
-            (7.00, 0.66),
-            (7.00, 2.84),
-            (5.46, 2.84),
-            (5.46, 1.30),
-            (-2.20, 1.30)
-        ]
+        self.create_timer(0.5, self.update_map)
 
-        # Collection workspace perimeter
-        # self.workspace_vertices = [
-        #     (-2.20, -1.30),
-        #     (2.20, -1.30),
-        #     (2.20, 1.30),
-        #     (-2.20, 1.30),
-        # ]
 
+    def workspace_callback(self, msg: Workspace):
+        if self.workspace_vertices:
+            return
+        for point_msg in msg.points:
+            x = point_msg.x
+            y = point_msg.y
+            self.workspace_vertices.append((x, y))
         # Initalise map based on workspace perimeter
         self.map.initalise_grid_with_workspace(self.workspace_vertices)
 
-    def objects_callback(self, msg):
-        for object_msg in msg.objects:
-            x = object_msg.x
-            y = object_msg.y
-            angle = object_msg.angle
-            object_type = object_msg.object_type
-            self.map.add_object(x, y, angle, object_type)
+    def scan_callback(self, msg: LaserScan):
+        if self.map.grid is None:
+            return
 
-    def update_marker(self):
-        marker = Marker()
-        marker.header.frame_id = "map"  # Ensure this frame exists in your TF tree
-        marker.header.stamp = self.get_clock().now().to_msg()  # Ensure current timestamp
-        marker.ns = "workspace"
-        marker.id = 0
-        marker.type = Marker.LINE_STRIP
-        marker.action = Marker.ADD
+        # Lidar origin
+        lidar_origin = PointStamped()
+        lidar_origin.header.stamp = msg.header.stamp
+        lidar_origin.header.frame_id = msg.header.frame_id
+        lidar_origin.point.x = 0.0
+        lidar_origin.point.y = 0.0
+        lidar_origin.point.z = 0.0
 
-        # Set the scale of the lines (thickness)
-        marker.scale.x = 0.05  # Increased line thickness for better visibility
+        try:
+            origin_transform = self.tf_buffer.lookup_transform(
+                "odom",
+                msg.header.frame_id,
+                rclpy.time.Time(seconds=0),
+                rclpy.duration.Duration(seconds=1.0)
+            )
+            transformed_origin = tf2_geometry_msgs.do_transform_point(lidar_origin, origin_transform)
+        except TransformException as ex:
+            self.get_logger().warn(f"Could not transform lidar origin reading ({lidar_origin.point.x}, {lidar_origin.point.y}): {ex}")
+            return
 
-        # Set the color of the lines (e.g., green)
-        marker.color.r = 0.0
-        marker.color.g = 1.0
-        marker.color.b = 0.0
-        marker.color.a = 1.0  # Fully opaque
+        angle = msg.angle_min
 
-        # Add the vertices of the workspace polygon
-        for x, y in self.workspace_vertices:
-            point = Point()
-            point.x = x  # Already in meters
-            point.y = y  # Already in meters
-            point.z = 0.0  # Workspace is on the ground (z = 0)
-            marker.points.append(point)
+        # Process laser scan readings
+        for reading in msg.ranges:
+            valid = not (math.isinf(reading) or math.isnan(reading))
+            if not valid:
+                reading = msg.range_max
+                
 
-        # Close the polygon by adding the first vertex again
-        first_point = Point()
-        first_point.x = self.workspace_vertices[0][0]
-        first_point.y = self.workspace_vertices[0][1]
-        first_point.z = 0.0
-        marker.points.append(first_point)
+            if not (angle > -(math.pi * 0.25) and angle < (math.pi * 0.75)):
+                angle += msg.angle_increment
+                continue
 
-        # Publish the marker
-        self.marker_publisher.publish(marker)
+            # Lidar point
+            lidar_point = PointStamped()
+            lidar_point.header.stamp = msg.header.stamp
+            lidar_point.header.frame_id = msg.header.frame_id
+            lidar_point.point.x = reading * math.cos(angle)
+            lidar_point.point.y = reading * math.sin(angle)
+            lidar_point.point.z = 0.0
+
+            try:
+                point_transform = self.tf_buffer.lookup_transform(
+                    "odom",
+                    msg.header.frame_id,
+                    rclpy.time.Time(seconds=0),
+                    rclpy.duration.Duration(seconds=1.0)
+                )
+                transformed_point = tf2_geometry_msgs.do_transform_point(lidar_point, point_transform)
+
+            except TransformException as ex:
+                self.get_logger().warn(f"Could not transform lidar point reading ({lidar_point.point.x}, {lidar_point.point.y}): {ex}")
+                angle += msg.angle_increment
+                continue
+
+            self.map.update_obstacles_in_line(transformed_origin.point.x, transformed_origin.point.y, transformed_point.point.x, transformed_point.point.y, valid)
+            angle += msg.angle_increment
 
     def update_map(self):
+        if not self.workspace_vertices:
+            return
         map_msg = OccupancyGrid()
         map_msg.header.stamp = self.get_clock().now().to_msg()
         map_msg.header.frame_id = "map"
