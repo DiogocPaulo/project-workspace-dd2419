@@ -164,6 +164,11 @@ class Navigation(Node):
             if distance <= distance_threshold and not self.waiting_for_path:
                 self.get_logger().info(f"Reached end of target path")
                 self.waiting_for_path = True
+                if self.backing_up:
+                    self.get_logger().info("Exiting backing up process")
+                    self.state.target_velocity = target_velocity
+                    self.target_path.reverse_path()
+                    self.backing_up = False
 
                 # Clear existing target path
                 self.target_path.x_points = []
