@@ -24,6 +24,8 @@ class TargetPath:
         self.x_points.reverse()
         self.y_points.reverse()
 
+        self.old_nearest_point_index = None
+
     def search_target_index(self,  state: RobotState):
         if not self.x_points or not self.y_points:
             # Checks if there exits a path

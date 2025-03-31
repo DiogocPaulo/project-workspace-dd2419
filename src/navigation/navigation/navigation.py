@@ -24,7 +24,7 @@ lookahead_min = 0.3         # Minimum look-ahead distance
 distance_threshold = 0.15   # Stop distance threshold
 yaw_threshold = 0.2         # Stop yaw threshold
 target_velocity = 0.15      # Robot's target velocity
-backing_velocity = -0.10
+backing_velocity = -0.15
 
 def pure_pursuit_control(state, target_path):
     index, lookahead = target_path.search_target_index(state)
@@ -170,7 +170,11 @@ class Navigation(Node):
                 self.target_path.y_points = []
                 return
 
-        if (abs(alpha) > (math.pi / 2)) and not self.backing_up:
+        if self.backing_up:
+            left_wheel = self.state.target_velocity - (base/2) * omega
+            right_wheel = self.state.target_velocity + (base/2) * omega
+            self.get_logger().info(f"Velocity: {self.state.velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
+        elif (abs(alpha) > (math.pi / 2)):
             angular_velocity = 0.10
             left_wheel = -angular_velocity
             right_wheel = angular_velocity
@@ -180,7 +184,7 @@ class Navigation(Node):
             command_velocity = self.state.target_velocity * np.exp(-2 * np.abs(alpha))
             left_wheel = command_velocity - (base/2) * omega
             right_wheel = command_velocity + (base/2) * omega
-            self.get_logger().info(f"Velocity: {command_velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
+            self.get_logger().info(f"Velocity: {self.state.velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
 
         self.publish_duty_cycles(left_wheel, right_wheel)
 
