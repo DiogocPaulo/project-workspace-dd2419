@@ -152,7 +152,7 @@ class Navigation(Node):
             self.backing_up = False
             return
 
-        if not self.target_path.x_points or self.waiting_for_path:
+        if not self.target_path.x_points or (self.waiting_for_path and not self.backing_up):
             self.get_logger().info("Waiting for path")
             self.publish_duty_cycles(0.0, 0.0)
             return
