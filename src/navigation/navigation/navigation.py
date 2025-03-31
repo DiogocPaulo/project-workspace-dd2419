@@ -40,7 +40,7 @@ def pure_pursuit_control(state, target_path):
         target_y = target_path.y_points[-1]
         index = len(target_path.x_points) - 1
 
-    if state.velocity < 0:
+    if state.target_velocity < 0:
         effective_yaw = state.yaw + math.pi
     else:
         effective_yaw = state.yaw
@@ -49,7 +49,7 @@ def pure_pursuit_control(state, target_path):
     alpha = math.atan2(math.sin(alpha), math.cos(alpha))
     kappa = 2.0 * math.sin(alpha) / lookahead
 
-    omega = state.velocity * kappa
+    omega = state.target_velocity * kappa
 
     return omega, alpha, index
 
@@ -65,7 +65,7 @@ def calculate_angular_velocity(state, state_yaw, target_yaw):
 
     alpha = math.atan2(math.sin(error), math.cos(error))
     kappa = 2.0 * math.sin(alpha)
-    omega = state.velocity * kappa
+    omega = state.target_velocity * kappa
     return omega, alpha
 
 class Navigation(Node):
@@ -177,7 +177,7 @@ class Navigation(Node):
             self.get_logger().info(f"Velocity: {angular_velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
         else:
             # angular_scale = 2 * (np.abs(alpha) / np.pi)
-            command_velocity = self.state.velocity * np.exp(-2 * np.abs(alpha))
+            command_velocity = self.state.target_velocity * np.exp(-2 * np.abs(alpha))
             left_wheel = command_velocity - (base/2) * omega
             right_wheel = command_velocity + (base/2) * omega
             self.get_logger().info(f"Velocity: {command_velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
