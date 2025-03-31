@@ -24,8 +24,9 @@ lookahead_min = 0.3         # Minimum look-ahead distance
 distance_threshold = 0.15   # Stop distance threshold
 yaw_threshold = 0.2         # Stop yaw threshold
 target_velocity = 0.15      # Robot's target velocity
+backing_velocity = -0.10
 
-def pure_pursuit_control(state, target_path):
+def pure_pursuit_control(state, target_path, reverse=False):
     index, lookahead = target_path.search_target_index(state)
     
     if index is None:
@@ -40,7 +41,11 @@ def pure_pursuit_control(state, target_path):
         index = len(target_path.x_points) - 1
 
     alpha = math.atan2(target_y - state.y, target_x - state.x) - state.yaw
-    alpha = math.atan2(math.sin(alpha), math.cos(alpha))
+    if not reverse:
+        alpha = math.atan2(math.sin(alpha), math.cos(alpha))
+    else:
+        alpha = math.atan2(-math.sin(alpha), -math.cos(alpha))
+
     kappa = 2.0 * math.sin(alpha) / lookahead
 
     omega = state.velocity * kappa
@@ -83,6 +88,7 @@ class Navigation(Node):
         self.target_path = TargetPath(lookahead_gain, lookahead_min)
         self.previous_index = 0
         self.waiting_for_path = True
+        self.backing_up = False
         self.inflated_map = None
 
         self.create_timer(0.05, self.control_loop)
@@ -91,6 +97,8 @@ class Navigation(Node):
         self.state.update_state(msg)
 
     def path_callback(self, msg: Path):
+        if self.backing_up:
+            return
         if len(msg.poses) > 0:
             self.waiting_for_path = False
             self.target_path.update_path(msg)
@@ -129,9 +137,40 @@ class Navigation(Node):
         self.motor_publisher.publish(duty_msg)
 
     def control_loop(self):
-        if self.inflated_map is not None and not self.inflated_map.is_free(self.state.x, self.state.y, 50):
-            self.get_logger().info("Backing within inflation radius")
-            self.publish_duty_cycles(-0.10, -0.10)
+        in_inflated_region = self.inflated_map is not None and not self.inflated_map.is_free(self.state.x, self.state.y, 50)
+        if in_inflated_region and not self.backing_up:
+            self.get_logger().info("Entering backing up process")
+            self.state.target_velocity = backing_velocity
+            self.target_path.reverse_path()
+            self.backing_up = True
+            return
+        elif not in_inflated_region and self.backing_up:
+            self.get_logger().info("Exiting backing up process")
+            self.state.target_velocity = target_velocity
+            self.target_path.reverse_path()
+            self.backing_up = False
+            return
+
+        if self.backing_up:
+            omega, alpha, self.previous_index = pure_pursuit_control(self.state, self.target_path, reverse=True)
+
+            distance = self.state.distance_to_state(self.target_path.x_points[-1], self.target_path.y_points[-1])
+            if distance <= distance_threshold:
+                self.get_logger().info("Reached end of target path when backing")
+                self.state.target_velocity = target_velocity
+                self.target_path.reverse_path()
+                self.backing_up = False
+                self.waiting_for_path = True
+
+                # Clear existing target path
+                self.target_path.x_points = []
+                self.target_path.y_points = []
+                return
+            command_velocity = self.state.velocity * np.exp(-2 * np.abs(alpha))
+            left_wheel = command_velocity - (base/2) * omega
+            right_wheel = command_velocity + (base/2) * omega
+            self.get_logger().info(f"Velocity: {command_velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
+            self.publish_duty_cycles(left_wheel, right_wheel)
             return
 
         if not self.target_path.x_points or self.waiting_for_path:
