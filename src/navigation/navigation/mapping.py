@@ -34,7 +34,7 @@ class Mapping(Node):
 
         self.create_subscription(Workspace, "/workspace", self.workspace_callback, 10)
         self.create_subscription(LaserScan, "/scan", self.scan_callback, 10)
-        self.map_publisher = self.create_publisher(OccupancyGrid, "/lidar_map", 10)
+        self.map_publisher = self.create_publisher(OccupancyGrid, "/map", 10)
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self, spin_thread=True)

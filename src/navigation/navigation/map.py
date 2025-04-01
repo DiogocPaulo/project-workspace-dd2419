@@ -41,8 +41,8 @@ class Map:
         self.grid_height = grid_height
         self.grid = grid
         self.workspace_vertices = None
-        self.occupancy_increase = 25
-        self.occupancy_decrease = 5
+        self.occupancy_increase = 20
+        self.occupancy_decrease = 2
 
     def initialise_grid(self, workspace_vertices):
         # Initialise grid based on a workspace perimeter
@@ -297,7 +297,7 @@ class Map:
         inflated_grid = np.where(
             (occupied_mask > 0),
             self.grid,
-            (inflated_values * 0.5).astype(int),
+            (inflated_values * 0.8).astype(int),
         )
 
         self.grid = inflated_grid

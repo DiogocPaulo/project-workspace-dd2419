@@ -110,7 +110,7 @@ class Navigation(Node):
             self.get_logger().warn("Recived empty path")
 
     def odom_path_callback(self, msg: Path):
-        if not self.backing_up and not self.waiting_for_path:
+        if not self.backing_up or not self.waiting_for_path:
             return
         if len(msg.poses) > 0:
             self.waiting_for_path = False
@@ -161,6 +161,10 @@ class Navigation(Node):
             self.get_logger().info("Exiting backing up process")
             self.state.target_velocity = target_velocity
             self.backing_up = False
+
+            self.waiting_for_path = True
+            self.target_path.x_points = []
+            self.target_path.y_points = []
             return
 
         if not self.target_path.x_points or (self.waiting_for_path and not self.backing_up):
