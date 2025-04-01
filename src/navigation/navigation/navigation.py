@@ -23,8 +23,9 @@ lookahead_gain = 0.1        # Look-ahead distance gain
 lookahead_min = 0.3         # Minimum look-ahead distance
 distance_threshold = 0.15   # Stop distance threshold
 yaw_threshold = 0.2         # Stop yaw threshold
-target_velocity = 0.15      # Robot's target velocity
+target_velocity = 0.16      # Robot's target velocity
 backing_velocity = -0.10
+angular_velocity = 0.10
 
 def pure_pursuit_control(state, target_path):
     index, lookahead = target_path.search_target_index(state)
@@ -40,12 +41,12 @@ def pure_pursuit_control(state, target_path):
         target_y = target_path.y_points[-1]
         index = len(target_path.x_points) - 1
 
-    if state.target_velocity < 0:
-        effective_yaw = state.yaw + math.pi
-    else:
-        effective_yaw = state.yaw
+    # if state.target_velocity < 0:
+    #     effective_yaw = state.yaw + math.pi
+    # else:
+    #     effective_yaw = state.yaw
 
-    alpha = math.atan2(target_y - state.y, target_x - state.x) - effective_yaw
+    alpha = math.atan2(target_y - state.y, target_x - state.x) - state.yaw
     alpha = math.atan2(math.sin(alpha), math.cos(alpha))
     kappa = 2.0 * math.sin(alpha) / lookahead
 
@@ -193,14 +194,13 @@ class Navigation(Node):
             left_wheel = self.state.target_velocity - (base/2) * omega
             right_wheel = self.state.target_velocity + (base/2) * omega
             self.get_logger().info(f"Velocity: {self.state.velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
-        elif (abs(alpha) > (math.pi / 2)):
-            angular_velocity = 0.10
+        elif (abs(alpha) >= (math.pi * 0.75)):
             left_wheel = -angular_velocity
             right_wheel = angular_velocity
             self.get_logger().info(f"Velocity: {angular_velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
         else:
             # angular_scale = 2 * (np.abs(alpha) / np.pi)
-            command_velocity = self.state.target_velocity * np.exp(-2 * np.abs(alpha))
+            command_velocity = self.state.target_velocity * np.exp(-1 * np.abs(alpha))
             left_wheel = command_velocity - (base/2) * omega
             right_wheel = command_velocity + (base/2) * omega
             self.get_logger().info(f"Velocity: {self.state.velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")

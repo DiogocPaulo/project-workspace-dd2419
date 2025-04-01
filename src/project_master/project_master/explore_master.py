@@ -241,7 +241,7 @@ class ExploreMaster(Node):
         self.map = Map(self.resolution)
         self.map.initialise_grid(self.workspace_vertices)
         self.map.inflate_grid(0.45)
-        self.show_waypoints = True
+        self.show_waypoints = False
         self.end_points = generate_waypoints_with_map(self.map, 0.45, self.resolution)
         # self.end_points = generate_waypoints(offset_workspace_vertices(self.workspace_vertices, 0.45), 0.35, 0.05)
 

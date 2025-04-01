@@ -26,8 +26,7 @@ setup(
             'localisation = localisation.localisation:main',
             'odometry = localisation.odometry:main',
             'ag_scan = localisation.ag_scan:main',
-            'transform_consumer = localisation.transform_consumer:main'
-            'dead_reckoning = localisation.dead_reckoning:main',
+            'transform_consumer = localisation.transform_consumer:main',
             'navigation = localisation.navigation:main',
         ],
     },

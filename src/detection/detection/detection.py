@@ -449,7 +449,7 @@ class ExamineImage(Node):
 
         ratio = num_middle_layer_points / num_highest_layer_points
 
-        self.get_logger().info(f"ratio: {ratio}")
+        #self.get_logger().info(f"ratio: {ratio}")
 
         # Classification based on the ratio
         if 1 < ratio <= 6.5:  # Cube: ratio is approximately 1
@@ -583,7 +583,7 @@ class ExamineImage(Node):
                 else:
                     free_from_obstacles = self.map.are_adjacent_cells_free(x_transformed, y_transformed, 1, 50)
 
-                self.get_logger().info(f"initial:{self.initial_object_list}")
+                #self.get_logger().info(f"initial:{self.initial_object_list}")
 
                 # If not a duplicate, add the new object to the list
                 if not is_duplicate and free_from_obstacles:
@@ -603,12 +603,12 @@ class ExamineImage(Node):
                     object_list_msg.objects = self.object_list
                     self.object_list_publisher.publish(object_list_msg)
 
-                    self.get_logger().info(f"Published new object list now includes: {object_type} at ({x_transformed:.2f}, {y_transformed:.2f})")
+                    #self.get_logger().info(f"Published new object list now includes: {object_type} at ({x_transformed:.2f}, {y_transformed:.2f})")
 
                  # Confidence-based correction
                 CONFIDENCE_RADIUS = 0.06 # 5cm
                 MIN_CONSISTENT = 2        # Need at least 2 consistent observations
-                self.get_logger().info(f"obstacles:{self.object_list}")
+                #self.get_logger().info(f"obstacles:{self.object_list}")
                 
                 # Find all objects in this area
                 nearby = []
@@ -680,6 +680,8 @@ class ExamineImage(Node):
                 # Determine threshold based on types
                 if obj1.object_type == "box" or obj2.object_type == "box":
                     threshold = 0.18  # Boxes need 18cm
+                elif obj1.object_type == obj2.object_type: 
+                    threshold = 0.15
                 else:
                     threshold = 0.06 # Others need 5cm
 
