@@ -44,24 +44,15 @@ class Map:
         self.occupancy_increase = 25
         self.occupancy_decrease = 5
 
-    def initialise_grid(self):
-        # Initialise grid based map properties
-        if self.grid_width is None or self.grid_height is None:
-            raise ValueError("Grid width and height not initialised")
-        if self.origin_x is None or self.origin_y is None:
-            raise ValueError("Grid origin not initialised")
-
-        self.grid = np.full((self.grid_height, self.grid_width), -1, dtype=np.int8)
-
-    def initalise_grid_with_workspace(self, workspace_vertices):
+    def initialise_grid(self, workspace_vertices):
         # Initialise grid based on a workspace perimeter
         x_list = [vertex[0] for vertex in workspace_vertices]
         y_list = [vertex[1] for vertex in workspace_vertices]
 
         x_min = math.floor(min(x_list) / self.resolution) - 1
-        x_max = math.ceil(max(x_list) / self.resolution) + 1
+        x_max = math.ceil(max(x_list) / self.resolution)
         y_min = math.floor(min(y_list) / self.resolution) - 1
-        y_max = math.ceil(max(y_list) / self.resolution) + 1
+        y_max = math.ceil(max(y_list) / self.resolution)
 
         self.grid_width = x_max - x_min + 1
         self.grid_height = y_max - y_min
@@ -173,74 +164,59 @@ class Map:
                 error += dx
         return cells
 
-    def update_obstacles_in_line(self, start_x, start_y, end_x, end_y, valid):
+    def update_obstacles(self, valid, start_x, start_y, end_x, end_y):
         start_x, start_y = self.world_to_grid(start_x, start_y)
         end_x, end_y = self.world_to_grid(end_x, end_y)
         cells = self.point_to_line(start_x, start_y, end_x, end_y)
+        for cell in cells[:-1]:
+            x, y = cell
+            if not self.is_within_workspace(x, y, world=False):
+                continue
+            self.grid[y, x] = max(self.grid[y, x] - self.occupancy_decrease, 0)
+        x, y = cells[-1]
+        if not self.is_within_grid(x, y, world=False):
+            return
         if valid:
-        # For valid readings increase occupancy of the last cell decrease the rest
-            for cell in cells:
-                x, y = cell
-                if not (0 < x < self.grid_width-1 and 0 < y < self.grid_height-1):
-                    continue
-                if cell == cells[-1]:
-                    self.grid[y, x] = min(self.grid[y, x] + self.occupancy_increase, 100)
-                else:
-                    self.grid[y, x] = max(self.grid[y, x] - self.occupancy_decrease, 0)
+            self.grid[y, x] = min(self.grid[y, x] + self.occupancy_increase, 100)
         else:
-        # For invalid readings decrease occupancy of all cells
-            for cell in cells:
-                x, y = cell
-                if not (0 < x < self.grid_width-1 and 0 < y < self.grid_height-1):
-                    continue
-                self.grid[y, x] = max(self.grid[y, x] - self.occupancy_decrease, 0)
-
+            self.grid[y, x] = max(self.grid[y, x] - self.occupancy_decrease, 0)
 
     def set_workspace_vertices(self, vertices):
-        """Sets the workspace boundary as a list of (x, y) vertices and marks grid cells outside the workspace."""
-        self.workspace_vertices = vertices
+        self.workspace_vertices = [self.world_to_grid(x, y) for x, y in vertices]
 
-        # Mark grid cells outside the workspace
         for y in range(self.grid_height):
             for x in range(self.grid_width):
-                world_x, world_y = self.grid_to_world(x, y)
-                if not self.is_within_workspace(world_x, world_y):
+                if not self.is_within_workspace(x, y, world=False):
                     self.grid[y, x] = 100
 
-    def is_on_line(self, x, y, x1, y1, x2, y2):
-        """Checks if (x, y) lies exactly on the line segment (x1, y1) -> (x2, y2)."""
-        if min(x1, x2) <= x <= max(x1, x2) and min(y1, y2) <= y <= max(y1, y2):
-            cross_product = (y - y1) * (x2 - x1) - (x - x1) * (y2 - y1)
-            if abs(cross_product) < 1e-6:  # Close to zero → on the line
-                return True
-        return False
+    def winding_number(self, x, y):
+        counter = 0
+        for i in range(len(self.workspace_vertices)):
+            x_current, y_current = self.workspace_vertices[i]
+            x_next, y_next = self.workspace_vertices[(i + 1) % len(self.workspace_vertices)]
 
-    def winding_number(self, x, y, vertices):
-        """Calculate the winding number for a point (x, y) to determine if it is inside the polygon."""
-        wn = 0  # Winding number counter
-        n = len(vertices)
+            if y_current <= y:
+                if y_next > y:
+                    if self.is_left(x, y, x_current, y_current, x_next, y_next) > 0: 
+                        counter += 1
+            else:
+                if y_next <= y:
+                    if self.is_left(x, y, x_current, y_current, x_next, y_next) < 0:
+                        counter -= 1
+        return counter != 0
 
-        for i in range(n):
-            x1, y1 = vertices[i]
-            x2, y2 = vertices[(i + 1) % n]
+    def is_left(self, x, y, x_current, y_current, x_next, y_next):
+        return ((x_next - x_current) * (y - y_current) - (y_next - y_current) * (x - x_current))
 
-            # Check if point is on the boundary (on the line segment)
-            if self.is_on_line(x, y, x1, y1, x2, y2):
-                return True  # Point is on the boundary, considered inside
+    def is_within_workspace(self, x, y, world=True):
+        if world:
+            x, y = self.world_to_grid(x, y)
+        return self.winding_number(x, y)
 
-            # Check if the point is between the y-bounds of the edge
-            if y1 <= y < y2 or y2 <= y < y1:
-                # Calculate the x-coordinate of the intersection of the edge with a horizontal line from the point
-                x_intersection = x1 + (y - y1) * (x2 - x1) / (y2 - y1)
-
-                if x < x_intersection:
-                    wn += 1 if y1 < y2 else -1  # Increment or decrement based on the edge direction
-
-        return wn != 0  # If the winding number is non-zero, the point is inside
-
-    def is_within_workspace(self, x, y):
-        """Checks if a point (x, y) is inside the workspace or on its boundary."""
-        return self.winding_number(x, y, self.workspace_vertices)
+    def is_within_grid(self, x, y, world=False):
+        if world:
+            x, y = self.world_to_grid(x, y)
+        return (0 <= x < self.grid_width and 0 <= y < self.grid_height)
 
     def is_free(self, x, y, value_threshold):
         # Check if a grid cell is free based on a value threshold

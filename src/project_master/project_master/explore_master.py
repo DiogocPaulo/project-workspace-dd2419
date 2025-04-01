@@ -231,7 +231,7 @@ class ExploreMaster(Node):
     def __init__(self):
         super().__init__("explore_master")
 
-        workspace_file = "workspaces/small_workspace.tsv"
+        workspace_file = "workspaces/large_workspace.tsv"
         self.workspace_vertices = self.read_workspace(workspace_file, skip_header=True)
         self.workspace_publisher = self.create_publisher(Workspace, "/workspace", 10)
         self.waypoints_path_publisher = self.create_publisher(Path, "/waypoints_path", 10)
@@ -239,7 +239,7 @@ class ExploreMaster(Node):
 
         self.resolution = 0.05
         self.map = Map(self.resolution)
-        self.map.initalise_grid_with_workspace(self.workspace_vertices)
+        self.map.initialise_grid(self.workspace_vertices)
         self.map.inflate_grid(0.45)
         self.show_waypoints = True
         self.end_points = generate_waypoints_with_map(self.map, 0.45, self.resolution)

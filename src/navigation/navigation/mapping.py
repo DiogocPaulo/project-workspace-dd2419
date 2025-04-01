@@ -34,7 +34,7 @@ class Mapping(Node):
 
         self.create_subscription(Workspace, "/workspace", self.workspace_callback, 10)
         self.create_subscription(LaserScan, "/scan", self.scan_callback, 10)
-        self.map_publisher = self.create_publisher(OccupancyGrid, "/map", 10)
+        self.map_publisher = self.create_publisher(OccupancyGrid, "/lidar_map", 10)
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self, spin_thread=True)
@@ -55,7 +55,7 @@ class Mapping(Node):
             y = point_msg.y
             self.workspace_vertices.append((x, y))
         # Initalise map based on workspace perimeter
-        self.map.initalise_grid_with_workspace(self.workspace_vertices)
+        self.map.initialise_grid(self.workspace_vertices)
 
     def scan_callback(self, msg: LaserScan):
         if self.map.grid is None:
@@ -116,7 +116,7 @@ class Mapping(Node):
                 angle += msg.angle_increment
                 continue
 
-            self.map.update_obstacles_in_line(transformed_origin.point.x, transformed_origin.point.y, transformed_point.point.x, transformed_point.point.y, valid)
+            self.map.update_obstacles(valid, transformed_origin.point.x, transformed_origin.point.y, transformed_point.point.x, transformed_point.point.y)
             angle += msg.angle_increment
 
     def update_map(self):
