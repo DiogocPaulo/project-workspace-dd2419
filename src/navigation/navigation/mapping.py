@@ -86,7 +86,7 @@ class Mapping(Node):
                 reading = msg.range_max
                 
 
-            if not (angle > -(math.pi * 0.15) and angle < (math.pi * 0.65)):
+            if not (angle > -(math.pi * 0.20) and angle < (math.pi * 0.70)):
                 angle += msg.angle_increment
                 continue
 
