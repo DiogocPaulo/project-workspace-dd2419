@@ -132,7 +132,7 @@ class ExamineImage(Node):
             #self.get_logger().info(f"Published TF for object: {object_type} at ({x:.2f}, {y:.2f})")
 
         object_list_msg = ObjectList()
-        object_list_msg.header.frame_id = "map"
+        object_list_msg.header.frame_id = "odom"
         object_list_msg.header.stamp = self.get_clock().now().to_msg()
         object_list_msg.length = len(self.object_list)
         object_list_msg.objects = self.object_list
@@ -530,7 +530,7 @@ class ExamineImage(Node):
 
         try:
             transform = self.tfBuffer.lookup_transform(
-                'map',  # Target frame
+                "odom",  # Target frame
                 point_in.header.frame_id,  # Source frame
                 point_in.header.stamp,
                 rclpy.duration.Duration(seconds=1.0)  # Timeout
@@ -562,7 +562,7 @@ class ExamineImage(Node):
                 self.initial_object_list.append(initial_object_msg)
 
                 initial_list_msg = ObjectList()
-                initial_list_msg.header.frame_id = "map"
+                initial_list_msg.header.frame_id = "odom"
                 initial_list_msg.header.stamp = stamp
                 initial_list_msg.length = len(self.initial_object_list)
                 initial_list_msg.objects = self.initial_object_list
@@ -597,7 +597,7 @@ class ExamineImage(Node):
                     self.object_list.append(object_msg)
 
                     object_list_msg = ObjectList()
-                    object_list_msg.header.frame_id = "map"
+                    object_list_msg.header.frame_id = "odom"
                     object_list_msg.header.stamp = stamp
                     object_list_msg.length = len(self.object_list)
                     object_list_msg.objects = self.object_list
@@ -644,7 +644,7 @@ class ExamineImage(Node):
 
                         # Re-publish the corrected object list
                         object_list_msg = ObjectList()
-                        object_list_msg.header.frame_id = "map"
+                        object_list_msg.header.frame_id = "odom"
                         object_list_msg.header.stamp = stamp
                         object_list_msg.length = len(self.object_list)
                         object_list_msg.objects = self.object_list
@@ -699,7 +699,7 @@ class ExamineImage(Node):
 
         for i, object_msg in enumerate(self.object_list):
             transform = TransformStamped()
-            transform.header.frame_id = 'map'  # Change to your desired parent frame
+            transform.header.frame_id = "odom"  # Change to your desired parent frame
             transform.header.stamp = self.get_clock().now().to_msg()
             transform.child_frame_id = f"{object_msg.object_type}_{i}"
             

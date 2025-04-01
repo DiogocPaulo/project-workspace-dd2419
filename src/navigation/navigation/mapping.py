@@ -63,12 +63,12 @@ class Mapping(Node):
 
         try:
             if not self.tf_buffer.can_transform(
-                "map", msg.header.frame_id, rclpy.time.Time(seconds=0), rclpy.duration.Duration(seconds=1.0)
+                "odom", msg.header.frame_id, rclpy.time.Time(seconds=0), rclpy.duration.Duration(seconds=1.0)
             ):
                 self.get_logger().warn(f"No transform from lidar_link to map found")
                 return
             lidar_transform = self.tf_buffer.lookup_transform(
-                "map", msg.header.frame_id, rclpy.time.Time(seconds=0)
+                "odom", msg.header.frame_id, rclpy.time.Time(seconds=0)
             )
 
         except tf2_ros.TransformException as ex:
@@ -118,7 +118,7 @@ class Mapping(Node):
             return
         map_msg = OccupancyGrid()
         map_msg.header.stamp = self.get_clock().now().to_msg()
-        map_msg.header.frame_id = "map"
+        map_msg.header.frame_id = "odom"
 
         map_msg.info.resolution = self.map.resolution
         map_msg.info.width = self.map.grid_width

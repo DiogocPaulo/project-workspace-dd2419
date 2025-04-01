@@ -96,7 +96,7 @@ class Pathing(Node):
 
         map_msg = OccupancyGrid()
         map_msg.header.stamp = self.get_clock().now().to_msg()
-        map_msg.header.frame_id = "map"
+        map_msg.header.frame_id = "odom"
 
         map_msg.info.resolution = self.inflated_map.resolution
         map_msg.info.width = self.inflated_map.grid_width
@@ -154,7 +154,7 @@ class Pathing(Node):
 
         path_msg = Path()
         path_msg.header.stamp = self.get_clock().now().to_msg()
-        path_msg.header.frame_id = "map"
+        path_msg.header.frame_id = "odom"
 
         if path is not None:
             for point in path:
@@ -185,7 +185,7 @@ class Pathing(Node):
 
         path_msg = Path()
         path_msg.header.stamp = self.get_clock().now().to_msg()
-        path_msg.header.frame_id = "map"
+        path_msg.header.frame_id = "odom"
 
         dx = end_x - start_x
         dy = end_y - start_y
@@ -226,7 +226,7 @@ class Pathing(Node):
 
         path_msg = Path()
         path_msg.header.stamp = self.get_clock().now().to_msg()
-        path_msg.header.frame_id = "map"
+        path_msg.header.frame_id = "odom"
 
         # Intermidiate points
         path_resolution = 20

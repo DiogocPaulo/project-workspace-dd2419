@@ -260,7 +260,7 @@ class ExploreMaster(Node):
     def publish_workspace(self):
         workspace_msg = Workspace()
         workspace_msg.header.stamp = self.get_clock().now().to_msg()
-        workspace_msg.header.frame_id = "map"
+        workspace_msg.header.frame_id = "odom"
 
         for vertex in self.workspace_vertices:
             point_msg = Point()
@@ -276,7 +276,7 @@ class ExploreMaster(Node):
             return
         path_msg = Path()
         path_msg.header.stamp = self.get_clock().now().to_msg()
-        path_msg.header.frame_id = "map"
+        path_msg.header.frame_id = "odom"
 
         for i in range(len(self.end_points)):
             pose_msg = PoseStamped()
@@ -294,7 +294,7 @@ class ExploreMaster(Node):
     def broadcast_waypoints(self):
         for i, point in enumerate(self.end_points):
             transform = TransformStamped()
-            transform.header.frame_id = 'map'  # Change to your desired parent frame
+            transform.header.frame_id = "odom"  # Change to your desired parent frame
             transform.header.stamp = self.get_clock().now().to_msg()
             transform.child_frame_id = f'EndPoint{i}'
             
