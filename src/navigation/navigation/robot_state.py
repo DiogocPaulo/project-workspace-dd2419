@@ -23,7 +23,7 @@ class RobotState:
         self.yaw = np.arctan2(siny_cosp, cosy_cosp)
 
         odom_velocity = odom_msg.twist.twist.linear.x
-        self.velocity = odom_velocity + (self.target_velocity - odom_velocity)
+        self.velocity = odom_velocity
 
     def distance_to_state(self, x, y):
         return np.hypot(self.x - x, self.y - y)

@@ -449,7 +449,7 @@ class ExamineImage(Node):
 
         ratio = num_middle_layer_points / num_highest_layer_points
 
-        #self.get_logger().info(f"ratio: {ratio}")
+        self.get_logger().info(f"ratio: {ratio}")
 
         # Classification based on the ratio
         if 1 < ratio <= 6.5:  # Cube: ratio is approximately 1
@@ -570,11 +570,11 @@ class ExamineImage(Node):
 
                 for i, obj in enumerate(self.initial_object_list[:-1]):
                     distance = np.sqrt((x_transformed - obj.x)**2 + (y_transformed - obj.y)**2)
-                    if obj.object_type == "box":
-                        if distance < 0.18: # If the object is within 1 cm of an existing object
+                    if object_type == "box" or obj.object_type == "box":
+                        if distance < 0.20:    #f the object is within 1 cm of an existing object
                             is_duplicate = True
                             break
-                    elif distance < 0.05: # If the object is within 1 cm of an existing object
+                    elif distance < 0.06:   # If the object is within 1 cm of an existing object
                         is_duplicate = True
                         break
 
@@ -606,7 +606,7 @@ class ExamineImage(Node):
                     self.get_logger().info(f"Published new object list now includes: {object_type} at ({x_transformed:.2f}, {y_transformed:.2f})")
 
                  # Confidence-based correction
-                CONFIDENCE_RADIUS = 0.05  # 5cm
+                CONFIDENCE_RADIUS = 0.06 # 5cm
                 MIN_CONSISTENT = 2        # Need at least 2 consistent observations
                 self.get_logger().info(f"obstacles:{self.object_list}")
                 
@@ -614,8 +614,8 @@ class ExamineImage(Node):
                 nearby = []
                 for obj in self.initial_object_list:
                     dist = np.sqrt((x_transformed - obj.x)**2 + (y_transformed - obj.y)**2)
-                    if obj.object_type == "box":
-                        if dist <= 0.18:
+                    if object_type == "box" or obj.object_type == "box":
+                        if dist <= 0.20:
                             nearby.append(obj)
                     elif dist <= CONFIDENCE_RADIUS: # If the object is within 1 cm of an existing object
                         nearby.append(obj)
@@ -634,8 +634,8 @@ class ExamineImage(Node):
                             for nearby_obj in nearby:
                                 dist = np.sqrt((obj.x - nearby_obj.x)**2 + (obj.y - nearby_obj.y)**2)
                                 if obj.object_type == "box":
-                                    if dist <= 0.18:
-                                        self.object_list[i].object_type = most_common
+                                    if dist <= 0.20:
+                                        self.object_list[i].object_type = "box"
                                         break
                                 elif dist <= CONFIDENCE_RADIUS:
                                     # Update the type in the main object list
@@ -657,11 +657,46 @@ class ExamineImage(Node):
         except TransformException as e:
             self.get_logger().error(f"Failed coordinate transform for newly {object_type} detected object: {e}")
 
+    def check_duplicates(self):
+        duplicates_removed = 0
+        n = len(self.object_list)
+        to_remove = set()  # Stores indices of objects to remove
 
+        for i in range(n):
+            if i in to_remove:
+                continue  # Skip if already marked for removal
+            
+            obj1 = self.object_list[i]
+            
+            for j in range(i + 1, n):
+                if j in to_remove:
+                    continue  # Skip if already marked
+                
+                obj2 = self.object_list[j]
+                dx = obj1.x - obj2.x
+                dy = obj1.y - obj2.y
+                dist = np.sqrt(dx**2 + dy**2)
+
+                # Determine threshold based on types
+                if obj1.object_type == "box" or obj2.object_type == "box":
+                    threshold = 0.18  # Boxes need 18cm
+                else:
+                    threshold = 0.06 # Others need 5cm
+
+                # If too close, mark the second object for removal
+                if dist < threshold:
+                    to_remove.add(j)
+                    duplicates_removed += 1
+
+        # Rebuild the list, excluding duplicates
+        self.object_list = [obj for idx, obj in enumerate(self.object_list) if idx not in to_remove]
+        return
 
     
 
     def broadcast_object_list(self):
+        self.check_duplicates()
+
         for i, object_msg in enumerate(self.object_list):
             transform = TransformStamped()
             transform.header.frame_id = 'map'  # Change to your desired parent frame

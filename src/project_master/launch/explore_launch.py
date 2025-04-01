@@ -1,4 +1,4 @@
-# Launches pathing and navigation
+# Launches nodes for exploration phase
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
@@ -15,7 +15,7 @@ def generate_launch_description():
         Node(
             package="project_master",
             executable="explore_master",
-            name="robot_master",
+            name="robot_explore",
             ros_arguments=["--log-level", "info"]
         ),
         Node(
@@ -28,7 +28,7 @@ def generate_launch_description():
             package="navigation",
             executable="mapping",
             name="robot_mapping",
-            ros_arguments=["--log-level", "info"]
+            ros_arguments=["--log-level", "warn"]
         ),
         Node(
             package="navigation",

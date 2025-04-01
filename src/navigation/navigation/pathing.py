@@ -81,8 +81,12 @@ class Pathing(Node):
             response.success = True
             response.message = f"Pathing end point set: ({self.end_point[0]:.2f}, {self.end_point[1]:.2f})"
         else:
-            response.success = False
-            response.message = f"Failed to find path to end point: ({self.end_point[0]:.2f}, {self.end_point[1]:.2f})"
+            if self.inflated_map.is_free(self.start_point[0], self.start_point[1], 50):
+                response.success = False
+                response.message = f"Failed to find path to end point: ({self.end_point[0]:.2f}, {self.end_point[1]:.2f})"
+            else:
+                response.success = True
+                response.message = f"Currently within inflation radius waiting on navigation: ({self.start_point[0]:.2f}, {self.start_point[1]:.2f}) = {self.inflated_map.get_occupancy(self.start_point[0], self.start_point[1])}"
 
         return response
 
@@ -133,7 +137,7 @@ class Pathing(Node):
                 angle = object_msg.angle
                 object_type = object_msg.object_type
                 self.inflated_map.add_object(x, y, angle, object_type)
-            self.inflated_map.inflate_grid(inflation_radius)
+            self.inflated_map.inflate_grid_by_half(inflation_radius)
             path_planner = AdaptiveAStar(self.inflated_map.grid, self.adaptive_h)
             path = path_planner.plan_path((start_y, start_x), (end_y, end_x))
 
