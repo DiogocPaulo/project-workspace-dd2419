@@ -189,7 +189,7 @@ class Map:
                 if not self.is_within_workspace(x, y, world=False):
                     self.grid[y, x] = 100
 
-    def winding_number(self, x, y, vertices=self.workspace_vertices):
+    def winding_number(self, x, y, vertices):
         counter = 0
         for i in range(len(vertices)):
             x_current, y_current = vertices[i]
@@ -211,7 +211,7 @@ class Map:
     def is_within_workspace(self, x, y, world=True):
         if world:
             x, y = self.world_to_grid(x, y)
-        return self.winding_number(x, y)
+        return self.winding_number(x, y, self.workspace_vertices)
 
     def is_within_grid(self, x, y, world=False):
         if world:
