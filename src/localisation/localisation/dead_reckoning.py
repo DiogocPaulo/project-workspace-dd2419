@@ -27,16 +27,17 @@ class DeadReckoning(Node):
             history=HistoryPolicy.KEEP_LAST,
             reliability=ReliabilityPolicy.BEST_EFFORT
         )
+        self.exclusive_group = rclpy.callback_groups.MutuallyExclusiveCallbackGroup()
 
         # Constants
         self.ticks_per_revolution = 48 * 64
         self.wheel_radius = 0.04921
         self.base_width = 0.31
         self.yaw_weight = 0.98
-        self.angular_weight = 0.95
 
         # Internal variables
         self.then_time = self.get_clock().now()
+        self.last_imu_time = None
         self.accumulated_ticks_left = 0
         self.accumulated_ticks_right = 0
         self.last_encoder_left = None
@@ -46,11 +47,10 @@ class DeadReckoning(Node):
         self.theta = 0.0
         self.linear_velocity = 0.0
         self.angular_velocity = 0.0
-        self.imu_yaw = None
-        self.imu_angular_velocity = None
+        self.imu_yaw = 0.0
 
-        self.create_subscription(Encoders, "/motor/encoders", self.encoder_callback, qos_profile)
-        self.create_subscription(Imu, "/imu/data_raw", self.imu_callback, qos_profile)
+        self.create_subscription(Encoders, "/motor/encoders", self.encoder_callback, qos_profile, callback_group=self.exclusive_group)
+        self.create_subscription(Imu, "/imu/data_raw", self.imu_callback, qos_profile, callback_group=self.exclusive_group)
         self.odom_publisher = self.create_publisher(Odometry, "/odom", 10)
         self.path_publisher = self.create_publisher(Path, "/odom_path", 10)
         self.odom_path = Path()
@@ -58,7 +58,7 @@ class DeadReckoning(Node):
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self, spin_thread=True)
 
-        self.create_timer(0.1, self.update_odometry)
+        self.create_timer(0.1, self.update_odometry, callback_group=self.exclusive_group)
 
     def encoder_callback(self, msg):
         # Init step
@@ -75,42 +75,20 @@ class DeadReckoning(Node):
         self.last_encoder_right = msg.encoder_right
 
     def imu_callback(self, msg):
-        q = imu_pose_base.orientation
-        siny_cosp = 2 * (q.w * q.z + q.x * q.y)
-        cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z)
-        imu_yaw = np.arctan2(siny_cosp, cosy_cosp)
-        imu_angular_velocity = msg.angular_velocity.z
-        imu_linear_velocity = msg.linear_velocity.x
-        self.get_logger().info(f"Odometry vs IMU - Linear: {self.linear_velocity} vs {imu_linear_velocity}")
-        self.get_logger().info(f"Odometry vs IMU - Angular: {self.angular_velocity} vs {imu_angular_velocity}")
-        self.get_logger().info(f"Odometry vs IMU - Yaw: {self.theta} vs {imu_yaw}")
-        # try:
-        #     imu_pose = PoseStamped()
-        #     imu_pose.header.stamp = msg.header.stamp
-        #     imu_pose.header.frame_id = msg.header.frame_id
-        #     imu_pose.pose.position.x = 0
-        #     imu_pose.pose.position.y = 0
-        #     imu_pose.pose.position.z = 0
-        #     imu_pose.orientation.x = msg.orientation.x
-        #     imu_pose.orientation.y = msg.orientation.y
-        #     imu_pose.orientation.z = msg.orientation.z
-        #
-        #     imu_to_base = self.tf_buffer.lookup_transform(
-        #         "base_link",
-        #         msg.header.frame_id,
-        #         msg.header.stamp,
-        #         rclpy.duration.Duration(seconds=1.0),
-        #     )
-        #     imu_pose_base = tf2_geometry_msgs.do_transform_pose_stamped(imu_pose, imu_to_base)
-        #
-        #     q = imu_pose_base.orientation
-        #     siny_cosp = 2 * (q.w * q.z + q.x * q.y)
-        #     cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z)
-        #     self.imu_yaw = np.arctan2(siny_cosp, cosy_cosp)
-        #     self.imu_angular_velocity = msg.angular_velocity.z
-        # except TransformException as ex:
-        #     self.get_logger().warn(f"Could not transform IMU reading to base_link: {ex}")
-        #     return
+        if self.last_imu_time is None:
+            self.last_imu_time = self.get_clock().now()
+            return
+        now_time = self.get_clock().now()
+        elapsed_time = now_time - self.last_imu_time
+        self.last_imu_time = now_time
+        elapsed_time = elapsed_time.nanoseconds / 1e9
+
+        if elapsed_time > 0:
+            yaw_delta = msg.angular_velocity.z * elapsed_time
+        else:
+            yaw_delta = 0
+
+        self.imu_yaw += yaw_delta
 
     def update_odometry(self):
         # Wait for encoder init
@@ -147,11 +125,7 @@ class DeadReckoning(Node):
         elif delta_theta != 0:
             self.theta += delta_theta
 
-        # Calculate velocities, fusing IMU angular velocity into angular velocity if avalialbe
-        if self.imu_angular_velocity is not None and elapsed_time > 0:
-            self.angular_velocity = (self.angular_weight * self.imu_angular_velocity) + ((1 - self.angular_weight) * (delta_theta / elapsed_time))
-            self.angular_velocity = delta_theta / elapsed_time
-        elif elapsed_time > 0:
+        if elapsed_time > 0:
             self.linear_velocity = delta_distance / elapsed_time
             self.angular_velocity = delta_theta / elapsed_time
         else:
