@@ -47,16 +47,12 @@ def pure_pursuit_control(state, target_path):
 
     alpha = math.atan2(target_y - state.y, target_x - state.x) - state.yaw
     alpha = math.atan2(math.sin(alpha), math.cos(alpha))
-    curvature = 2.0 * math.sin(alpha) / lookahead
+    kappa = 2.0 * math.sin(alpha) / lookahead
 
-    clamped_curvature = max(curvature_min, min(abs(curvature), curvature_max))
-    normalised_curvature = clamped_curvature / curvature_max
-
-    cube_root_curvature = np.cbrt(normalised_curvature)
-    speed_factor = np.power(math.sin(math.acos(cube_root_curvature)), 3)
+    speed_factor = np.exp(-2 * np.abs(alpha))
     linear_velocity = (velocity_max - velocity_min) * speed_factor + velocity_min
 
-    angular_velocity = linear_velocity * curvature
+    angular_velocity = linear_velocity * kappa
 
     return linear_velocity, angular_velocity, alpha, index
 
@@ -179,7 +175,7 @@ class Navigation(Node):
             self.publish_duty_cycles(0.0, 0.0)
             return
 
-        linear_velocity, angular_velocity, alpha, self.previous_index = pure_pursuit_control(self.state, self.target_path)
+        linear_velocity, angular_velocity, self.previous_index = pure_pursuit_control(self.state, self.target_path)
 
         if self.previous_index >= (len(self.target_path.x_points) - 1):
             distance = self.state.distance_to_state(self.target_path.x_points[-1], self.target_path.y_points[-1])
@@ -196,23 +192,12 @@ class Navigation(Node):
                 self.target_path.y_points = []
                 return
 
-        # if self.backing_up:
-        #     left_wheel = self.state.target_velocity - (base/2) * omega
-        #     right_wheel = self.state.target_velocity + (base/2) * omega
-        #     self.get_logger().info(f"Velocity: {self.state.velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
-        # elif (abs(alpha) > (math.pi / 2)):
-        #     angular_velocity = 0.10
-        #     left_wheel = -angular_velocity
-        #     right_wheel = angular_velocity
-        #     self.get_logger().info(f"Velocity: {angular_velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
-        # else:
-        #     # angular_scale = 2 * (np.abs(alpha) / np.pi)
-        #     command_velocity = self.state.target_velocity * np.exp(-2 * np.abs(alpha))
-        #     left_wheel = command_velocity - (base/2) * omega
-        #     right_wheel = command_velocity + (base/2) * omega
-        #     self.get_logger().info(f"Velocity: {self.state.velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
-        left_wheel = linear_velocity - (base/2) * angular_velocity
-        right_wheel = linear_velocity + (base/2) * angular_velocity
+        if (abs(alpha) > (math.pi * 0.75)):
+            left_wheel = (base/2) * angular_velocity
+            right_wheel = (base/2) * angular_velocity
+        else:
+            left_wheel = linear_velocity - (base/2) * angular_velocity
+            right_wheel = linear_velocity + (base/2) * angular_velocity
         self.get_logger().info(f"Velocity: {self.state.velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
 
         self.publish_duty_cycles(left_wheel, right_wheel)
