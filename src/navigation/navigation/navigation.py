@@ -49,8 +49,8 @@ def pure_pursuit_control(state, target_path):
     alpha = math.atan2(math.sin(alpha), math.cos(alpha))
     kappa = 2.0 * math.sin(alpha) / lookahead
 
-    decay_rate = 2.0 * (1 - abs(alpha)/math.pi)
-    speed_factor = np.exp(-decay_rate * np.abs(alpha))
+    # decay_rate = 2.0 * (1 - abs(alpha)/math.pi)
+    speed_factor = np.exp(-1 * np.abs(alpha))
     linear_velocity = (velocity_max - velocity_min) * speed_factor + velocity_min
 
     angular_velocity = linear_velocity * kappa
@@ -176,7 +176,7 @@ class Navigation(Node):
             self.publish_duty_cycles(0.0, 0.0)
             return
 
-        linear_velocity, angular_velocity, self.previous_index = pure_pursuit_control(self.state, self.target_path)
+        linear_velocity, angular_velocity, alpha, self.previous_index = pure_pursuit_control(self.state, self.target_path)
 
         if self.previous_index >= (len(self.target_path.x_points) - 1):
             distance = self.state.distance_to_state(self.target_path.x_points[-1], self.target_path.y_points[-1])
