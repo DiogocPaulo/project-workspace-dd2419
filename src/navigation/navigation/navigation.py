@@ -27,7 +27,7 @@ target_velocity = 0.15      # Robot's target velocity
 backing_velocity = -0.10
 
 velocity_min = 0.10
-velocity_max = 0.22
+velocity_max = 0.18
 curvature_min = 0.0
 curvature_max = 6.0
 
@@ -49,7 +49,8 @@ def pure_pursuit_control(state, target_path):
     alpha = math.atan2(math.sin(alpha), math.cos(alpha))
     kappa = 2.0 * math.sin(alpha) / lookahead
 
-    speed_factor = np.exp(-2 * np.abs(alpha))
+    decay_rate = 2.0 * (1 - abs(alpha)/math.pi)
+    speed_factor = np.exp(-decay_rate * np.abs(alpha))
     linear_velocity = (velocity_max - velocity_min) * speed_factor + velocity_min
 
     angular_velocity = linear_velocity * kappa
@@ -192,9 +193,9 @@ class Navigation(Node):
                 self.target_path.y_points = []
                 return
 
-        if (abs(alpha) > (math.pi * 0.75)):
-            left_wheel = (base/2) * angular_velocity
-            right_wheel = (base/2) * angular_velocity
+        if (abs(alpha) > (math.pi * 0.5)):
+            left_wheel = 0.0 - (base/2) * angular_velocity
+            right_wheel = 0.0 + (base/2) * angular_velocity
         else:
             left_wheel = linear_velocity - (base/2) * angular_velocity
             right_wheel = linear_velocity + (base/2) * angular_velocity
