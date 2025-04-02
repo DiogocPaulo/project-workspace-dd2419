@@ -26,6 +26,11 @@ yaw_threshold = 0.2         # Stop yaw threshold
 target_velocity = 0.15      # Robot's target velocity
 backing_velocity = -0.10
 
+velocity_min = 0.10
+velocity_max = 0.22
+curvature_min = 0.0
+curvature_max = 6.0
+
 def pure_pursuit_control(state, target_path):
     index, lookahead = target_path.search_target_index(state)
     
@@ -40,18 +45,20 @@ def pure_pursuit_control(state, target_path):
         target_y = target_path.y_points[-1]
         index = len(target_path.x_points) - 1
 
-    if state.target_velocity < 0:
-        effective_yaw = state.yaw + math.pi
-    else:
-        effective_yaw = state.yaw
-
-    alpha = math.atan2(target_y - state.y, target_x - state.x) - effective_yaw
+    alpha = math.atan2(target_y - state.y, target_x - state.x) - state.yaw
     alpha = math.atan2(math.sin(alpha), math.cos(alpha))
-    kappa = 2.0 * math.sin(alpha) / lookahead
+    curvature = 2.0 * math.sin(alpha) / lookahead
 
-    omega = state.target_velocity * kappa
+    clamped_curvature = max(curvature_min, min(abs(curvature), curvature_max))
+    normalised_curvature = clamped_curvature / curvature_max
 
-    return omega, alpha, index
+    cube_root_curvature = np.cbrt(normalised_curvature)
+    speed_factor = np.power(math.sin(math.acos(cube_root_curvature)), 3)
+    linear_velocity = (velocity_max - velocity_min) * speed_factor + velocity_min
+
+    angular_velocity = linear_velocity * curvature
+
+    return linear_velocity, angular_velocity, alpha, index
 
 def calculate_angular_velocity(state, state_yaw, target_yaw):
     state_yaw = (state_yaw + 180) % 360 - 180
@@ -151,59 +158,62 @@ class Navigation(Node):
         self.motor_publisher.publish(duty_msg)
 
     def control_loop(self):
-        in_inflated_region = self.inflated_map is not None and not self.inflated_map.is_free(self.state.x, self.state.y, 50)
-        if in_inflated_region and not self.backing_up and self.waiting_for_path:
-            self.get_logger().info("Entering backing up process")
-            self.state.target_velocity = backing_velocity
-            self.backing_up = True
-            return
-        elif not in_inflated_region and self.backing_up:
-            self.get_logger().info("Exiting backing up process")
-            self.state.target_velocity = target_velocity
-            self.backing_up = False
-
-            self.waiting_for_path = True
-            self.target_path.x_points = []
-            self.target_path.y_points = []
-            return
+        # in_inflated_region = self.inflated_map is not None and not self.inflated_map.is_free(self.state.x, self.state.y, 50)
+        # if in_inflated_region and not self.backing_up and self.waiting_for_path:
+        #     self.get_logger().info("Entering backing up process")
+        #     self.state.target_velocity = backing_velocity
+        #     self.backing_up = True
+        #     return
+        # elif not in_inflated_region and self.backing_up:
+        #     self.get_logger().info("Exiting backing up process")
+        #     self.state.target_velocity = target_velocity
+        #     self.backing_up = False
+        #
+        #     self.waiting_for_path = True
+        #     self.target_path.x_points = []
+        #     self.target_path.y_points = []
+        #     return
 
         if not self.target_path.x_points or (self.waiting_for_path and not self.backing_up):
             self.get_logger().info("Waiting for path")
             self.publish_duty_cycles(0.0, 0.0)
             return
 
-        omega, alpha, self.previous_index = pure_pursuit_control(self.state, self.target_path)
+        linear_velocity, angular_velocity, alpha, self.previous_index = pure_pursuit_control(self.state, self.target_path)
 
         if self.previous_index >= (len(self.target_path.x_points) - 1):
             distance = self.state.distance_to_state(self.target_path.x_points[-1], self.target_path.y_points[-1])
             if distance <= distance_threshold and not self.waiting_for_path:
                 self.get_logger().info(f"Reached end of target path")
                 self.waiting_for_path = True
-                if self.backing_up:
-                    self.get_logger().info("Exiting backing up process")
-                    self.state.target_velocity = target_velocity
-                    self.backing_up = False
+                # if self.backing_up:
+                #     self.get_logger().info("Exiting backing up process")
+                #     self.state.target_velocity = target_velocity
+                #     self.backing_up = False
 
                 # Clear existing target path
                 self.target_path.x_points = []
                 self.target_path.y_points = []
                 return
 
-        if self.backing_up:
-            left_wheel = self.state.target_velocity - (base/2) * omega
-            right_wheel = self.state.target_velocity + (base/2) * omega
-            self.get_logger().info(f"Velocity: {self.state.velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
-        elif (abs(alpha) > (math.pi / 2)):
-            angular_velocity = 0.10
-            left_wheel = -angular_velocity
-            right_wheel = angular_velocity
-            self.get_logger().info(f"Velocity: {angular_velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
-        else:
-            # angular_scale = 2 * (np.abs(alpha) / np.pi)
-            command_velocity = self.state.target_velocity * np.exp(-2 * np.abs(alpha))
-            left_wheel = command_velocity - (base/2) * omega
-            right_wheel = command_velocity + (base/2) * omega
-            self.get_logger().info(f"Velocity: {self.state.velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
+        # if self.backing_up:
+        #     left_wheel = self.state.target_velocity - (base/2) * omega
+        #     right_wheel = self.state.target_velocity + (base/2) * omega
+        #     self.get_logger().info(f"Velocity: {self.state.velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
+        # elif (abs(alpha) > (math.pi / 2)):
+        #     angular_velocity = 0.10
+        #     left_wheel = -angular_velocity
+        #     right_wheel = angular_velocity
+        #     self.get_logger().info(f"Velocity: {angular_velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
+        # else:
+        #     # angular_scale = 2 * (np.abs(alpha) / np.pi)
+        #     command_velocity = self.state.target_velocity * np.exp(-2 * np.abs(alpha))
+        #     left_wheel = command_velocity - (base/2) * omega
+        #     right_wheel = command_velocity + (base/2) * omega
+        #     self.get_logger().info(f"Velocity: {self.state.velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
+        left_wheel = linear_velocity - (base/2) * angular_velocity
+        right_wheel = linear_velocity + (base/2) * angular_velocity
+        self.get_logger().info(f"Velocity: {self.state.velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
 
         self.publish_duty_cycles(left_wheel, right_wheel)
 

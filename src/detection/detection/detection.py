@@ -680,6 +680,8 @@ class ExamineImage(Node):
                 # Determine threshold based on types
                 if obj1.object_type == "box" or obj2.object_type == "box":
                     threshold = 0.18  # Boxes need 18cm
+                elif obj1.object_type == obj2.object_type: 
+                    threshold = 0.15
                 else:
                     threshold = 0.06 # Others need 5cm
 
