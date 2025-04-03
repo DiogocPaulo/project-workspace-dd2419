@@ -27,7 +27,6 @@ target_velocity = 0.15      # Robot's target velocity
 backing_velocity = -0.10
 
 turning_velocity = 0.10
-target_velocity = 0.15
 
 def pure_pursuit_control(state, target_path):
     index, lookahead = target_path.search_target_index(state)
@@ -49,7 +48,7 @@ def pure_pursuit_control(state, target_path):
     speed_factor = np.exp(-2 * np.power(alpha, 2))
     linear_velocity = target_velocity * speed_factor
 
-    kappa = 4.0 * np.arctan(alpha) / lookahead
+    kappa = 2.0 * np.arctan(alpha) / lookahead
     angular_velocity = target_velocity * kappa
 
     return linear_velocity, angular_velocity, index
