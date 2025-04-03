@@ -42,7 +42,7 @@ class Map:
         self.grid = grid
         self.workspace_vertices = None
         self.occupancy_increase = 25
-        self.occupancy_decrease = 1
+        self.occupancy_decrease = 5
 
     def initialise_grid(self, workspace_vertices):
         # Initialise grid based on a workspace perimeter

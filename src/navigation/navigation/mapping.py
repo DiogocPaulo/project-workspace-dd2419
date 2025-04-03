@@ -39,8 +39,11 @@ class Mapping(Node):
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self, spin_thread=True)
 
-        # Parameters
-        self.resolution = 0.05  # 5 cm per cell
+        # Constants
+        self.ignore_distance = 0.35
+        self.resolution = 0.05
+
+        # Variables
         self.map = Map(self.resolution)
         self.workspace_vertices = []
         self.lidar_origin_x = None
@@ -84,15 +87,16 @@ class Mapping(Node):
             valid = not (math.isinf(reading) or math.isnan(reading))
             if not valid:
                 reading = msg.range_max
+
+            lidar_point_x = reading * math.cos(angle)
+            lidar_point_y = reading * math.sin(angle)
+
+            distance = np.hypot(lidar_point_x, lidar_point_y)
                 
+            if distance > self.ignore_distance:
+                point_x, point_y = self.transform_point(lidar_transform, lidar_point_x, lidar_point_y)
+                self.map.update_obstacles(valid, self.lidar_origin_x, self.lidar_origin_y, point_x, point_y)
 
-            if not (angle > -(math.pi * 0.20) and angle < (math.pi * 0.70)):
-                angle += msg.angle_increment
-                continue
-
-            point_x, point_y = self.transform_point(lidar_transform, reading * math.cos(angle), reading * math.sin(angle))
-
-            self.map.update_obstacles(valid, self.lidar_origin_x, self.lidar_origin_y, point_x, point_y)
             angle += msg.angle_increment
 
         self.update_map()
