@@ -33,7 +33,7 @@ class Pathing(Node):
         self.create_subscription(OccupancyGrid, "/map", self.map_callback, 10)
         self.create_subscription(ObjectList, "/detected_objects", self.objects_callback, qos_profile)
         self.path_publisher = self.create_publisher(Path, "/custom_path", 10)
-        self.path_grid_publisher = self.create_publisher(OccupancyGrid, "/custom_path_grid", 10)
+        self.path_map_publisher = self.create_publisher(OccupancyGrid, "/path_map", 10)
         self.inflated_map_publisher = self.create_publisher(OccupancyGrid, "/inflated_map", 10)
         self.end_point_service = self.create_service(GoToPoint, "/pathing_end_point", self.receive_end_point)
 
@@ -53,6 +53,7 @@ class Pathing(Node):
         
         self.create_timer(0.05, self.publish_astar_path)
         self.create_timer(0.5, self.update_inflated_map)
+        self.create_timer(0.5, self.update_path_map)
 
     def odom_callback(self, msg: Odometry):
         if self.start_point != (None, None):

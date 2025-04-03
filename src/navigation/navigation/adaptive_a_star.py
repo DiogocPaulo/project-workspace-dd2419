@@ -43,7 +43,7 @@ class AdaptiveAStar:
             if current == end_node:
                 # Reconstruct path
                 path = []
-                path_grid = np.full(grid.shape, -1, dtype=np.int8)
+                path_grid = np.full(self.grid.shape, -1, dtype=np.int8)
                 while current in came_from:
                     path.append(current)
                     current = came_from[current]
@@ -57,7 +57,7 @@ class AdaptiveAStar:
                             self.adaptive_h[node] = g_score[end_node] - g_score[node]
                 for x, y in path:
                     path_grid[x, y] = 100
-                return path, self.path_grid
+                return path, path_grid
 
             closed_set.add(current)
             for neighbour in self.get_neighbours(current):
