@@ -86,7 +86,7 @@ class Navigation(Node):
         self.motor_publisher = self.create_publisher(DutyCycles, "/motor/duty_cycles", 10)
 
         # Navigation parameters
-        self.state = RobotState(target_velocity)
+        self.state = RobotState()
         self.target_path = TargetPath(lookahead_gain, lookahead_min)
         self.previous_index = 0
         self.waiting_for_path = True
