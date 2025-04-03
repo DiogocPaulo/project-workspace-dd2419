@@ -18,6 +18,18 @@ from project_interfaces.srv import GoToPoint, Trigger
 from navigation.map import Map
 from navigation.adaptive_a_star import AdaptiveAStar
 
+def grid_intersection(grid1, grid2):
+    if grid1 is None or grid2 is None:
+        return True
+    height1, width1 = grid1.shape
+    height2, width2 = grid2.shape
+
+    if height1 != height2 or width1 != width2:
+        return True
+
+    return np.any((grid1 > 0) & (grid2 > 0))
+
+
 class Pathing(Node):
     
     def __init__(self):
@@ -143,25 +155,15 @@ class Pathing(Node):
         self.path_map_publisher.publish(map_msg)
         self.get_logger().info("Published custom path as occupancy map", once=True)
 
-    def extract_path(self, path_grid):
-        if self.map is None:
-            return None
-        if path_grid is None:
-            return None
-
-        mask = (path_grid == 10)
-        self.map.grid_to_world()
-
     def publish_astar_path(self):
         if self.start_point == (None, None):
-            self.get_logger().info("No start point received")
+            self.get_logger().warn("No start point received")
             return
         if self.end_point == (None, None):
-            self.get_logger().info("No end point received")
+            self.get_logger().warn("No end point received")
             return
-
         if self.map is None:
-            self.get_logger().info("Occupancy map not received")
+            self.get_logger().warn("Occupancy map not received")
             return
 
         start_x, start_y = self.map.world_to_grid(self.start_point[0], self.start_point[1])
@@ -178,6 +180,9 @@ class Pathing(Node):
                 object_type = object_msg.object_type
                 self.inflated_map.add_object(x, y, angle, object_type)
             self.inflated_map.inflate_grid_by_half(inflation_radius)
+            if not grid_intersection(self.inflated_map.grid, self.path_grid):
+                self.get_logger().info("Current path is still valid")
+                return
             path_planner = AdaptiveAStar(self.inflated_map.grid, self.adaptive_h)
             path, self.path_grid = path_planner.plan_path((start_y, start_x), (end_y, end_x))
 
