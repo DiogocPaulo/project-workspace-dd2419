@@ -26,10 +26,8 @@ yaw_threshold = 0.2         # Stop yaw threshold
 target_velocity = 0.15      # Robot's target velocity
 backing_velocity = -0.10
 
-velocity_min = 0.10
-velocity_max = 0.18
-curvature_min = 0.0
-curvature_max = 6.0
+turning_velocity = 0.10
+target_velocity = 0.15
 
 def pure_pursuit_control(state, target_path):
     index, lookahead = target_path.search_target_index(state)
@@ -47,15 +45,14 @@ def pure_pursuit_control(state, target_path):
 
     alpha = math.atan2(target_y - state.y, target_x - state.x) - state.yaw
     alpha = math.atan2(math.sin(alpha), math.cos(alpha))
-    kappa = 2.0 * math.sin(alpha) / lookahead
 
-    decay_rate = 2.0 * (1 - abs(alpha)/math.pi)
-    speed_factor = np.exp(-decay_rate * np.abs(alpha))
-    linear_velocity = (velocity_max - velocity_min) * speed_factor + velocity_min
+    speed_factor = np.exp(-2 * np.power(alpha, 2))
+    linear_velocity = target_velocity * speed_factor
 
-    angular_velocity = linear_velocity * kappa
+    kappa = 4.0 * np.arctan(alpha) / lookahead
+    angular_velocity = target_velocity * kappa
 
-    return linear_velocity, angular_velocity, alpha, index
+    return linear_velocity, angular_velocity, index
 
 def calculate_angular_velocity(state, state_yaw, target_yaw):
     state_yaw = (state_yaw + 180) % 360 - 180
@@ -193,12 +190,8 @@ class Navigation(Node):
                 self.target_path.y_points = []
                 return
 
-        if (abs(alpha) > (math.pi * 0.5)):
-            left_wheel = 0.0 - (base/2) * angular_velocity
-            right_wheel = 0.0 + (base/2) * angular_velocity
-        else:
-            left_wheel = linear_velocity - (base/2) * angular_velocity
-            right_wheel = linear_velocity + (base/2) * angular_velocity
+        left_wheel = linear_velocity - (base/2) * angular_velocity
+        right_wheel = linear_velocity + (base/2) * angular_velocity
         self.get_logger().info(f"Velocity: {self.state.velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
 
         self.publish_duty_cycles(left_wheel, right_wheel)
