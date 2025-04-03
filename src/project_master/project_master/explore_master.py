@@ -11,8 +11,8 @@ from geometry_msgs.msg import PoseStamped, TransformStamped
 from rclpy.qos import QoSProfile, HistoryPolicy, ReliabilityPolicy
 from project_interfaces.srv import GoToPoint, Trigger
 from nav_msgs.msg import Path, Odometry
-from project_interfaces.msg import Point, Workspace
-from navigation.map import Map, WorkspaceArea
+from project_interfaces.msg import Vertex, WorkspaceVertices
+from mapping.map import Map, WorkspaceArea
 
 from project_master import behaviours
 
@@ -231,9 +231,9 @@ class ExploreMaster(Node):
     def __init__(self):
         super().__init__("explore_master")
 
-        workspace_file = "workspaces/small_workspace.tsv"
+        workspace_file = "workspaces/large_workspace.tsv"
         self.workspace_vertices = self.read_workspace(workspace_file, skip_header=True)
-        self.workspace_publisher = self.create_publisher(Workspace, "/workspace", 10)
+        self.workspace_publisher = self.create_publisher(WorkspaceVertices, "/workspace", 10)
         self.waypoints_path_publisher = self.create_publisher(Path, "/waypoints_path", 10)
         self.end_points_broadcaster = TransformBroadcaster(self)
 
@@ -258,15 +258,17 @@ class ExploreMaster(Node):
             self.create_timer(2, self.broadcast_waypoints)
 
     def publish_workspace(self):
-        workspace_msg = Workspace()
+        workspace_msg = WorkspaceVertices()
         workspace_msg.header.stamp = self.get_clock().now().to_msg()
         workspace_msg.header.frame_id = "map"
 
         for vertex in self.workspace_vertices:
-            point_msg = Point()
-            point_msg.x = vertex[0]
-            point_msg.y = vertex[1]
-            workspace_msg.points.append(point_msg)
+            vertex_msg = Vertex()
+            vertex_msg.x = vertex[0]
+            vertex_msg.y = vertex[1]
+            workspace_msg.vertices.append(vertex_msg)
+
+        workspace_msg.grid_resolution = self.resolution
 
         self.workspace_publisher.publish(workspace_msg)
         self.get_logger().info("Published workspace vertices", once=True)

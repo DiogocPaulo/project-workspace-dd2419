@@ -15,7 +15,7 @@ from geometry_msgs.msg import PoseStamped
 
 from project_interfaces.srv import GoToPoint, Trigger
 
-from navigation.map import Map
+from mapping.map import Map
 from navigation.adaptive_a_star import AdaptiveAStar
 
 def grid_intersection(grid1, grid2):
@@ -28,7 +28,6 @@ def grid_intersection(grid1, grid2):
         return True
 
     return np.any((grid1 > 0) & (grid2 > 0))
-
 
 class Pathing(Node):
     
@@ -49,14 +48,14 @@ class Pathing(Node):
         self.inflated_map_publisher = self.create_publisher(OccupancyGrid, "/inflated_map", 10)
         self.end_point_service = self.create_service(GoToPoint, "/pathing_end_point", self.receive_end_point)
 
-        # Parameters
-        self.start_point = (0.0, 0.0)
-        self.end_point = (None, None)
-        self.amplitude = 0.5
-        self.cycles = 1.0
+        # Constants
         self.adaptive_h = {}
         self.base = 0.35
         self.region_radius = 1.0
+
+        # Variables
+        self.start_point = (0.0, 0.0)
+        self.end_point = (None, None)
         self.map = None
         self.inflated_map = None
         self.path_grid = None
@@ -75,7 +74,6 @@ class Pathing(Node):
         height = msg.info.height
         grid = np.array(msg.data, dtype=np.int8).reshape((height, width))
 
-        # Create map or update map grid
         if self.map is None:
             resolution = msg.info.resolution
             origin_x = msg.info.origin.position.x
@@ -185,7 +183,7 @@ class Pathing(Node):
                 self.get_logger().info("Current path is still valid")
                 return
             path_planner = AdaptiveAStar(self.inflated_map.grid, self.adaptive_h)
-            path, self.path_grid = path_planner.plan_path((start_y, start_x), (end_y, end_x))
+            path, self.path_grid = path_planner.plan_path((start_y, start_x), (end_y, end_x), 50)
 
             if path is not None:
                 break

@@ -15,8 +15,8 @@ find_package(geometry_msgs REQUIRED)
 # find_package(<dependency> REQUIRED)
 
 set(msg_files
-	"msg/Point.msg"
-	"msg/Workspace.msg"
+	"msg/Vertex.msg"
+	"msg/WorkspaceVertices.msg"
 	"msg/Object.msg"
 	"msg/ObjectList.msg"
 	)

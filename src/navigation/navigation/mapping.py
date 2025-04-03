@@ -2,7 +2,6 @@
 
 import math
 import numpy as np
-import sys
 
 import rclpy
 from rclpy.node import Node
@@ -17,9 +16,9 @@ from nav_msgs.msg import OccupancyGrid
 from visualization_msgs.msg import Marker, MarkerArray
 from geometry_msgs.msg import PointStamped, Pose, Quaternion, Vector3
 from sensor_msgs.msg import LaserScan
-from project_interfaces.msg import Point, Workspace
+from project_interfaces.msg import Vertex, WorkspaceVertices
 
-from navigation.map import Map
+from mapping.map import Map
 
 class Mapping(Node):
 
@@ -32,7 +31,7 @@ class Mapping(Node):
             reliability=ReliabilityPolicy.BEST_EFFORT
         )
 
-        self.create_subscription(Workspace, "/workspace", self.workspace_callback, 10)
+        self.create_subscription(WorkspaceVertices, "/workspace", self.workspace_callback, 10)
         # self.create_subscription(LaserScan, "/scan", self.scan_callback, 10)
         self.map_publisher = self.create_publisher(OccupancyGrid, "/map", 10)
 
@@ -49,12 +48,12 @@ class Mapping(Node):
         self.lidar_origin_x = None
         self.lidar_origin_y = None
 
-    def workspace_callback(self, msg: Workspace):
+    def workspace_callback(self, msg: WorkspaceVertices):
         if self.workspace_vertices:
             return
-        for point_msg in msg.points:
-            x = point_msg.x
-            y = point_msg.y
+        for vertex_msg in msg.vertices:
+            x = vertex_msg.x
+            y = vertex_msg.y
             self.workspace_vertices.append((x, y))
         # Initalise map based on workspace perimeter
         self.map.initialise_grid(self.workspace_vertices)

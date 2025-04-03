@@ -16,22 +16,23 @@ class AdaptiveAStar:
         # Default to Manhattan distance
         return abs(node[0] - end_node[0]) + abs(node[1] - end_node[1])
 
-    def get_neighbours(self, node):
+    def get_neighbours(self, node, occupancy):
         (y, x) = node  # Correct order: (row, column)
         neighbours = []
         for dy, dx in [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)]:  # Include diagonals
             next_y, next_x = y + dy, x + dx
             if 0 <= next_y < self.rows and 0 <= next_x < self.columns:
-                if self.grid[next_y, next_x] < 50:  # Ensure traversability
+                if self.grid[next_y, next_x] < occupancy:  # Ensure traversability
                     # Check for diagonal movement
                     if abs(dy) == 1 and abs(dx) == 1:
-                        if self.grid[y + dy, x] < 50 and self.grid[y, x + dx] < 50:  # Ensure both adjacent cells are free
+                        # Ensure both adjacent cells are free
+                        if self.grid[y + dy, x] < occupancy and self.grid[y, x + dx] < occupancy:
                             neighbours.append((next_y, next_x))
                     else:
                         neighbours.append((next_y, next_x))
         return neighbours
 
-    def plan_path(self, start_node, end_node):
+    def plan_path(self, start_node, end_node, occupancy):
         open_set = []
         heapq.heappush(open_set, (self.heuristic(start_node, end_node), 0, start_node))
         came_from = {}
@@ -60,7 +61,7 @@ class AdaptiveAStar:
                 return path, path_grid
 
             closed_set.add(current)
-            for neighbour in self.get_neighbours(current):
+            for neighbour in self.get_neighbours(current, occupancy):
                 tentative_g = g_score[current] + 1  # Uniform cost
                 if neighbour in g_score and tentative_g >= g_score[neighbour]:
                     continue  # Not a better path
@@ -69,38 +70,3 @@ class AdaptiveAStar:
                 f_score = tentative_g + self.heuristic(neighbour, end_node)
                 heapq.heappush(open_set, (f_score, tentative_g, neighbour))
         return None, None # No path found
-
-if __name__ == "__main__":
-    from navigation.map import Map
-
-    # Initialize the grid map
-    grid = Map(1, 0, 0, 15, 15)
-    grid.initialize_map()
-    grid.set_workspace_vertices([
-        (0, 0),
-        (10, 0),
-        (10, 10),
-        (0, 10)
-    ])
-    grid.set_grid_value(0, 0, 100)  # Mark obstacles
-    grid.set_grid_value(3, 3, 100)
-    grid.set_grid_value(7, 7, 100)
-
-    grid.inflate_map(1)  # Inflate obstacles
-
-    path_planner = AdaptiveAStar(grid.inflated_grid, {})
-
-    # Convert world coordinates to grid coordinates
-    grid_x, grid_y = map(int, grid.world_to_grid(7, 0.5))
-    grid_x_end, grid_y_end = map(int, grid.world_to_grid(2, 8))
-
-    # Fix indexing when accessing the grid
-    print(f"Value at start: {grid.inflated_grid[grid_y, grid_x]}")
-    print(f"Value at end: {grid.inflated_grid[grid_y_end, grid_x_end]}")
-
-    path = path_planner.plan_path((grid_y, grid_x), (grid_y_end, grid_x_end))
-    print("Path:", path)
-
-    # Visualize the grid
-    grid.visualize_grid(False, path)
-    grid.visualize_grid(True, path)

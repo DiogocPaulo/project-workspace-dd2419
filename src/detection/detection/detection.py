@@ -28,22 +28,13 @@ from sensor_msgs_py.point_cloud2 import create_cloud
 import time
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-from project_interfaces.msg import Object, ObjectList, Point, Workspace
-from navigation.map import WorkspaceArea, Map
+from project_interfaces.msg import Object, ObjectList, Vertex, WorkspaceVertices
+from mapping.map import WorkspaceArea, Map
 
 class ExamineImage(Node):
 
     def __init__(self):
         super().__init__('examine_image')
-
-        self.mat = None
-
-        self.get_logger().info(f"Init detection")
-
-        self.tfBuffer = tf2_ros.Buffer()
-        self.listener = tf2_ros.TransformListener(self.tfBuffer, self, spin_thread=True)
-
-        self.object_list_broadcaster = tf2_ros.TransformBroadcaster(self)
 
         qos_profile = QoSProfile(
             depth=1,
@@ -51,48 +42,40 @@ class ExamineImage(Node):
             reliability=ReliabilityPolicy.BEST_EFFORT
         )
 
-        self.sub2 = self.create_subscription(
-            PointCloud2,
-            '/camera/camera/depth/color/points',
-            self.cloud_callback,
-            qos_profile
-        )
-        self.create_subscription(Workspace, "/workspace", self.workspace_callback, 10)
-        self.create_subscription(OccupancyGrid, "/map", self.map_callback, 10)
-
+        self.create_subscription(PointCloud2, '/camera/camera/depth/color/points', self.cloud_callback, qos_profile)
+        self.create_subscription(WorkspaceVertices, "/workspace", self.workspace_callback, 10)
+        self.create_subscription(OccupancyGrid, "/map", self.obstacles_map_callback, 10)
         self.pub = self.create_publisher(PointCloud2, '/depth_points_filtered', 100)
+        # Publishers for detected objects as a list
+        self.object_list_publisher = self.create_publisher(ObjectList, "/detected_objects", 10)
+        # Publisher for clusters
+        self.cluster_publisher = self.create_publisher(PointCloud2, '/clusters', 10)
+
+        self.tfBuffer = tf2_ros.Buffer()
+        self.listener = tf2_ros.TransformListener(self.tfBuffer, self, spin_thread=True)
+        self.object_list_broadcaster = tf2_ros.TransformBroadcaster(self)
 
         # Create the 'maps' folder if it doesn't exist
         folder_path = os.path.join(os.getcwd(), 'maps')
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
 
-        # Define the path to the map file
+        # Constants
         self.file_path = os.path.join(folder_path, 'Map.txt')
 
-        # Initialize an empty list to store detected objects
+        # Variables
+        self.workspace_vertices = []
+        self.workspace_map = None
+        self.obstacles_map = None
         self.object_list = []
         self.initial_object_list = []
-
-        self.workspace = None
-        self.map = None
-
-        # Publishers for detected objects as a list
-        self.object_list_publisher = self.create_publisher(ObjectList, "/detected_objects", 10)
-
-        # Publisher for clusters
-        self.cluster_publisher = self.create_publisher(PointCloud2, '/clusters', 10)
-
-        self.broadcaster = self.create_timer(5.0, self.broadcast_object_list)
-
-        # Timer to periodically write to map.txt
-        self.write_timer = self.create_timer(5.0, self.write_to_file)  # Write every 5 seconds
-
-        # Add a counter to track the number of messages received
         self.message_counter = 0
-
         self.read = 0
 
+        self.broadcaster = self.create_timer(5.0, self.broadcast_object_list)
+        self.write_timer = self.create_timer(5.0, self.write_to_file)
+
+        self.get_logger().info(f"Init detection")
         self.read_map_file()
 
     def read_map_file(self):
@@ -138,30 +121,30 @@ class ExamineImage(Node):
         object_list_msg.objects = self.object_list
         self.object_list_publisher.publish(object_list_msg)
 
-    def workspace_callback(self, msg: Workspace):
-        if self.workspace:
+    def workspace_callback(self, msg: WorkspaceVertices):
+        if self.workspace_vertices:
             return
-        workspace_vertices = []
-        for point_msg in msg.points:
-            x = point_msg.x
-            y = point_msg.y
-            workspace_vertices.append((x, y))
+        for vertex_msg in msg.vertices:
+            x = vertex_msg.x
+            y = vertex_msg.y
+            self.workspace_vertices.append((x, y))
+        # Initialise map based on workspace perimeter
+        self.workspace_map = Map(msg.grid_resolution)
+        self.workspace_map.initialise_grid(self.workspace_vertices)
 
-        self.workspace = WorkspaceArea(workspace_vertices)
-
-    def map_callback(self, msg: OccupancyGrid):
+    def obstacles_map_callback(self, msg: OccupancyGrid):
         width = msg.info.width
         height = msg.info.height
         grid = np.array(msg.data, dtype=np.int8).reshape((height, width))
 
         # Create map or update map grid
-        if self.map is None:
+        if self.obstacles_map is None:
             resolution = msg.info.resolution
             origin_x = msg.info.origin.position.x
             origin_y = msg.info.origin.position.y
-            self.map = Map(resolution, origin_x, origin_y, width, height, grid)
+            self.obstacles_map = Map(resolution, origin_x, origin_y, width, height, grid)
         else:
-            self.map.update_grid(grid)
+            self.obstacles_map.update_grid(grid)
 
     def cloud_callback(self, msg: PointCloud2):
         # Increment the message counter
@@ -512,13 +495,6 @@ class ExamineImage(Node):
         # Publish the clusters
         self.cluster_publisher.publish(cluster_msg)
 
-    def is_within_workspace(self, x, y):
-        """Checks if a point (x, y) is within a simple rectangular boundary."""
-        if self.workspace_vertices is None:
-            return False
-        return self.workspace_x_min < x < self.workspace_x_max and self.workspace_y_min < y < self.workspace_y_max
-
-
     def publish_object(self, x, y, angle, object_type, stamp):
         # Create a PointStamped message for the input coordinates
         point_in = PointStamped()
@@ -544,10 +520,8 @@ class ExamineImage(Node):
             y_transformed = point_out.point.y
             z_transformed = point_out.point.z
 
-            # Check if the new object is a duplicate based on proximity
-            is_duplicate = False
-            if self.workspace is not None:
-                is_in = self.workspace.is_within_workspace(x_transformed, y_transformed)
+            if self.workspace_map is not None:
+                is_in = self.workspace_map.is_free(x_transformed, y_transformed, 50)
             else:
                 is_in = False
 
@@ -568,6 +542,8 @@ class ExamineImage(Node):
                 initial_list_msg.objects = self.initial_object_list
                 self.object_list_publisher.publish(initial_list_msg)
 
+                # Check if the new object is a duplicate based on proximity
+                is_duplicate = False
                 for i, obj in enumerate(self.initial_object_list[:-1]):
                     distance = np.sqrt((x_transformed - obj.x)**2 + (y_transformed - obj.y)**2)
                     if object_type == "box" or obj.object_type == "box":
@@ -578,10 +554,10 @@ class ExamineImage(Node):
                         is_duplicate = True
                         break
 
-                if self.map is None:
-                    free_from_obstacles = True
+                if self.obstacles_map is not None:
+                    free_from_obstacles = self.obstacles_map.are_adjacent_cells_free(x_transformed, y_transformed, 1, 75)
                 else:
-                    free_from_obstacles = self.map.are_adjacent_cells_free(x_transformed, y_transformed, 1, 50)
+                    free_from_obstacles = True
 
                 self.get_logger().info(f"initial:{self.initial_object_list}")
 

@@ -13,7 +13,7 @@ from geometry_msgs.msg import PoseStamped
 from robp_interfaces.msg import DutyCycles
 from project_interfaces.srv import GoToPoint, Trigger
 
-from navigation.map import Map
+from mapping.map import Map
 from navigation.robot_state import RobotState
 from navigation.target_path import TargetPath
 
