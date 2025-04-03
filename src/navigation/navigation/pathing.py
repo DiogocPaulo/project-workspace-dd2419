@@ -42,7 +42,7 @@ class Pathing(Node):
         self.amplitude = 0.5
         self.cycles = 1.0
         self.adaptive_h = {}
-        self.base = 0.45
+        self.base = 0.35
         self.region_radius = 1.0
         self.map = None
         self.inflated_map = None
@@ -143,10 +143,10 @@ class Pathing(Node):
 
             if path is not None:
                 break
-            if inflation_radius > 0.35:
-                inflation_radius -= self.map.resolution
-                self.get_logger().info("No path found, trying smaller inflation radius")
-                continue
+            # if inflation_radius > 0.35:
+            #     inflation_radius -= self.map.resolution
+            #     self.get_logger().info("No path found, trying smaller inflation radius")
+            #     continue
             else:
                 # If the path is none
                 self.get_logger().warn("No path found")

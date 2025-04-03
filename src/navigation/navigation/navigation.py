@@ -192,8 +192,8 @@ class Navigation(Node):
         left_wheel = linear_velocity - (base/2) * angular_velocity
         right_wheel = linear_velocity + (base/2) * angular_velocity
 
-        # left_wheel = np.copysign(np.maximum(np.abs(left_wheel), wheel_duty_min), left_wheel)
-        # right_wheel = np.copysign(np.maximum(np.abs(right_wheel), wheel_duty_min), right_wheel)
+        left_wheel = np.copysign(np.maximum(np.abs(left_wheel), wheel_duty_min), left_wheel)
+        right_wheel = np.copysign(np.maximum(np.abs(right_wheel), wheel_duty_min), right_wheel)
 
         self.get_logger().info(f"Velocity: {self.state.velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
 
