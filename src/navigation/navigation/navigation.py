@@ -19,14 +19,14 @@ from navigation.target_path import TargetPath
 
 # Robot parameters
 base = 0.3                  # Wheelbase of the vehicle
-lookahead_gain = 0.1        # Look-ahead distance gain
+lookahead_gain = 1.2        # Look-ahead distance gain
 lookahead_min = 0.3         # Minimum look-ahead distance
 distance_threshold = 0.15   # Stop distance threshold
 yaw_threshold = 0.2         # Stop yaw threshold
 target_velocity = 0.18      # Robot's target velocity
 backing_velocity = -0.10
 turning_velocity = 0.10
-wheel_duty_min = 0.09
+wheel_duty_min = 0.07
 
 def pure_pursuit_control(state, target_path):
     index, lookahead = target_path.search_target_index(state)
@@ -45,7 +45,7 @@ def pure_pursuit_control(state, target_path):
     alpha = math.atan2(target_y - state.y, target_x - state.x) - state.yaw
     alpha = math.atan2(math.sin(alpha), math.cos(alpha))
 
-    speed_factor = np.exp(-0.5 * np.power(alpha, 2))
+    speed_factor = np.exp(-2 * np.power(alpha, 2))
     linear_velocity = target_velocity * speed_factor
 
     kappa = 2.0 * np.arctan(alpha) / lookahead
@@ -192,8 +192,8 @@ class Navigation(Node):
         left_wheel = linear_velocity - (base/2) * angular_velocity
         right_wheel = linear_velocity + (base/2) * angular_velocity
 
-        left_wheel = np.copysign(np.maximum(np.abs(left_wheel), wheel_duty_min), left_wheel)
-        right_wheel = np.copysign(np.maximum(np.abs(right_wheel), wheel_duty_min), right_wheel)
+        # left_wheel = np.copysign(np.maximum(np.abs(left_wheel), wheel_duty_min), left_wheel)
+        # right_wheel = np.copysign(np.maximum(np.abs(right_wheel), wheel_duty_min), right_wheel)
 
         self.get_logger().info(f"Velocity: {self.state.velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
 
