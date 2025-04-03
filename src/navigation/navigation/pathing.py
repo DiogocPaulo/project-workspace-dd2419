@@ -55,8 +55,6 @@ class Pathing(Node):
         self.create_timer(0.5, self.update_inflated_map)
 
     def odom_callback(self, msg: Odometry):
-        if self.start_point != (None, None):
-            return
         self.start_point = (msg.pose.pose.position.x, msg.pose.pose.position.y)
 
     def map_callback(self, msg):
@@ -78,10 +76,6 @@ class Pathing(Node):
 
     def receive_end_point(self, request, response):
         if self.end_point != (request.x, request.y):
-            if not self.pathing_failed:
-                self.start_point = self.end_point
-            else:
-                self.start_point = (None, None)
             self.end_point = (request.x, request.y)
             self.pathing_failed = False
 
