@@ -37,7 +37,7 @@ class Pathing(Node):
         self.end_point_service = self.create_service(GoToPoint, "/pathing_end_point", self.receive_end_point)
 
         # Parameters
-        self.start_point = (0, 0)
+        self.start_point = (0.0, 0.0)
         self.end_point = (None, None)
         self.amplitude = 0.5
         self.cycles = 1.0
@@ -53,6 +53,8 @@ class Pathing(Node):
         self.create_timer(0.5, self.update_inflated_map)
 
     def odom_callback(self, msg: Odometry):
+        if self.start_point != (None, None):
+            return
         self.start_point = (msg.pose.pose.position.x, msg.pose.pose.position.y)
 
     def map_callback(self, msg):
@@ -74,6 +76,10 @@ class Pathing(Node):
 
     def receive_end_point(self, request, response):
         if self.end_point != (request.x, request.y):
+            if not self.pathing_failed:
+                self.start_point = self.end_point
+            else:
+                self.start_point = (None, None)
             self.end_point = (request.x, request.y)
             self.pathing_failed = False
 
@@ -116,6 +122,9 @@ class Pathing(Node):
         self.get_logger().info("Published inflated occupancy map", once=True)
 
     def publish_astar_path(self):
+        if self.start_point == (None, None):
+            self.get_logger().info("No start point received")
+            return
         if self.end_point == (None, None):
             self.get_logger().info("No end point received")
             return
@@ -177,75 +186,6 @@ class Pathing(Node):
 
         self.path_publisher.publish(path_msg)
         self.get_logger().info("Published A star custom path")
-
-
-    def publish_curved_path(self):
-        start_x, start_y = self.start_point
-        end_x, end_y = self.end_point
-
-        path_msg = Path()
-        path_msg.header.stamp = self.get_clock().now().to_msg()
-        path_msg.header.frame_id = "map"
-
-        dx = end_x - start_x
-        dy = end_y - start_y
-        length = np.sqrt(dx**2 + dy**2)
-        
-        ux = dx / length
-        uy = dy / length
-        
-        nx = -uy
-        ny = ux
-        
-        path_resolution = 20
-
-        for i in range(path_resolution + 1):
-            t = i / path_resolution  # Parameter t goes from 0 to 1
-            bx = start_x + t * dx
-            by = start_y + t * dy
-            
-            offset = self.amplitude * np.sin(2 * np.pi * self.cycles * t)
-            x = bx + offset * nx
-            y = by + offset * ny
-            
-            pose = PoseStamped()
-            pose.header = path_msg.header
-            pose.pose.position.x = x
-            pose.pose.position.y = y
-            pose.pose.position.z = 0.0
-            pose.pose.orientation.w = 1.0
-            path_msg.poses.append(pose)
-
-        self.path_publisher.publish(path_msg)
-        self.get_logger().info("Published curved custom path", once=True)
-        
-
-    def publish_straight_path(self):
-        start_x, start_y = self.start_point
-        end_x, end_y = self.end_point
-
-        path_msg = Path()
-        path_msg.header.stamp = self.get_clock().now().to_msg()
-        path_msg.header.frame_id = "map"
-
-        # Intermidiate points
-        path_resolution = 20
-        if end_x == 0 and end_y == 0:
-            self.get_logger().info("No end point selected")
-            return
-
-        for i in range(path_resolution):
-            pose = PoseStamped()
-            pose.header = path_msg.header
-            t = i/(path_resolution - 1)
-            pose.pose.position.x = (1 - t) * start_x + t * end_x
-            pose.pose.position.y = (1 - t) * start_y + t * end_y
-            pose.pose.position.z = 0.0
-            pose.pose.orientation.w = 1.0
-            path_msg.poses.append(pose)
-
-        self.path_publisher.publish(path_msg)
-        self.get_logger().info("Published straight custom path", once=True)
 
 def main():
     rclpy.init()
