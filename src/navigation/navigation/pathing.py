@@ -89,6 +89,7 @@ class Pathing(Node):
 
     def receive_end_point(self, request, response):
         if self.end_point != (request.x, request.y):
+            self.path_grid = None
             self.end_point = (request.x, request.y)
             self.pathing_failed = False
 
