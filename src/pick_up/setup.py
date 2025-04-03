@@ -29,6 +29,8 @@ setup(
             'talker = pick_up.move_servos_publisher:main',
             'listener = pick_up.servo_pos_subscriber:main',
             'ArmCameraNode = pick_up.pick_up_camera:main',
+            'FrameExtractor = pick_up.pick_up_camera:main',
+            'YOLOTrainer = pick_up.pick_up_camera:main',
         ],
     },
 )

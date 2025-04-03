@@ -18,5 +18,17 @@ def generate_launch_description():
             name='pick_up_camera',
             output='screen',
         ),
+        Node(
+            package='pick_up',
+            executable='FrameExtractor',
+            name='pick_up_camera',
+            output='screen',    
+        ),
+        Node(
+            package='pick_up',
+            executable='YOLOTrainer',
+            name='pick_up_camera',
+            output='screen',    
+        ),
     ])
 

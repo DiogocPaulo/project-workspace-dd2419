@@ -8,13 +8,14 @@ from cv_bridge import CvBridge
 import cv2
 from ultralytics import YOLO
 import numpy as np
-
+import os
+import onnx
 
 class ArmCamera(Node):
     def __init__(self):
         super().__init__("multi_servo_publisher")
 
-        self.model = YOLO("yolov8n.pt")
+        self.model = YOLO("runs/detect/train5/weights/best.pt")
 
         self.subscription = self.create_subscription(
             Image, '/arm_camera/image_raw', self.image_callback, 10)
@@ -31,7 +32,7 @@ class ArmCamera(Node):
         results = self.model(cv_image)
 
         
-        class_names = ['cube', 'sphere', 'plushie']  
+        class_names = ['Box','objects']  
 
         
         for result in results[0].boxes: 
@@ -48,6 +49,39 @@ class ArmCamera(Node):
         ros_image = self.bridge.cv2_to_imgmsg(cv_image, encoding="bgr8")
 
         self.publisher.publish(ros_image)
+
+
+class FrameExtractor(Node):
+    def __init__(self):
+        super().__init__("FrameExtractor")
+
+        self.model = YOLO("yolov8n.pt")
+
+        self.subscription = self.create_subscription(
+            Image, '/arm_camera/image_raw', self.image_callback, 10)
+        
+        self.image_count = 0
+
+        self.bridge = CvBridge()
+
+        self.output_dir = "ros_bag_images"
+        os.makedirs(self.output_dir, exist_ok=True)
+
+        
+    def image_callback(self, msg):
+        cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+        image_path = os.path.join(self.output_dir, f"frame_{self.image_count}.jpg")
+        cv2.imwrite(image_path, cv_image)
+        self.get_logger().info(f"Saved {image_path}")
+        self.image_count += 1
+
+class YOLOTrainNode(Node):
+    def __init__(self):
+        super().__init__("Trainer")
+
+        self.model = YOLO("yolov8n.pt")
+
+        self.model.train(data="/home/robot/project-workspace-dd2419/datasets/Image Labeling.v2i.yolov8/data.yaml", epochs=10, imgsz=640)
 
 
 def main():
