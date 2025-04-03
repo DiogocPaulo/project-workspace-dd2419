@@ -25,8 +25,8 @@ distance_threshold = 0.15   # Stop distance threshold
 yaw_threshold = 0.2         # Stop yaw threshold
 target_velocity = 0.15      # Robot's target velocity
 backing_velocity = -0.10
-
 turning_velocity = 0.10
+duty_min = 0.10
 
 def pure_pursuit_control(state, target_path):
     index, lookahead = target_path.search_target_index(state)
@@ -49,7 +49,7 @@ def pure_pursuit_control(state, target_path):
     linear_velocity = target_velocity * speed_factor
 
     kappa = 2.0 * np.arctan(alpha) / lookahead
-    angular_velocity = target_velocity * kappa
+    angular_velocity = turning_velocity * kappa
 
     return linear_velocity, angular_velocity, index
 
@@ -136,6 +136,10 @@ class Navigation(Node):
             self.inflated_map.update_grid(grid)
         
     def publish_duty_cycles(self, left_wheel, right_wheel):
+        if left_wheel != 0.0 and right_wheel != 0.0:
+            left_wheel = np.copysign(np.maximum(np.abs(left_wheel), wheel_duty_min), left_wheel)
+            right_wheel = np.copysign(np.maximum(np.abs(right_wheel), wheel_duty_min), right_wheel)
+
         # Ensure left and right duty cycles are between -1 to 1
         max_value = max(abs(left_wheel), abs(right_wheel))
         if max_value > 1:
@@ -191,6 +195,7 @@ class Navigation(Node):
 
         left_wheel = linear_velocity - (base/2) * angular_velocity
         right_wheel = linear_velocity + (base/2) * angular_velocity
+
         self.get_logger().info(f"Velocity: {self.state.velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
 
         self.publish_duty_cycles(left_wheel, right_wheel)
