@@ -34,7 +34,7 @@ def generate_launch_description():
             package="navigation",
             executable="pathing",
             name="robot_pathing",
-            ros_arguments=["--log-level", "info"]
+            ros_arguments=["--log-level", "warn"]
         ),
         Node(
             package="detection",
