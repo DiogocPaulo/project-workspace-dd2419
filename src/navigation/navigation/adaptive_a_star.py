@@ -5,7 +5,6 @@ class AdaptiveAStar:
     def __init__(self, grid, adaptive_h=None):
         self.grid = grid
         self.rows, self.columns = grid.shape  # (height, width)
-        self.path_grid = np.full(grid.shape, -1, dtype=np.int8)
         self.adaptive_h = adaptive_h if adaptive_h is not None else {}
 
     def update_grid(self, grid):
@@ -44,6 +43,7 @@ class AdaptiveAStar:
             if current == end_node:
                 # Reconstruct path
                 path = []
+                path_grid = np.full(grid.shape, -1, dtype=np.int8)
                 while current in came_from:
                     path.append(current)
                     current = came_from[current]
@@ -56,7 +56,7 @@ class AdaptiveAStar:
                         if node in g_score:
                             self.adaptive_h[node] = g_score[end_node] - g_score[node]
                 for x, y in path:
-                    self.path_grid[y, x] = 2
+                    path_grid[x, y] = 100
                 return path, self.path_grid
 
             closed_set.add(current)
