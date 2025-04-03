@@ -5,6 +5,7 @@ class AdaptiveAStar:
     def __init__(self, grid, adaptive_h=None):
         self.grid = grid
         self.rows, self.columns = grid.shape  # (height, width)
+        self.path_grid = np.full(grid.shape, -1, dtype=np.int8)
         self.adaptive_h = adaptive_h if adaptive_h is not None else {}
 
     def update_grid(self, grid):
@@ -54,7 +55,9 @@ class AdaptiveAStar:
                     for node in closed_set:
                         if node in g_score:
                             self.adaptive_h[node] = g_score[end_node] - g_score[node]
-                return path
+                for x, y in path:
+                    self.path_grid[y, x] = 2
+                return path, self.path_grid
 
             closed_set.add(current)
             for neighbour in self.get_neighbours(current):
@@ -65,7 +68,7 @@ class AdaptiveAStar:
                 g_score[neighbour] = tentative_g
                 f_score = tentative_g + self.heuristic(neighbour, end_node)
                 heapq.heappush(open_set, (f_score, tentative_g, neighbour))
-        return None  # No path found
+        return None, None # No path found
 
 if __name__ == "__main__":
     from navigation.map import Map

@@ -44,7 +44,7 @@ class Map:
         self.occupancy_increase = 25
         self.occupancy_decrease = 5
 
-    def initialise_grid(self, workspace_vertices):
+    def initialise_grid(self, workspace_vertices, empty=False):
         # Initialise grid based on a workspace perimeter
         x_list = [vertex[0] for vertex in workspace_vertices]
         y_list = [vertex[1] for vertex in workspace_vertices]
@@ -61,7 +61,9 @@ class Map:
         self.origin_y = (y_min) * self.resolution
 
         self.grid = np.full((self.grid_height, self.grid_width), -1, dtype=np.int8)
-        self.set_workspace_vertices(workspace_vertices)
+        self.workspace_vertices = [self.world_to_grid(x, y) for x, y in workspace_vertices]
+        if not empty:
+            self.add_workspace_perimeter()
 
     def update_grid(self, grid):
         self.grid = grid
@@ -181,9 +183,7 @@ class Map:
         else:
             self.grid[y, x] = max(self.grid[y, x] - self.occupancy_decrease, 0)
 
-    def set_workspace_vertices(self, vertices):
-        self.workspace_vertices = [self.world_to_grid(x, y) for x, y in vertices]
-
+    def add_workspace_perimeter(self):
         for y in range(self.grid_height):
             for x in range(self.grid_width):
                 if not self.is_within_workspace(x, y, world=False):
@@ -260,8 +260,8 @@ class Map:
 
     def grid_to_world(self, x, y):
         # Convert grid indices to world coordinates
-        world_x = self.origin_x + x * self.resolution
-        world_y = self.origin_y + y * self.resolution
+        world_x = self.origin_x + (x + 0.5) * self.resolution
+        world_y = self.origin_y + (y + 0.5) * self.resolution
         return world_x, world_y
 
     def distance_to_cells(self, distance):

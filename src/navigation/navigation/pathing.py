@@ -33,6 +33,7 @@ class Pathing(Node):
         self.create_subscription(OccupancyGrid, "/map", self.map_callback, 10)
         self.create_subscription(ObjectList, "/detected_objects", self.objects_callback, qos_profile)
         self.path_publisher = self.create_publisher(Path, "/custom_path", 10)
+        self.path_grid_publisher = self.create_publisher(OccupancyGrid, "/custom_path_grid", 10)
         self.inflated_map_publisher = self.create_publisher(OccupancyGrid, "/inflated_map", 10)
         self.end_point_service = self.create_service(GoToPoint, "/pathing_end_point", self.receive_end_point)
 
@@ -46,6 +47,7 @@ class Pathing(Node):
         self.region_radius = 1.0
         self.map = None
         self.inflated_map = None
+        self.path_grid = None
         self.object_list = []
         self.pathing_failed = False
         
@@ -121,6 +123,40 @@ class Pathing(Node):
         self.inflated_map_publisher.publish(map_msg)
         self.get_logger().info("Published inflated occupancy map", once=True)
 
+    def update_path_map(self):
+        if self.map is None or self.path_grid is None:
+            return
+
+        map_msg = OccupancyGrid()
+        map_msg.header.stamp = self.get_clock().now().to_msg()
+        map_msg.header.frame_id = "map"
+
+        map_msg.info.resolution = self.map.resolution
+        map_msg.info.width = self.map.grid_width
+        map_msg.info.height = self.map.grid_height
+        map_msg.info.origin.position.x = self.map.origin_x
+        map_msg.info.origin.position.y = self.map.origin_y
+        map_msg.info.origin.position.z = 0.0
+        map_msg.info.origin.orientation.x = 0.0
+        map_msg.info.origin.orientation.y = 0.0
+        map_msg.info.origin.orientation.z = 0.0
+        map_msg.info.origin.orientation.w = 1.0
+
+        # Flatting grid into a row-major list
+        map_msg.data = self.path_grid.flatten().tolist()
+
+        self.path_map_publisher.publish(map_msg)
+        self.get_logger().info("Published custom path as occupancy map", once=True)
+
+    def extract_path(self, path_grid):
+        if self.map is None:
+            return None
+        if path_grid is None:
+            return None
+
+        mask = (path_grid == 10)
+        self.map.grid_to_world()
+
     def publish_astar_path(self):
         if self.start_point == (None, None):
             self.get_logger().info("No start point received")
@@ -148,7 +184,7 @@ class Pathing(Node):
                 self.inflated_map.add_object(x, y, angle, object_type)
             self.inflated_map.inflate_grid_by_half(inflation_radius)
             path_planner = AdaptiveAStar(self.inflated_map.grid, self.adaptive_h)
-            path = path_planner.plan_path((start_y, start_x), (end_y, end_x))
+            path, self.path_grid = path_planner.plan_path((start_y, start_x), (end_y, end_x))
 
             if path is not None:
                 break
