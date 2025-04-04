@@ -24,10 +24,10 @@ class ProjectMaster(Node):
         self.client = self.create_client(PickObject, 'PickObject')
 
         
-        self.reached_destination_service = self.create_service(Trigger, "/reached_destination", self.reached_destination_callback)
-        self.end_point_client = self.create_client(GoToPoint, "/navigation_point")
-        while not self.end_point_client.wait_for_service(timeout_sec=1.0):
-            self.get_logger().debug("GoToPoint service not yet avaliable, waiting ...")
+        # self.reached_destination_service = self.create_service(Trigger, "/reached_destination", self.reached_destination_callback)
+        # self.end_point_client = self.create_client(GoToPoint, "/navigation_point")
+        # while not self.end_point_client.wait_for_service(timeout_sec=1.0):
+        #     self.get_logger().debug("GoToPoint service not yet avaliable, waiting ...")
 
         self.end_points = [
             (-1.6, 0.9, 0.0),
@@ -41,21 +41,23 @@ class ProjectMaster(Node):
         self.objects = []
 
         self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
+
+        # self.send_arm_request(0.2,0.0,0.0,"PICKUP")
             
 
-    def send_end_point(self, x, y, yaw):
-        request = GoToPoint.Request()
-        request.x = x
-        request.y = y
-        request.yaw = yaw
+    # def send_end_point(self, x, y, yaw):
+    #     request = GoToPoint.Request()
+    #     request.x = x
+    #     request.y = y
+    #     request.yaw = yaw
 
-        self.point_future = self.point_client.call_async(request)
-        rclpy.spin_until_future_complete(self, self.point_future)
-        if self.point_future.result() is not None:
-            response = self.point_future.result()
-            self.get_logger().info(f"GoToPoint Response: {response.message}")
-        else:
-            self.get_logger().info("GoToPoint service failed")
+    #     self.point_future = self.point_client.call_async(request)
+    #     rclpy.spin_until_future_complete(self, self.point_future)
+    #     if self.point_future.result() is not None:
+    #         response = self.point_future.result()
+    #         self.get_logger().info(f"GoToPoint Response: {response.message}")
+    #     else:
+    #         self.get_logger().info("GoToPoint service failed")
 
     def send_arm_task(self, x, y, z, task):
         self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
@@ -147,34 +149,34 @@ class ProjectMaster(Node):
         self.get_logger().info(f"Published transform for {name} at ({x}, {y})")
 
 
-    def reached_destination_callback(self, request, response):
-        next_x = self.end_points[self.i][0]
-        next_y = self.end_points[self.i][1]
-        next_yaw = self.end_points[self.i][2]
-        self.send_end_point(next_x, next_y, next_yaw)
-        self.i = (self.i + 1) % 4
+    # def reached_destination_callback(self, request, response):
+    #     next_x = self.end_points[self.i][0]
+    #     next_y = self.end_points[self.i][1]
+    #     next_yaw = self.end_points[self.i][2]
+    #     self.send_end_point(next_x, next_y, next_yaw)
+    #     self.i = (self.i + 1) % 4
 
-        response.success = True
-        response.message = f"Sending end point: ({next_x}, {next_y}) at {next_yaw} radians"
-        return response
+    #     response.success = True
+    #     response.message = f"Sending end point: ({next_x}, {next_y}) at {next_yaw} radians"
+    #     return response
 
-    def send_end_point(self, x, y, yaw):
-        # Create new GoToPoint service for navigation node
-        navigation_request = GoToPoint.Request()
-        navigation_request.x = x
-        navigation_request.y = y
-        navigation_request.yaw = yaw
+    # def send_end_point(self, x, y, yaw):
+    #     # Create new GoToPoint service for navigation node
+    #     navigation_request = GoToPoint.Request()
+    #     navigation_request.x = x
+    #     navigation_request.y = y
+    #     navigation_request.yaw = yaw
 
-        # Handle request and response to navigation node async
-        future = self.end_point_client.call_async(navigation_request)
-        future.add_done_callback(self.navigation_response_callback)
+    #     # Handle request and response to navigation node async
+    #     future = self.end_point_client.call_async(navigation_request)
+    #     future.add_done_callback(self.navigation_response_callback)
 
-    def navigation_response_callback(self, future):
-        try:
-            response = future.result()
-            self.get_logger().info(f"Navigation response: {response.success}, {response.message}")
-        except Exception as e:
-            self.get_logger().warn(f"Service call to navigation node failed: {e}")
+    # def navigation_response_callback(self, future):
+    #     try:
+    #         response = future.result()
+    #         self.get_logger().info(f"Navigation response: {response.success}, {response.message}")
+    #     except Exception as e:
+    #         self.get_logger().warn(f"Service call to navigation node failed: {e}")
         
 
 
@@ -185,9 +187,9 @@ def main():
    # node.send_end_point(-1.5, 0.5)
 
     
-    node.process_map_file("/home/robot/project-workspace-dd2419/maps/Map_test.txt")
-    node.publish_transforms()
-    # node.send_arm_request(0.2,0.0,0.0,"PICKUP")
+    # node.process_map_file("/home/robot/project-workspace-dd2419/maps/Map_test.txt")
+    # node.publish_transforms()
+    node.send_arm_request(0.2,0.0,0.0,"PICKUP")
     # node.send_arm_request(0.15,-0.15,0.0,"DROPOFF")   
 
 
