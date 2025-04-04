@@ -10,6 +10,8 @@ from ultralytics import YOLO
 import numpy as np
 import os
 import onnx
+from project_interfaces.msg import DetectedData, DetectedDataArray
+from std_msgs.msg import Header
 
 class ArmCamera(Node):
     def __init__(self):
@@ -23,6 +25,8 @@ class ArmCamera(Node):
 
         self.publisher = self.create_publisher(Image, '/yolov8/detections', 10)
 
+        self.publisher_detected = self.create_publisher(DetectedDataArray, '/yolov8/detections_data', 10)
+
         self.bridge = CvBridge()
 
         
@@ -34,10 +38,12 @@ class ArmCamera(Node):
         
         class_names = ['Box','objects']  
 
+        detection_msg = DetectedDataArray()
+
         
         for result in results[0].boxes: 
             x1, y1, x2, y2 = map(int, result.xyxy[0])
-            confidence = result.conf[0]
+            confidence = float(result.conf[0])
             class_idx = int(result.cls[0])
 
             label = class_names[class_idx] if class_idx < len(class_names) else "Unknown"
@@ -46,9 +52,32 @@ class ArmCamera(Node):
 
             cv2.putText(cv_image, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
+            detection = DetectedData()
+            detection.label = label
+            detection.confidence = confidence
+            detection.xmin = x1
+            detection.ymin = y1
+            detection.xmax = x2
+            detection.ymax = y2
+            detection.timestamp = msg.header.stamp
+
+            detection_msg.detections.append(detection)
+
+
+        
+        height, width, _ = cv_image.shape
+        center_x, center_y = width // 2, height // 2
+
+        cv2.line(cv_image, (center_x - 20, center_y), (center_x + 20, center_y), (0, 0, 255), 2)
+        cv2.line(cv_image, (center_x, center_y - 20), (center_x, center_y + 20), (0, 0, 255), 2)
+        cv2.circle(cv_image, (center_x, center_y), 5, (0, 0, 255), -1)
+
         ros_image = self.bridge.cv2_to_imgmsg(cv_image, encoding="bgr8")
 
+
         self.publisher.publish(ros_image)
+
+        self.publisher_detected.publish(detection_msg)
 
 
 class FrameExtractor(Node):

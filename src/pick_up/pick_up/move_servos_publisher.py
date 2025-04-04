@@ -65,6 +65,8 @@ class MultiServoPublisher(Node):
             response.result = self.pickup_callback(request)
         elif request.description == "DROPOFF":
             response.result = self.dropoff_callback(request)
+        elif request.description == "LOOK":
+            response.result = self.look_callback(request)
         else:
             response.result = 2
             return response
@@ -223,56 +225,50 @@ class MultiServoPublisher(Node):
 
         return 0
 
+    def look_callback(self, request):
+        self.get_logger().info(f'Received look request at {request.point}')
+        msg = Int16MultiArray()
+        msg.layout = MultiArrayLayout(dim=[MultiArrayDimension(label="", size=12, stride=12)], data_offset=0)
+        move_time = 2000 #arm speed (milliseconds)
 
-    def pickup_callback_sim(self, msg):
-        self.get_logger().info(f'Received pickup request at {msg.point}')
-        position = msg.point
-        
-        joint_names = ['joint1', 'joint2', 'joint3', 'joint4', 'joint5','r_joint']
+        zero_time = Time()
+        zero_time.sec = 0
+        zero_time.nanosec = 0
 
+        # pose = [14000,12000,12000,12000,12000,12000,move_time,move_time,move_time,move_time,move_time,move_time]
+        # msg.data = pose
+        # self.publisher.publish(msg)
+    
+        # Transform ---------------------------------------
+        tf_future = self.tfBuffer.wait_for_transform_async(
+            target_frame = 'arm_base',
+            source_frame = request.header.frame_id,
+            time = zero_time # Get latest transform instead of timestamped, since we want to pickup when the robot is standing still
+        )
+
+        rclpy.spin_until_future_complete(self,tf_future, timeout_sec=1)
+
+        try:
+            t = self.tfBuffer.lookup_transform(
+                'arm_base',
+                request.header.frame_id,
+                zero_time
+        )
+        except TransformException as ex:
+            self.get_logger().info(
+                f'Could not transform map to arm_base: {ex}'
+            )
+        # Transform ---------------------------------------
 
         self.clock.sleep_for(rclpy.duration.Duration(seconds=2)) #Give arm time to do its thing
-        base_arm,v1_arm,v2_arm,v3_arm = self.FindKinematics2(position.x,position.y,position.z)
+        position = do_transform_point(request,t)
+        position = position.point
+        base_arm,v1_arm,v2_arm,v3_arm = self.FindKinematics(position.x,position.y,position.z)
 
 
         if base_arm == -1:
             self.get_logger().info(f'COULD NOT FIND KINEMATIC SOLUTION FOR POSITION: {position}')
-            return
-
-
-
-        self.get_logger().info(f"APPLYING SERVO ANGLES: BASE={base_arm} SERVO5={v1_arm} SERVO4={v2_arm} SERVO3={v3_arm}")
-        self.get_logger().info(f"PICKUP INITIATED")
-
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
-        
-        self.publish_JointStates(joint_names,[base_arm,v1_arm,v2_arm,v3_arm,0.0,1.0])
-
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
-        
-        self.publish_JointStates(joint_names,[base_arm,v1_arm,v2_arm,v3_arm,0.0,0.0])
-
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
-
-        self.publish_JointStates(joint_names,[0.0,0.0,0.0,0.0,0.0,0.0])
-
-        self.get_logger().info(f"PICKUP COMPLETE")
-        return 
-
-    def dropoff_callback_sim(self, msg):
-        self.get_logger().info(f'Received dropoff request at {msg.point}')
-        position = msg.point
-        
-        joint_names = ['joint1', 'joint2', 'joint3', 'joint4', 'joint5','r_joint']
-
-
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=2)) #Give arm time to do its thing
-        base_arm,v1_arm,v2_arm,v3_arm = self.FindKinematics2(position.x,position.y,position.z)
-
-
-        if base_arm == -1:
-            self.get_logger().info(f'COULD NOT FIND KINEMATIC SOLUTION FOR POSITION: {position}')
-            return
+            return 1
 
 
 
@@ -281,24 +277,30 @@ class MultiServoPublisher(Node):
 
         self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
         
-        self.publish_JointStates(joint_names,[base_arm,v1_arm,v2_arm,v3_arm,0.0,0.0])
+        pose = [14000,12000,v3_arm,v2_arm,v1_arm,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
+        msg.data = pose
+        self.publisher.publish(msg)
 
         self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
         
-        self.publish_JointStates(joint_names,[base_arm,v1_arm,v2_arm,v3_arm,0.0,1.0])
+        pose = [3000,12000,v3_arm,v2_arm,v1_arm,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
+        msg.data = pose
+        self.publisher.publish(msg)
 
         self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
 
-        self.publish_JointStates(joint_names,[0.0,0.0,0.0,0.0,0.0,1.0])
+        pose = [12000,12000,12000,12000,12000,12000,move_time,move_time,move_time,move_time,move_time,move_time]
+        msg.data = pose
+        self.publisher.publish(msg)
 
         self.get_logger().info(f"DROPOFF COMPLETE")
-        return 
 
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
+
+        return 0
 
 
         
-
-
 
     def CalcKinematics(self,x,y,z,desired_grip_angle): #Servos 5 & 4
         # self.get_logger().info(f'Position: {x},{y}')
