@@ -299,6 +299,8 @@ class LidarAggregator(Node):
 
         self.marker_pub.publish(marker)
 
+        self.get_logger().info(f"Published {len(line_segments)} line segments.")
+
 def main(args=None):
     rclpy.init(args=args)
     node = LidarAggregator()

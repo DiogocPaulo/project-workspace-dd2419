@@ -53,10 +53,10 @@ class MapOdomPublisher(Node):
         # Correct order for updating rotation: new = correction * current
         self.rotation = quaternion_multiply(icp_rotation, self.rotation)
 
-        self.get_logger().info(
+        """self.get_logger().info(
             f"ICP transform combined: translation={self.translation.tolist()}, "
             f"rotation={euler_from_quaternion(self.rotation)[2]:.3f} rad (yaw)"
-        )
+        )"""
 
 
     def publish_transform(self):
@@ -83,10 +83,10 @@ class MapOdomPublisher(Node):
 
         # Log the current transform with drift
         yaw = euler_from_quaternion(self.rotation)[2]
-        self.get_logger().info(
+        """self.get_logger().info(
             f"Published transform with drift: "
             f"translation={self.translation.tolist()}, yaw={yaw:.3f} rad"
-        )
+        )"""
 
 def main(args=None):
     rclpy.init()
