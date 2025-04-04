@@ -1,0 +1,155 @@
+#include "localization/localization_node.hpp"
+
+namespace Localization {
+
+Node::Node() : rclcpp::Node("localization_node") {
+    // Initialize subscribers
+    scan_sub_ = create_subscription<sensor_msgs::msg::LaserScan>(
+        "scan", 10, std::bind(&Node::scanCallback, this, std::placeholders::_1));
+    odom_sub_ = create_subscription<nav_msgs::msg::Odometry>(
+        "odom", 10, std::bind(&Node::odomCallback, this, std::placeholders::_1));
+
+    // Initialize the point cloud publisher
+    cloud_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("reference_scan_cloud", 10);
+
+    // Initialize timer
+    timer_ = create_wall_timer(std::chrono::milliseconds(100), std::bind(&Node::publishTransform, this));
+
+    // Initialize transform broadcaster
+    tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
+
+    // Initialize transform buffer and listener
+    tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
+    tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+
+    // Initialize transform state
+    translation_ = {0.0, 0.0, 0.0};
+    rotation_.setRPY(0.0, 0.0, 0.0);
+    transform_z_ = 0.0;
+
+    // Initialize LidarScanStorage and ICP
+    scan_storage_ = LidarScanStorage(0.5); // 50 cm grid size
+    icp_ = ICP(0.1, 50); // 10 cm threshold, 50 iterations
+
+    RCLCPP_INFO(this->get_logger(), "Localization node initialized.");
+}
+
+void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) {
+    if (std::abs(angular_velocity_) > 0.1) {
+        RCLCPP_DEBUG(this->get_logger(), "Robot is rotating too fast, skipping scan processing.");
+        return; // Skip processing if robot is not moving
+    }
+
+    // Ensure TF buffer has data
+    if (!tf_buffer_->canTransform("map", msg->header.frame_id, tf2::TimePointZero, std::chrono::milliseconds(500))) {
+        RCLCPP_WARN(this->get_logger(), "Transform from %s to map not available yet!", msg->header.frame_id.c_str());
+        return;
+    }
+    // Get the transform from Lidar frame to Map frame
+    try {
+        RCLCPP_DEBUG(this->get_logger(), "Transform exists from %s to map.", msg->header.frame_id.c_str());
+        geometry_msgs::msg::TransformStamped transform = tf_buffer_->lookupTransform("map", msg->header.frame_id, tf2::TimePointZero);
+        transform_z_ = transform.transform.translation.z;
+
+        // Convert LaserScan to 2D points in Map frame
+        std::vector<Eigen::Vector2d> points = laserScanToPoints(msg, time_stamp_, linear_velocity_, angular_velocity_);
+        transformPoints(points, transform);
+
+        // Get stored scan data from LidarScanStorage
+        auto stored_scan = scan_storage_.getClosestScan(current_pose_);
+
+        if (stored_scan) {
+            // Perform ICP to find transformation and get aligned points
+            std::vector<Eigen::Vector2d> aligned_points;
+            Eigen::Matrix3d icp_transform;
+            icp_.setTarget(stored_scan->points);
+            icp_.computeICP(points, icp_transform, aligned_points);
+
+            // Extract translation and rotation from ICP transform
+            double icp_translation_x = icp_transform(0, 2);
+            double icp_translation_y = icp_transform(1, 2);
+            double icp_rotation_theta = std::atan2(icp_transform(1, 0), icp_transform(0, 0));
+
+            // Convert ICP rotation to quaternion
+            tf2::Quaternion icp_rotation;
+            icp_rotation.setRPY(0.0, 0.0, icp_rotation_theta);
+
+            // Update the current transform
+            translation_[0] += icp_translation_x;
+            translation_[1] += icp_translation_y;
+            rotation_ = icp_rotation * rotation_;
+
+            // Store the current scan in the LidarScanStorage
+            scan_storage_.addScan(aligned_points, current_pose_);
+
+            // Publish the reference point cloud
+            publishPointCloud(stored_scan->points);
+
+        } else {
+            RCLCPP_WARN(this->get_logger(), "No stored scan found for ICP.");
+            // Store the current scan in the LidarScanStorage
+            scan_storage_.addScan(points, current_pose_);
+        }
+
+    } catch (tf2::TransformException& ex) {
+        RCLCPP_WARN(this->get_logger(), "Could not transform %s to map: %s", msg->header.frame_id.c_str(), ex.what());
+        return; // Skip processing if transform is unavailable
+    }
+}
+
+
+void Node::odomCallback(const nav_msgs::msg::Odometry::ConstSharedPtr& msg) {
+    time_stamp_ = msg->header.stamp;
+    current_pose_.position.x() = msg->pose.pose.position.x;
+    current_pose_.position.y() = msg->pose.pose.position.y;
+    tf2::Quaternion quat;
+    tf2::fromMsg(msg->pose.pose.orientation, quat);
+    current_pose_.theta = quat.getAngle();
+    linear_velocity_ = msg->twist.twist.linear.x;
+    angular_velocity_ = msg->twist.twist.angular.z;
+}
+
+void Node::publishTransform() {
+    geometry_msgs::msg::TransformStamped tf_msg;
+    tf_msg.header.stamp = time_stamp_;
+    tf_msg.header.frame_id = "map";
+    tf_msg.child_frame_id = "odom";
+    tf_msg.transform.translation.x = translation_[0];
+    tf_msg.transform.translation.y = translation_[1];
+    tf_msg.transform.translation.z = 0;
+    tf_msg.transform.rotation = tf2::toMsg(rotation_);
+
+    tf_broadcaster_->sendTransform(tf_msg);
+}
+
+void Node::publishPointCloud(const std::vector<Eigen::Vector2d>& points) {
+    sensor_msgs::msg::PointCloud2 cloud_msg;
+    pcl::PointCloud<pcl::PointXYZRGB> cloud;
+
+    for (const auto& point : points) {
+        pcl::PointXYZRGB colored_point;
+        colored_point.x = point.x();
+        colored_point.y = point.y();
+        colored_point.z = transform_z_;
+        colored_point.r = 255; // Red
+        colored_point.g = 165; // Orange
+        colored_point.b = 0;   // Blue
+        cloud.points.push_back(colored_point);
+    }
+    cloud.width = static_cast<uint32_t>(cloud.points.size());
+    cloud.height = 1; // Unorganized
+    pcl::toROSMsg(cloud, cloud_msg);
+    cloud_msg.header.frame_id = "map";
+    cloud_msg.header.stamp = time_stamp_;
+    cloud_pub_->publish(cloud_msg);
+}
+
+} // namespace Localization
+
+int main(int argc, char * argv[]) {
+    rclcpp::init(argc, argv);
+    auto node = std::make_shared<Localization::Node>();
+    rclcpp::spin(node);
+    rclcpp::shutdown();
+    return 0;
+}

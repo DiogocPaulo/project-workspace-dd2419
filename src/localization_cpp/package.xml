@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>localization_cpp</name>
+  <version>0.1.0</version>
+  <description>A C++ ICP localization package</description>
+
+  <maintainer email="gaah@kth.se">Gabriell Åhlin</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>rclcpp</depend>
+  <depend>tf2_ros</depend>
+  <depend>nav_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>tf2_eigen</depend>
+  <depend>tf2_geometry_msgs</depend>
+  <depend>visualization_msgs</depend>  <!-- For visualization of point clouds -->
+  <depend>pcl_conversions</depend>      <!-- If you're using PCL for conversions -->
+  <depend>pcl_ros</depend>              <!-- If you're using PCL for point cloud processing -->
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
