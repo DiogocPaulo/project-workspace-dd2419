@@ -20,6 +20,8 @@ set(msg_files
 	"msg/Object.msg"
 	"msg/ObjectList.msg"
 	"msg/ArmTaskMessage.msg"
+	"msg/DetectedData.msg"
+	"msg/DetectedDataArray.msg"
 	)
 
 set(srv_files
