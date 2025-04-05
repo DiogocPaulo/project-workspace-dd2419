@@ -33,6 +33,10 @@
 #include <pcl/point_types.h>
 #include <pcl_conversions/pcl_conversions.h>
 
+// Function timing
+#include <iostream>
+#include <chrono>
+
 namespace Localization {
 
 class Node : public rclcpp::Node {

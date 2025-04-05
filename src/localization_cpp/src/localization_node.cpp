@@ -35,7 +35,7 @@ Node::Node() : rclcpp::Node("localization_node") {
 }
 
 void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) {
-    if (std::abs(angular_velocity_) > 0.1) {
+    if (std::abs(angular_velocity_) > 0.5) {
         RCLCPP_DEBUG(this->get_logger(), "Robot is rotating too fast, skipping scan processing.");
         return; // Skip processing if robot is not moving
     }
@@ -63,7 +63,12 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
             std::vector<Eigen::Vector2d> aligned_points;
             Eigen::Matrix3d icp_transform;
             icp_.setTarget(stored_scan->points);
+
+            auto start_time = std::chrono::high_resolution_clock::now();
             icp_.computeICP(points, icp_transform, aligned_points);
+            auto end_time = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+            RCLCPP_INFO(this->get_logger(), "ICP computation took %ld ms", duration);
 
             // Extract translation and rotation from ICP transform
             double icp_translation_x = icp_transform(0, 2);
@@ -71,7 +76,7 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
             double icp_rotation_theta = std::atan2(icp_transform(1, 0), icp_transform(0, 0));
 
             // Limit change per iteration
-            if (std::abs(icp_translation_x) > 0.1 || std::abs(icp_translation_y) > 0.1 || std::abs(icp_rotation_theta) > M_PI) {
+            if (std::abs(icp_translation_x) > 0.2 || std::abs(icp_translation_y) > 0.2 || std::abs(icp_rotation_theta) > M_PI) {
                 return;
             }
 
@@ -85,7 +90,9 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
             rotation_ = icp_rotation * rotation_;
 
             // Store the current scan in the LidarScanStorage
-            scan_storage_.addScan(aligned_points, current_pose_);
+            if ((current_pose_.position - stored_scan->pose.position).norm() > 0.05) {
+                scan_storage_.addScan(aligned_points, current_pose_);
+            }
 
             // Publish the reference point cloud
             publishPointCloud(stored_scan->points);

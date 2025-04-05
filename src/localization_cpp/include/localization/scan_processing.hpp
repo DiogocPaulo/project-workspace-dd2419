@@ -74,10 +74,10 @@ std::vector<Eigen::Vector2d> laserScanToPoints(const sensor_msgs::msg::LaserScan
         double x = static_cast<double>(range * std::cos(angle));
         double y = static_cast<double>(range * std::sin(angle));
         // Correct the coordinate based on velocity and time
-        rclcpp::Time point_time = scan_start_time + rclcpp::Duration::from_nanoseconds(static_cast<int64_t>(i * scan->time_increment * 1e9));
-        double delta_time = (point_time - scan_start_time).seconds();
-        Eigen::Vector2d corrected_point = correctCoordinate(Eigen::Vector2d(x, y), delta_time, linear_velocity, angular_velocity);
-        points.emplace_back(corrected_point);
+        //rclcpp::Time point_time = scan_start_time + rclcpp::Duration::from_nanoseconds(static_cast<int64_t>(i * scan->time_increment * 1e9));
+        //double delta_time = (point_time - scan_start_time).seconds();
+        //Eigen::Vector2d corrected_point = correctCoordinate(Eigen::Vector2d(x, y), delta_time, linear_velocity, angular_velocity);
+        points.emplace_back(x, y);
         prev_range = range; // Update previous range
     }
 
