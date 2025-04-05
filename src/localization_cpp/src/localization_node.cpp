@@ -70,6 +70,11 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
             double icp_translation_y = icp_transform(1, 2);
             double icp_rotation_theta = std::atan2(icp_transform(1, 0), icp_transform(0, 0));
 
+            // Limit change per iteration
+            if (std::abs(icp_translation_x) > 0.1 || std::abs(icp_translation_y) > 0.1 || std::abs(icp_rotation_theta) > M_PI) {
+                return;
+            }
+
             // Convert ICP rotation to quaternion
             tf2::Quaternion icp_rotation;
             icp_rotation.setRPY(0.0, 0.0, icp_rotation_theta);
@@ -97,17 +102,46 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
     }
 }
 
-
 void Node::odomCallback(const nav_msgs::msg::Odometry::ConstSharedPtr& msg) {
+    // Store the timestamp
     time_stamp_ = msg->header.stamp;
-    current_pose_.position.x() = msg->pose.pose.position.x;
-    current_pose_.position.y() = msg->pose.pose.position.y;
+
+    // Extract position from the odometry message
+    double odom_x = msg->pose.pose.position.x;
+    double odom_y = msg->pose.pose.position.y;
+    double odom_z = msg->pose.pose.position.z; // Assuming you're handling 3D positions
+
+    // Convert the odometry's quaternion orientation to tf2::Quaternion
     tf2::Quaternion quat;
     tf2::fromMsg(msg->pose.pose.orientation, quat);
-    current_pose_.theta = quat.getAngle();
+
+    // Apply the transform to convert the pose from the "odom" frame to the "map" frame
+    tf2::Vector3 odom_position(odom_x, odom_y, odom_z);
+
+    // Convert translation_ (std::array<double, 3>) into tf2::Vector3
+    tf2::Vector3 translation_vector(translation_[0], translation_[1], translation_[2]);
+
+    // Rotate the position using the quaternion rotation_
+    tf2::Vector3 transformed_position = tf2::quatRotate(rotation_, odom_position);
+
+    // Now add the translation vector
+    transformed_position += translation_vector;  // Adds translation after rotation
+
+    // Update current_pose_ with the transformed position
+    current_pose_.position.x() = transformed_position.x();
+    current_pose_.position.y() = transformed_position.y();
+    
+    // Apply rotation (rotation_ is the map-to-odom transform)
+    tf2::Quaternion transformed_rotation = rotation_ * quat;
+    
+    // Store the theta (orientation angle) if needed (from the rotated quaternion)
+    current_pose_.theta = transformed_rotation.getAngle();
+
+    // Store the linear and angular velocities
     linear_velocity_ = msg->twist.twist.linear.x;
     angular_velocity_ = msg->twist.twist.angular.z;
 }
+
 
 void Node::publishTransform() {
     geometry_msgs::msg::TransformStamped tf_msg;

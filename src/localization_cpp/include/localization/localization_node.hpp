@@ -17,6 +17,7 @@
 
 // Math and Linear Algebra includes#include <sensor_msgs/msg/point_cloud2.hpp>  // PointCloud2 message
 #include <Eigen/Dense>
+#include <cmath>
 
 // C++ Standard and Memory management includes
 #include <array>

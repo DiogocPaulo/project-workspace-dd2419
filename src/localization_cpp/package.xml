@@ -18,6 +18,8 @@
   <depend>visualization_msgs</depend>  <!-- For visualization of point clouds -->
   <depend>pcl_conversions</depend>      <!-- If you're using PCL for conversions -->
   <depend>pcl_ros</depend>              <!-- If you're using PCL for point cloud processing -->
+  <depend>robp_interfaces</depend>
+
 
   <export>
     <build_type>ament_cmake</build_type>
