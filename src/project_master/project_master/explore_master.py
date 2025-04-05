@@ -180,7 +180,7 @@ def generate_waypoints_with_map(map: Map, x_resolution, y_resolution):
         first = None
         last = None
         while (not reverse and y < y_max) or (reverse and y > y_min):
-            if map.is_free(x, y, 0):
+            if map.is_free(x, y, 1):
                 if first is None:
                     first = (x, y, 0.0)
                 last = (x, y, 0.0)
@@ -208,10 +208,15 @@ class ExploreMaster(Node):
         self.resolution = 0.05
         self.map = Map(self.resolution)
         self.map.initialise_grid(self.workspace_vertices)
-        self.map.inflate_grid(0.45)
+        self.map.inflate_grid(0.40)
         self.show_waypoints = True
-        self.end_points = generate_waypoints_with_map(self.map, 0.45, self.resolution)
+        # self.end_points = generate_waypoints_with_map(self.map, 0.35, self.resolution)
         # self.end_points = offset_workspace_vertices(self.workspace_vertices, 0.50)
+        self.end_points = [
+            (4.0, 1.0, 0.0),
+            (8.6, 2.2, 0.0),
+            (0.0, 0.0, 0.0),
+        ]
 
         root = self.create_exploration_tree()
         self.tree = py_trees_ros.trees.BehaviourTree(root=root)
@@ -228,7 +233,7 @@ class ExploreMaster(Node):
     def publish_workspace(self):
         workspace_msg = WorkspaceVertices()
         workspace_msg.header.stamp = self.get_clock().now().to_msg()
-        workspace_msg.header.frame_id = "map"
+        workspace_msg.header.frame_id = "odom"
 
         for vertex in self.workspace_vertices:
             vertex_msg = Vertex()
@@ -246,7 +251,7 @@ class ExploreMaster(Node):
             return
         path_msg = Path()
         path_msg.header.stamp = self.get_clock().now().to_msg()
-        path_msg.header.frame_id = "map"
+        path_msg.header.frame_id = "odom"
 
         for i in range(len(self.end_points)):
             pose_msg = PoseStamped()
