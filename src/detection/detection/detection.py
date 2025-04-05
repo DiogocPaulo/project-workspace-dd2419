@@ -31,6 +31,9 @@ from mpl_toolkits.mplot3d import Axes3D
 from project_interfaces.msg import Object, ObjectList, Vertex, WorkspaceVertices
 from mapping.map import Map
 
+import threading
+from threading import Event
+
 class ExamineImage(Node):
 
     def __init__(self):
@@ -51,9 +54,10 @@ class ExamineImage(Node):
         # Publisher for clusters
         self.cluster_publisher = self.create_publisher(PointCloud2, '/clusters', 10)
 
-        self.tfBuffer = tf2_ros.Buffer()
-        self.listener = tf2_ros.TransformListener(self.tfBuffer, self, spin_thread=True)
+        self.tf_buffer = tf2_ros.Buffer()
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self, spin_thread=True)
         self.object_list_broadcaster = tf2_ros.TransformBroadcaster(self)
+        self.shutdown_event = Event()
 
         # Create the 'maps' folder if it doesn't exist
         folder_path = os.path.join(os.getcwd(), "maps")
@@ -73,7 +77,7 @@ class ExamineImage(Node):
         self.read = 0
 
         self.broadcaster = self.create_timer(5.0, self.broadcast_object_list)
-        self.write_timer = self.create_timer(5.0, self.write_to_file)
+        self.create_timer(2.0, self.publish_object_list)
 
         self.get_logger().info(f"Init detection")
         self.read_map_file()
@@ -255,68 +259,39 @@ class ExamineImage(Node):
 
             if pure_red or pure_green or pure_blue:
                 if object_type == "sphere":
-                    if pure_red:
-                        emoji = "🔴"  # Red circle emoji
-                    elif pure_green:
-                        emoji = "🟢"  # Green circle emoji
-                    elif pure_blue:
-                        emoji = "🔵"  # Blue circle emoji
-                    #self.get_logger().info(f'{emoji} Cluster {cluster_label} is a sphere!')
                     self.publish_object(x, z + 0.02, 0.0, Object.SPHERE, msg.header.stamp)
                 elif object_type == "cube":
-                    if pure_red:
-                        emoji = "🟥"  # Red square emoji
-                    elif pure_green:
-                        emoji = "🟩"  # Green square emoji
-                    elif pure_blue:
-                        emoji = "🟦"  # Blue square emoji
-                    #self.get_logger().info(f'{emoji} Cluster {cluster_label} is a cube!')
                     self.publish_object(x, z + 0.02, 0.0, Object.CUBE, msg.header.stamp)
-                #elif object_type == "unknown":
-                    #self.get_logger().info(f'Object not identified :(!')
-
             elif self.is_box(cluster_points):  # If detected object is a box
-                #self.get_logger().info(f'📦 Cluster {cluster_label} is a box!')
-
                 # Compute the orientation angle of the box
                 angle = self.estimate_box_orientation(cluster_points)
-
-                # Store box with angle information[detection-5] [INFO] [1742488983.869258672] [robot_detection]:
+                # Store box with angle information
                 if angle == 0.0:
                     self.publish_object(x, z + 0.08, angle, Object.BOX, msg.header.stamp)
                 elif angle == 90.0:
                     self.publish_object(x, z + 0.12, angle, Object.BOX, msg.header.stamp)
                 else:
                     self.publish_object(x, z + 0.08, angle, Object.BOX, msg.header.stamp)
-
             elif self.is_plushie(cluster_points):
-                #self.get_logger().info(f'🧸 Cluster {cluster_label} is a plushie!')
                 self.publish_object(x + 0.01, z, 0.0, Object.PLUSHIE, msg.header.stamp)
-
             else:
                 self.get_logger().warn(f'Cluster {cluster_label} is NOT a recognized object.')
 
-            # ------------ TIMER FOR EFFICIENCY CHECK (move where desired) ------------
             end_time = time.time()
-            # self.get_logger().info(f"Processing time: {end_time - start_time:.4f} seconds")
-            # ------------------------------------------------------------------------
 
-    def write_to_file(self):
+    def write_map_file(self):
+        self.get_logger().info("Writing map file")
         with open(self.file_path, 'w') as file:
-            if self.read == 1:
-                file.write('\n')
-                self.read = 0
-            else:
-                for object_msg in self.object_list:
-                    if object_msg.object_type == Object.CUBE:
-                        object_type_label = "1"
-                    elif object_msg.object_type == Object.SPHERE:
-                        object_type_label = "2"
-                    elif object_msg.object_type == Object.PLUSHIE:
-                        object_type_label = "3"
-                    elif object_msg.object_type == Object.BOX:
-                        object_type_label = "B"
-                    file.write(f"{object_type_label}, {object_msg.x:.2f}, {object_msg.y:.2f}, {object_msg.angle:.1f}\n")
+            for object_msg in self.object_list:
+                if object_msg.object_type == Object.CUBE:
+                    object_type_label = "1"
+                elif object_msg.object_type == Object.SPHERE:
+                    object_type_label = "2"
+                elif object_msg.object_type == Object.PLUSHIE:
+                    object_type_label = "3"
+                elif object_msg.object_type == Object.BOX:
+                    object_type_label = "B"
+                file.write(f"{object_type_label}, {(object_msg.x * 100):.2f}, {(object_msg.y * 100):.2f}, {object_msg.angle:.1f}\n")
 
     def estimate_box_orientation(self, cluster_points):
         # Find the point with the lowest Z-coordinate
@@ -516,8 +491,12 @@ class ExamineImage(Node):
         point_in.point.y = 0.09
         point_in.point.z = y
 
+        if self.shutdown_event.is_set():
+            self.get_logger().warn("Shutdown event set, skipping transform lookup")
+            return
+
         try:
-            transform = self.tfBuffer.lookup_transform(
+            transform = self.tf_buffer.lookup_transform(
                 'map',  # Target frame
                 point_in.header.frame_id,  # Source frame
                 point_in.header.stamp,
@@ -645,6 +624,14 @@ class ExamineImage(Node):
         except TransformException as e:
             self.get_logger().error(f"Failed coordinate transform for newly {object_type} detected object: {e}")
 
+    def publish_object_list(self):
+        object_list_msg = ObjectList()
+        object_list_msg.header.frame_id = "map"
+        object_list_msg.header.stamp = self.get_clock().now().to_msg()
+        object_list_msg.length = len(self.object_list)
+        object_list_msg.objects = self.object_list
+        self.object_list_publisher.publish(object_list_msg)
+
     def check_duplicates(self):
         duplicates_removed = 0
         n = len(self.object_list)
@@ -682,8 +669,6 @@ class ExamineImage(Node):
         self.object_list = [obj for idx, obj in enumerate(self.object_list) if idx not in to_remove]
         return
 
-    
-
     def broadcast_object_list(self):
         self.check_duplicates()
 
@@ -709,14 +694,16 @@ class ExamineImage(Node):
 def main():
     rclpy.init()
     node = ExamineImage()
-
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        pass
+        node.get_logger().info("Keyboard interrupt, shutting down...")
+        node.write_map_file()
     finally:
+        del node.tf_listener
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 if __name__ == '__main__':
     main()
