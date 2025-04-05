@@ -11,35 +11,39 @@ import os
 from launch_ros.actions import Node
 
 def generate_launch_description():
+    mapping_launch_file = os.path.join(
+        get_package_share_directory("mapping"), "launch", "mapping_launch.py"
+    ) 
     return LaunchDescription([
         Node(
             package="project_master",
             executable="explore_master",
             name="robot_explore",
+            emulate_tty=True,
+            ros_arguments=["--log-level", "info"]
+        ),
+        IncludeLaunchDescription(
+            launch_description_source=AnyLaunchDescriptionSource(mapping_launch_file),
+        ),
+        Node(
+            package="navigation",
+            executable="pathing",
+            name="robot_pathing",
+            emulate_tty=True,
             ros_arguments=["--log-level", "info"]
         ),
         Node(
             package="navigation",
             executable="navigation",
             name="robot_navigation",
+            emulate_tty=True,
             ros_arguments=["--log-level", "info"]
-        ),
-        Node(
-            package="navigation",
-            executable="mapping",
-            name="robot_mapping",
-            ros_arguments=["--log-level", "warn"]
-        ),
-        Node(
-            package="navigation",
-            executable="pathing",
-            name="robot_pathing",
-            ros_arguments=["--log-level", "warn"]
         ),
         Node(
             package="detection",
             executable="detection",
             name="robot_detection",
-            ros_arguments=["--log-level", "warn"]
+            emulate_tty=True,
+            ros_arguments=["--log-level", "info"]
         ),
     ])

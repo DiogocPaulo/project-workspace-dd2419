@@ -29,7 +29,7 @@ import time
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from project_interfaces.msg import Object, ObjectList, Vertex, WorkspaceVertices
-from mapping.map import WorkspaceArea, Map
+from mapping.map import Map
 
 class ExamineImage(Node):
 
@@ -56,12 +56,12 @@ class ExamineImage(Node):
         self.object_list_broadcaster = tf2_ros.TransformBroadcaster(self)
 
         # Create the 'maps' folder if it doesn't exist
-        folder_path = os.path.join(os.getcwd(), 'maps')
+        folder_path = os.path.join(os.getcwd(), "maps")
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
 
         # Constants
-        self.file_path = os.path.join(folder_path, 'Map.txt')
+        self.file_path = os.path.join(folder_path, "map.csv")
 
         # Variables
         self.workspace_vertices = []
@@ -91,13 +91,21 @@ class ExamineImage(Node):
             if len(parts) < 4:
                 continue
 
-            object_type = parts[0]
-            x_cm = float(parts[1])
-            y_cm = float(parts[2])
-            angle = float(parts[3])
+            if parts[0] == "1":
+                object_type = Object.CUBE
+            elif parts[0] == "2":
+                object_type = Object.SPHERE
+            elif parts[0] == "3":
+                object_type = Object.PLUSHIE
+            elif parts[0] == "B":
+                object_type = Object.BOX
+            else:
+                object_type = parts[0]
+                self.get_logger().warn(f"Unidentified object type from map file: {object_type}")
 
-            x = x_cm / 100.0
-            y = y_cm / 100.0
+            x = float(parts[1])/100
+            y = float(parts[2])/100
+            angle = float(parts[3])
 
             # Create new object message
             object_msg = Object()
@@ -107,12 +115,8 @@ class ExamineImage(Node):
             object_msg.object_type = object_type
 
             self.object_list.append(object_msg)
-
             self.read = 1
-
-            #self.get_logger().info(f"Published new object list now includes: {object_type} at ({x:.2f}, {y:.2f})")
-
-            #self.get_logger().info(f"Published TF for object: {object_type} at ({x:.2f}, {y:.2f})")
+            self.get_logger().info(f"Adding object from file: {object_type} at ({x:.2f}, {y:.2f})")
 
         object_list_msg = ObjectList()
         object_list_msg.header.frame_id = "map"
@@ -304,7 +308,15 @@ class ExamineImage(Node):
                 self.read = 0
             else:
                 for object_msg in self.object_list:
-                    file.write(f"{object_msg.object_type} {object_msg.x:.2f} {object_msg.y:.2f} {object_msg.angle:.1f}\n")
+                    if object_msg.object_type == Object.CUBE:
+                        object_type_label = "1"
+                    elif object_msg.object_type == Object.SPHERE:
+                        object_type_label = "2"
+                    elif object_msg.object_type == Object.PLUSHIE:
+                        object_type_label = "3"
+                    elif object_msg.object_type == Object.BOX:
+                        object_type_label = "B"
+                    file.write(f"{object_type_label}, {object_msg.x:.2f}, {object_msg.y:.2f}, {object_msg.angle:.1f}\n")
 
     def estimate_box_orientation(self, cluster_points):
         # Find the point with the lowest Z-coordinate
@@ -692,23 +704,19 @@ class ExamineImage(Node):
             q.w = np.cos(object_msg.angle / 2.0)
             transform.transform.rotation = q
 
-            
             self.object_list_broadcaster.sendTransform(transform)
-        
 
-def main(args=None):
-    rclpy.init(args=args)
-
-    examine_image = ExamineImage()
+def main():
+    rclpy.init()
+    node = ExamineImage()
 
     try:
-        rclpy.spin(examine_image)
+        rclpy.spin(node)
     except KeyboardInterrupt:
         pass
-
-    examine_image.destroy_node()
-    rclpy.shutdown()
-
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
 
 if __name__ == '__main__':
     main()

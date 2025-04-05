@@ -34,6 +34,8 @@ def generate_launch_description():
             package="localisation",
             executable="odometry",
             name="robot_odometry",
+            emulate_tty=True,
+            ros_arguments=["--log-level", "info"]
         ),
     ])
 

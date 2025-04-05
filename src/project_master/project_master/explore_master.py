@@ -12,7 +12,7 @@ from rclpy.qos import QoSProfile, HistoryPolicy, ReliabilityPolicy
 from project_interfaces.srv import GoToPoint, Trigger
 from nav_msgs.msg import Path, Odometry
 from project_interfaces.msg import Vertex, WorkspaceVertices
-from mapping.map import Map, WorkspaceArea
+from mapping.map import Map
 
 from project_master import behaviours
 
@@ -164,38 +164,6 @@ def offset_workspace_vertices(workspace_vertices, offset_distance):
 
     return offset_vertices
 
-def generate_waypoints(workspace_vertices, x_resolution, y_resolution):
-
-    workspace = WorkspaceArea(workspace_vertices)
-
-    x_min = min(vertex[0] for vertex in workspace_vertices)
-    x_max = max(vertex[0] for vertex in workspace_vertices)
-    y_min = min(vertex[1] for vertex in workspace_vertices)
-    y_max = max(vertex[1] for vertex in workspace_vertices)
-
-    waypoints = []
-    reverse = False
-
-    x = x_min
-    while x < x_max:
-        y = y_min if not reverse else y_max
-        first = None
-        last = None
-        while (not reverse and y < y_max) or (reverse and y > y_min):
-            if workspace.is_within_workspace(x, y):
-                if first is None:
-                    first = (x, y, 0.0)
-                last = (x, y, 0.0)
-            y += y_resolution if not reverse else -y_resolution
-        if first is not None:
-            waypoints.append(first)
-        if last is not None and first != last:
-            waypoints.append(last)
-        x += x_resolution
-        reverse = not reverse
-    
-    return waypoints
-
 def generate_waypoints_with_map(map: Map, x_resolution, y_resolution):
 
     x_min = 0.0
@@ -242,8 +210,8 @@ class ExploreMaster(Node):
         self.map.initialise_grid(self.workspace_vertices)
         self.map.inflate_grid(0.45)
         self.show_waypoints = True
-        # self.end_points = generate_waypoints_with_map(self.map, 0.45, self.resolution)
-        self.end_points = offset_workspace_vertices(self.workspace_vertices, 0.50)
+        self.end_points = generate_waypoints_with_map(self.map, 0.45, self.resolution)
+        # self.end_points = offset_workspace_vertices(self.workspace_vertices, 0.50)
 
         root = self.create_exploration_tree()
         self.tree = py_trees_ros.trees.BehaviourTree(root=root)
@@ -394,8 +362,10 @@ def main():
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass
-
-    rclpy.shutdown()
+    finally:
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 if __name__ == "__main__":
     main()

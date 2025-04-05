@@ -5,29 +5,6 @@ from scipy.ndimage import maximum_filter, rotate, convolve
 
 from project_interfaces.msg import Object, ObjectList
 
-class WorkspaceArea:
-    def __init__(self, workspace_vertices):
-        self.workspace_vertices = workspace_vertices
-    def is_within_workspace(self, x, y):
-        return self.winding_number(x, y)
-    def winding_number(self, x, y):
-        counter = 0
-        for i in range(len(self.workspace_vertices)):
-            x_current, y_current = self.workspace_vertices[i]
-            x_next, y_next = self.workspace_vertices[(i + 1) % len(self.workspace_vertices)]
-
-            if y_current <= y:
-                if y_next > y:
-                    if self.is_left(x, y, x_current, y_current, x_next, y_next) > 0: 
-                        counter += 1
-            else:
-                if y_next <= y:
-                    if self.is_left(x, y, x_current, y_current, x_next, y_next) < 0:
-                        counter -= 1
-        return counter != 0
-    def is_left(self, x, y, x_current, y_current, x_next, y_next):
-        return ((x_next - x_current) * (y - y_current) - (y_next - y_current) * (x - x_current))
-
 class Map:
     """
     Class provides by default the utility functions such as conversions, but also store the map.
@@ -68,6 +45,11 @@ class Map:
     def update_grid(self, grid):
         self.grid = grid
 
+    def empty_grid(self):
+        if self.grid is None or self.grid_height is None or self.grid_width is None:
+            return
+        self.grid = np.full((self.grid_height, self.grid_width), -1, dtype=np.int8)
+
     def set_grid_value(self, x, y, value):
         # Set a grid cell to a value (0 to 100)
         if self.grid is None:
@@ -79,7 +61,7 @@ class Map:
         else:
             raise IndexError("Grid coordinates out of bounds.")
 
-    def add_object(self, x, y, angle, object_type):
+    def add_object(self, object_type, x, y, angle):
         if self.grid is None:
             # Grid is not yet initalised
             return
@@ -108,7 +90,6 @@ class Map:
         if (self.grid[grid_y, grid_x] == 100):
             # Object already in map
             return
-
 
         object_vertices = np.array([
             [grid_half_width, grid_half_height],
@@ -272,91 +253,42 @@ class Map:
         # Converts a number of grid cells to world distance
         return float(cells * self.resolution)
 
-    def inflate_grid_by_half(self, inflation_radius):
+    def inflate_grid(self, inflation_radius, percent=80, n=2):
         if self.grid is None:
             return
 
         inflation_cells = self.distance_to_cells(inflation_radius)
 
-        # Define a circular footprint using inflation radius
-        circular_footprint = np.zeros(
-            (2 * inflation_cells + 1, 2 * inflation_cells + 1),
-            dtype=int,
-        )
-        ty, tx = np.ogrid[
-            -inflation_cells : inflation_cells + 1,
-            -inflation_cells : inflation_cells + 1,
-        ]
-        mask = tx**2 + ty**2 <= inflation_cells**2
-        circular_footprint[mask] = 1
+        # # Define a circular footprint using inflation radius
+        # circular_footprint = np.zeros(
+        #     (2 * inflation_cells + 1, 2 * inflation_cells + 1),
+        #     dtype=int,
+        # )
+        # ty, tx = np.ogrid[
+        #     -inflation_cells : inflation_cells + 1,
+        #     -inflation_cells : inflation_cells + 1,
+        # ]
+        # mask = tx**2 + ty**2 <= inflation_cells**2
+        # circular_footprint[mask] = 1
 
-        occupied_mask = self.grid > 0
+        # Define a squircle footprint using inflation radius
+        x = np.linspace(-inflation_radius, inflation_radius, 2 * inflation_cells + 1)
+        y = np.linspace(-inflation_radius, inflation_radius, 2 * inflation_cells + 1)
+        tx, ty = np.meshgrid(x, y)
 
-        inflated_values = maximum_filter(self.grid, footprint=circular_footprint, mode="constant", cval=0)
+        mask = (np.abs(tx)**n + np.abs(ty)**n) <= inflation_cells**n
+
+        squircle_footprint = np.zeros_like(mask, dtype=int)
+        squircle_footprint[mask] = 1
+
+        occupied_mask = self.grid > 70
+
+        inflated_values = maximum_filter(self.grid, footprint=squircle_footprint, mode="constant", cval=0)
 
         inflated_grid = np.where(
             (occupied_mask > 0),
             self.grid,
-            (inflated_values * 0.8).astype(int),
+            (inflated_values * (percent/100)).astype(int),
         )
 
-        self.grid = inflated_grid
-
-    def inflate_grid(self, inflation_radius):
-        if self.grid is None:
-            return
-
-        inflation_cells = self.distance_to_cells(inflation_radius)
-
-        # Define a circular footprint using inflation radius
-        circular_footprint = np.zeros(
-            (2 * inflation_cells + 1, 2 * inflation_cells + 1),
-            dtype=int,
-        )
-        ty, tx = np.ogrid[
-            -inflation_cells : inflation_cells + 1,
-            -inflation_cells : inflation_cells + 1,
-        ]
-        mask = tx**2 + ty**2 <= inflation_cells**2
-        circular_footprint[mask] = 1
-
-        inflated_grid = maximum_filter(self.grid, footprint=circular_footprint, mode="constant", cval=0)
-        self.grid = inflated_grid
-
-    def inflate_grid_in_region(self, inflation_radius, region_radius, robot_x, robot_y):
-        # Returns a grid that has inflated occupied cells by an inflation radius within a region radius around to robot
-        if self.grid is None:
-            raise ValueError("Grid is not initialised")
-
-
-        inflation_cells = self.distance_to_cells(inflation_radius)
-        region_cells = self.distance_to_cells(region_radius)
-        grid_x, grid_y = self.world_to_grid(robot_x, robot_y)
-        if not (0 <= grid_x < self.grid_width and 0 <= grid_y < self.grid_height):
-            # Grid coordinates out of bounds
-            return
-
-        # Define region within grid to inflate
-        x_min = max(0, grid_x - region_cells)
-        x_max = min(self.grid_width, grid_x + region_cells + 1)
-        y_min = max(0, grid_y - region_cells)
-        y_max = min(self.grid_height, grid_y + region_cells + 1)
-
-        inflated_grid = self.grid.copy()
-        region = self.grid[y_min:y_max, x_min:x_max].copy()
-
-        # Define a circular footprint using inflation radius
-        circular_footprint = np.zeros(
-            (2 * inflation_cells + 1, 2 * inflation_cells + 1),
-            dtype=int,
-        )
-        ty, tx = np.ogrid[
-            -inflation_cells : inflation_cells + 1,
-            -inflation_cells : inflation_cells + 1,
-        ]
-        mask = tx**2 + ty**2 <= inflation_cells**2
-        circular_footprint[mask] = 1
-
-        inflated_region = maximum_filter(region, footprint=circular_footprint, mode="constant", cval=-1)
-        inflated_grid[y_min:y_max, x_min:x_max] = inflated_region
         self.grid = inflated_grid
