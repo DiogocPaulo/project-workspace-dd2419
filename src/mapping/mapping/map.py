@@ -1,7 +1,8 @@
 import numpy as np
 import math
 import matplotlib.pyplot as plt
-from scipy.ndimage import maximum_filter, rotate, convolve
+from scipy.ndimage import maximum_filter, rotate, convolve, distance_transform_edt
+import scipy.ndimage
 
 from project_interfaces.msg import Object, ObjectList
 
@@ -253,42 +254,17 @@ class Map:
         # Converts a number of grid cells to world distance
         return float(cells * self.resolution)
 
-    def inflate_grid(self, inflation_radius, percent=80, n=2):
+    def inflate_grid(self, inflation_radius, percent=80):
         if self.grid is None:
             return
 
-        inflation_cells = self.distance_to_cells(inflation_radius)
-
-        # # Define a circular footprint using inflation radius
-        # circular_footprint = np.zeros(
-        #     (2 * inflation_cells + 1, 2 * inflation_cells + 1),
-        #     dtype=int,
-        # )
-        # ty, tx = np.ogrid[
-        #     -inflation_cells : inflation_cells + 1,
-        #     -inflation_cells : inflation_cells + 1,
-        # ]
-        # mask = tx**2 + ty**2 <= inflation_cells**2
-        # circular_footprint[mask] = 1
-
-        # Define a squircle footprint using inflation radius
-        x = np.linspace(-inflation_radius, inflation_radius, 2 * inflation_cells + 1)
-        y = np.linspace(-inflation_radius, inflation_radius, 2 * inflation_cells + 1)
-        tx, ty = np.meshgrid(x, y)
-
-        mask = (np.abs(tx)**n + np.abs(ty)**n) <= inflation_cells**n
-
-        squircle_footprint = np.zeros_like(mask, dtype=int)
-        squircle_footprint[mask] = 1
-
         occupied_mask = self.grid > 70
 
-        inflated_values = maximum_filter(self.grid, footprint=squircle_footprint, mode="constant", cval=0)
+        distance_map = distance_transform_edt(~occupied_mask, sampling=self.resolution)
 
-        inflated_grid = np.where(
-            (occupied_mask > 0),
-            self.grid,
-            (inflated_values * (percent/100)).astype(int),
-        )
+        inflated_grid = np.zeros_like(self.grid, dtype=np.int8)
+        inflation_mask = (distance_map <= inflation_radius) & (~occupied_mask)
+        inflated_grid[inflation_mask] = int(percent)
+        inflated_grid[occupied_mask] = np.maximum(inflated_grid[occupied_mask], self.grid[occupied_mask])
 
-        self.grid = inflated_grid
+        self.grid = inflated_grid.astype(self.grid.dtype)

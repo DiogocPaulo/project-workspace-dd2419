@@ -60,7 +60,7 @@ class MapObjects(Node):
                 self.objects_map.add_object(str(object_type), x, y, angle)
             self.publish_objects_map()
 
-        self.previous_object_list = msg.objects
+        self.previous_object_list = current_object_list
 
     def publish_objects_map(self):
         if self.objects_map is None:
