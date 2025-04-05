@@ -189,8 +189,8 @@ def main():
     
     # node.process_map_file("/home/robot/project-workspace-dd2419/maps/Map_test.txt")
     # node.publish_transforms()
-    node.send_arm_request(0.2,0.0,0.0,"PICKUP")
-    # node.send_arm_request(0.15,-0.15,0.0,"DROPOFF")   
+    node.send_arm_request(0.25,0.0,0.06,"LOOK")
+    # node.send_arm_request(0.15,-0.15,0.0,"DROPOFF")
 
 
 
