@@ -210,13 +210,8 @@ class ExploreMaster(Node):
         self.map.initialise_grid(self.workspace_vertices)
         self.map.inflate_grid(0.40)
         self.show_waypoints = True
-        # self.end_points = generate_waypoints_with_map(self.map, 0.35, self.resolution)
+        self.end_points = generate_waypoints_with_map(self.map, 0.35, self.resolution)
         # self.end_points = offset_workspace_vertices(self.workspace_vertices, 0.50)
-        self.end_points = [
-            (4.0, 1.0, 0.0),
-            (8.6, 2.2, 0.0),
-            (0.0, 0.0, 0.0),
-        ]
 
         root = self.create_exploration_tree()
         self.tree = py_trees_ros.trees.BehaviourTree(root=root)
