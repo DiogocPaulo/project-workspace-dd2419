@@ -18,24 +18,23 @@ constexpr double MAX_RANGE = 10.0;
 
 // Correct the coordinate of a point based on velocity and time
 Eigen::Vector2d correctCoordinate(const Eigen::Vector2d& point,
-                                    double delta_time,
-                                    double linear_velocity,
-                                    double angular_velocity) {
-
-    // Calculate the change in position and orientation based on velocity and time
+                                  double delta_time,
+                                  double linear_velocity,
+                                  double angular_velocity) {
+    // Change in robot motion
     double delta_x = linear_velocity * delta_time;
     double delta_theta = angular_velocity * delta_time;
 
-    // Create the rotation matrix
-    Eigen::Matrix2d rotation;
-    rotation << std::cos(delta_theta), -std::sin(delta_theta),
-                std::sin(delta_theta), std::cos(delta_theta);
+    // Create inverse rotation matrix (negative angle)
+    Eigen::Matrix2d inverse_rotation;
+    inverse_rotation << std::cos(-delta_theta), -std::sin(-delta_theta),
+                        std::sin(-delta_theta),  std::cos(-delta_theta);
 
-    // Create the translation vector
-    Eigen::Vector2d translation(delta_x, 0);
+    // Translation in robot frame (negative to compensate)
+    Eigen::Vector2d translation(-delta_x, 0.0);
 
-    // Apply the transformation
-    Eigen::Vector2d corrected_point = rotation * point + translation;
+    // Apply inverse motion to point
+    Eigen::Vector2d corrected_point = inverse_rotation * (point + translation);
 
     return corrected_point;
 }

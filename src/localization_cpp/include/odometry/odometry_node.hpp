@@ -7,6 +7,7 @@
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <robp_interfaces/msg/encoders.hpp>
+#include <sensor_msgs/msg/imu.hpp>
 
 // ROS Transform-related includes
 #include <tf2_ros/transform_broadcaster.h>
@@ -16,6 +17,13 @@
 // Math includes
 #include <cmath>
 
+// Custom includes
+#include "localization/ekf.hpp"
+
+// Function timing
+#include <iostream>
+#include <chrono>
+
 namespace Localization {
 
 class OdometryNode : public rclcpp::Node {
@@ -23,14 +31,15 @@ public:
     OdometryNode();
 
 private:
-    // Timer callback for odometry update
-    void updateOdometry();
-
-    // Encoder callback
     void encoderCallback(const robp_interfaces::msg::Encoders::ConstSharedPtr& msg);
+    void imuCallback(const sensor_msgs::msg::Imu::ConstSharedPtr& msg);
+    void getEncoderState(double& delta_distance, double& delta_theta, double& linear_velocity, double& angular_velocity, double elapsed_time);
+    void updateOdometry();
+    void publishOdometry(const rclcpp::Time& current_time);
 
     // ROS Subscriber
     rclcpp::Subscription<robp_interfaces::msg::Encoders>::SharedPtr encoder_sub_;
+    rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
 
     // ROS Publishers
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
@@ -47,17 +56,22 @@ private:
     double wheel_radius_ = 0.04921;
     double base_width_ = 0.31;
 
-    // Internal variables
+    // Encoder data storage
     rclcpp::Time then_time_;
     int64_t accumulated_ticks_left_ = 0;
     int64_t accumulated_ticks_right_ = 0;
     int64_t last_encoder_left_ = 0;
     int64_t last_encoder_right_ = 0;
-    double x_ = 0.0;
-    double y_ = 0.0;
-    double theta_ = 0.0;
-    double linear_velocity_ = 0.0;
-    double angular_velocity_ = 0.0;
+
+    // IMU data storage
+    geometry_msgs::msg::Vector3 angular_velocity_imu_;
+    geometry_msgs::msg::Vector3 linear_acceleration_imu_;
+    geometry_msgs::msg::Quaternion orientation_imu_;
+    rclcpp::Time last_imu_time_;
+    bool imu_data_received_ = false;
+
+    // EKF and state variables
+    EKF ekf_;
 
     // Path storage
     nav_msgs::msg::Path odom_path_;

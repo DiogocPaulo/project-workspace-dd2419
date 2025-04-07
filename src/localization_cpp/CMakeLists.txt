@@ -65,6 +65,7 @@ ament_target_dependencies(odometry_node
   tf2_ros
   tf2_geometry_msgs
   nav_msgs
+  sensor_msgs
   geometry_msgs
   robp_interfaces  # For Encoders msg
 )
