@@ -1,5 +1,4 @@
-#ifndef LIDAR_SCAN_STORAGE_HPP
-#define LIDAR_SCAN_STORAGE_HPP
+#pragma once
 
 #include <unordered_map>
 #include <vector>
@@ -18,15 +17,6 @@ struct Pose2D {
         : position(x, y), theta(theta_rad) {}
 };
 
-// Stored scan: points and associated pose
-struct Scan {
-    std::vector<Eigen::Vector2d> points;
-    Pose2D pose;
-
-    Scan(const std::vector<Eigen::Vector2d>& pts, const Pose2D& p)
-        : points(pts.begin(), pts.begin() + std::min<size_t>(pts.size(), 1000)), pose(p) {}
-};
-
 // Grid cell key (integer coordinates)
 struct GridCell {
     int x, y;
@@ -41,15 +31,74 @@ struct GridCell {
 // Hash function for GridCell to use in unordered_map
 struct GridCellHash {
     std::size_t operator()(const GridCell& cell) const {
-        // Combine x and y using a simple hash (good enough for spatial grid)
         return std::hash<int>()(cell.x) ^ (std::hash<int>()(cell.y) << 1);
+    }
+};
+
+// Stored scan: points in a vector with an occupancy grid for aging
+struct Scan {
+    std::vector<Eigen::Vector2d> points; // All points stored here
+    std::unordered_map<GridCell, uint8_t, GridCellHash> occupancy_grid; // 0-100 counter per sub-cell
+    Pose2D pose;
+    double sub_cell_size;
+
+    Scan(const std::vector<Eigen::Vector2d>& pts, const Pose2D& p, double sub_size)
+        : pose(p), sub_cell_size(sub_size) {
+        points.reserve(1000); // Preallocate for efficiency
+        addPoints(pts);
+    }
+
+    // Add new points, updating occupancy counters
+    void addPoints(const std::vector<Eigen::Vector2d>& new_points) {
+        for (const auto& point : new_points) {
+            GridCell cell = pointToGridCell(point);
+            auto it = occupancy_grid.find(cell);
+            if (it == occupancy_grid.end()) {
+                // New cell: add point and set counter to 100
+                points.push_back(point);
+                occupancy_grid[cell] = 100;
+            } else {
+                // Existing cell: update counter to 100 (point already in vector)
+                it->second = 100;
+            }
+        }
+    }
+
+    // Age points and remove those with counter reaching 0
+    void agePoints(int decrement = 1) {
+        std::vector<Eigen::Vector2d> updated_points;
+        updated_points.reserve(points.size());
+
+        for (auto it = occupancy_grid.begin(); it != occupancy_grid.end();) {
+            it->second = std::max(0, static_cast<int>(it->second) - decrement);
+            if (it->second == 0) {
+                // Remove point from vector by not copying it
+                it = occupancy_grid.erase(it);
+            } else {
+                // Keep point associated with this cell
+                Eigen::Vector2d point(it->first.x * sub_cell_size + sub_cell_size / 2,
+                                      it->first.y * sub_cell_size + sub_cell_size / 2);
+                updated_points.push_back(point);
+                ++it;
+            }
+        }
+
+        points = std::move(updated_points);
+    }
+
+private:
+    GridCell pointToGridCell(const Eigen::Vector2d& point) const {
+        int x = static_cast<int>(std::floor(point.x() / sub_cell_size));
+        int y = static_cast<int>(std::floor(point.y() / sub_cell_size));
+        return GridCell(x, y);
     }
 };
 
 class LidarScanStorage {
 public:
-    // Constructor with configurable cell size (meters)
-    explicit LidarScanStorage(double cell_size = 1.0) : cell_size_(cell_size) {
+    // Constructor with configurable cell size and sub-cell size (meters)
+    explicit LidarScanStorage(double cell_size = 1.0, double sub_cell_size = 0.01)
+        : cell_size_(cell_size), sub_cell_size_(sub_cell_size) {
         scans_.reserve(20); // Preallocate for typical map size
     }
 
@@ -60,13 +109,24 @@ public:
         auto it = scans_.find(cell);
         if (it == scans_.end()) {
             // New cell: store the scan
-            scans_.emplace(cell, Scan(points, pose));
+            scans_.emplace(cell, Scan(points, pose, sub_cell_size_));
         } else {
-            // Existing cell: append points to previous scan
-            if (it->second.points.size() < 1000) {
-                size_t remaining_space = 1000 - it->second.points.size();
-                size_t points_to_add = std::min(remaining_space, points.size());
-                it->second.points.insert(it->second.points.end(), points.begin(), points.begin() + points_to_add);
+            // Existing cell: add points and update occupancy
+            it->second.addPoints(points);
+        }
+    }
+
+    // Age all scans to forget old points
+    void ageScans(int decrement = 1) {
+        for (auto& [cell, scan] : scans_) {
+            scan.agePoints(decrement);
+        }
+        // Optionally remove empty scans
+        for (auto it = scans_.begin(); it != scans_.end();) {
+            if (it->second.points.empty()) {
+                it = scans_.erase(it);
+            } else {
+                ++it;
             }
         }
     }
@@ -125,10 +185,9 @@ private:
         return GridCell(x, y);
     }
 
-    double cell_size_; // Grid cell size in meters
+    double cell_size_; // Grid cell size for scans (meters)
+    double sub_cell_size_; // Sub-grid cell size for points (meters)
     std::unordered_map<GridCell, Scan, GridCellHash> scans_; // Grid map of scans
 };
 
 } // namespace Localization
-
-#endif // LIDAR_SCAN_STORAGE_HPP

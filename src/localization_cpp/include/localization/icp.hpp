@@ -1,5 +1,4 @@
-#ifndef LOCALISATION_ICP_HPP
-#define LOCALISATION_ICP_HPP
+#pragma once
 
 #include <vector>
 #include <Eigen/Dense>
@@ -131,5 +130,3 @@ private:
 };
 
 } // namespace Localization
-
-#endif // LOCALISATION_ICP_HPP

@@ -91,6 +91,7 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
 
             // Store the current scan in the LidarScanStorage
             if ((current_pose_.position - stored_scan->pose.position).norm() > 0.05) {
+                stored_scan->agePoints(5); // Age points in the storage
                 scan_storage_.addScan(aligned_points, current_pose_);
             }
 
