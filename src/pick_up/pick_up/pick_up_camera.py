@@ -11,7 +11,16 @@ import numpy as np
 import os
 import onnx
 from project_interfaces.msg import DetectedData, DetectedDataArray
+from project_interfaces.srv import GetDetectedList
 from std_msgs.msg import Header
+import rclpy.time
+
+class detected_entity:
+    def __init__(self,label,x,y,timestamp):
+        self.x = x
+        self.y = y
+        self.label = label
+        self.timestamp = timestamp
 
 class ArmCamera(Node):
     def __init__(self):
@@ -19,65 +28,103 @@ class ArmCamera(Node):
 
         self.model = YOLO("runs/detect/train5/weights/best.pt")
 
-        self.subscription = self.create_subscription(
-            Image, '/arm_camera/image_raw', self.image_callback, 10)
+        self.srv = self.create_service(GetDetectedList, 'get_detected_list', self.get_detected_callback)
+
         
 
         self.publisher = self.create_publisher(Image, '/yolov8/detections', 10)
+
+        self.handle_camera = False
 
         self.publisher_detected = self.create_publisher(DetectedDataArray, '/yolov8/detections_data', 10)
 
         self.bridge = CvBridge()
 
+        self.detected_objects = []
+        self.detected_boxes = []
+        self.clock = self.get_clock()
+
+        self.subscription = self.create_subscription(
+            Image, '/arm_camera/image_raw', self.image_callback, 10)
+        
+        
         
     def image_callback(self, msg):
-        cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
+        if self.handle_camera:
+            cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
 
-        results = self.model(cv_image)
+            results = self.model(cv_image)
 
-        
-        class_names = ['Box','objects']  
-
-        detection_msg = DetectedDataArray()
-
-        
-        for result in results[0].boxes: 
-            x1, y1, x2, y2 = map(int, result.xyxy[0])
-            confidence = float(result.conf[0])
-            class_idx = int(result.cls[0])
-
-            label = class_names[class_idx] if class_idx < len(class_names) else "Unknown"
-
-            cv2.rectangle(cv_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
-
-            cv2.putText(cv_image, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-
-            detection = DetectedData()
-            detection.label = label
-            detection.confidence = confidence
-            detection.xmin = x1
-            detection.ymin = y1
-            detection.xmax = x2
-            detection.ymax = y2
-            detection.timestamp = msg.header.stamp
-
-            detection_msg.detections.append(detection)
+            
+            class_names = ['Box','objects']
 
 
-        
-        height, width, _ = cv_image.shape
-        center_x, center_y = width // 2, height // 2
-
-        cv2.line(cv_image, (center_x - 20, center_y), (center_x + 20, center_y), (0, 0, 255), 2)
-        cv2.line(cv_image, (center_x, center_y - 20), (center_x, center_y + 20), (0, 0, 255), 2)
-        cv2.circle(cv_image, (center_x, center_y), 5, (0, 0, 255), -1)
-
-        ros_image = self.bridge.cv2_to_imgmsg(cv_image, encoding="bgr8")
+            found_objects = False
+            found_boxes = False
 
 
-        self.publisher.publish(ros_image)
+            
+            for result in results[0].boxes: 
+                x1, y1, x2, y2 = map(int, result.xyxy[0])
+                confidence = float(result.conf[0])
+                class_idx = int(result.cls[0])
 
-        self.publisher_detected.publish(detection_msg)
+                label = class_names[class_idx] if class_idx < len(class_names) else "Unknown"
+
+                # Draw rectangle around detected box
+                cv2.rectangle(cv_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
+
+                # Draw label text
+                cv2.putText(cv_image, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+
+                # Calculate center of the box
+                center_x = (x1 + x2) // 2
+                center_y = (y1 + y2) // 2
+
+                # Draw green dot at the center of the box
+                cv2.circle(cv_image, (center_x, center_y), 5, (0, 255, 0), -1)
+
+                entity = DetectedData()
+                entity.confidence = confidence
+                entity.xmin=x1
+                entity.xmax=x2
+                entity.ymin=y1
+                entity.ymax=y2
+                entity.timestamp=msg.header.stamp
+
+                if entity.label == 'objects':
+                    if not found_objects:
+                        self.detected_objects = []
+                        found_objects = True
+                    self.detected_objects.append(entity)
+                elif entity.label == 'Box':
+                    if not found_boxes:
+                        self.detected_boxes = []
+                        found_objects = True
+                    self.detected_boxes.append(entity)
+
+
+            # Center crosshairs
+            height, width, _ = cv_image.shape
+            center_x, center_y = width // 2, height // 2
+
+            cv2.line(cv_image, (center_x - 20, center_y), (center_x + 20, center_y), (0, 0, 255), 2)
+            cv2.line(cv_image, (center_x, center_y - 20), (center_x, center_y + 20), (0, 0, 255), 2)
+            cv2.circle(cv_image, (center_x, center_y), 5, (0, 0, 255), -1)
+
+            ros_image = self.bridge.cv2_to_imgmsg(cv_image, encoding="bgr8")
+
+            self.publisher.publish(ros_image)
+
+    
+    def get_detected_callback(self, request, response):
+        self.handle_camera = True
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
+        response.objects = self.detected_objects
+        response.boxes = self.detected_boxes
+        self.handle_camera = False
+        return response
+
 
 
 class FrameExtractor(Node):
@@ -115,7 +162,8 @@ class YOLOTrainNode(Node):
 
 def main():
     rclpy.init()
-    node = FrameExtractor()
+    node = ArmCamera()
+
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:

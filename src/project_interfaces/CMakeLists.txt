@@ -26,8 +26,9 @@ set(msg_files
 
 set(srv_files
 	"srv/GoToPoint.srv"
-  "srv/PickObject.srv"
-  "srv/Trigger.srv"
+	"srv/PickObject.srv"
+	"srv/Trigger.srv"
+	"srv/GetDetectedList.srv"
 	)
 
 set(action_files

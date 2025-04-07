@@ -30,6 +30,10 @@ from project_interfaces.msg import ArmTaskMessage
 
 from rclpy.action import ActionClient
 
+from project_interfaces.msg import DetectedData, DetectedDataArray
+from project_interfaces.srv import GetDetectedList
+from geometry_msgs.msg import TransformStamped
+
 class MultiServoPublisher(Node):
     def __init__(self):
         super().__init__("multi_servo_publisher")
@@ -38,6 +42,8 @@ class MultiServoPublisher(Node):
         self.publisher_sim = self.create_publisher(JointState, '/joint_states', 10)
         self.i = 0
 
+        self.client = self.create_client(GetDetectedList, 'get_detected_list')
+
 
         self.tfBuffer = tf2_ros.Buffer()
         self.listener = tf2_ros.TransformListener(self.tfBuffer,self)
@@ -45,20 +51,29 @@ class MultiServoPublisher(Node):
         
         self.service = self.create_service(PickObject, 'PickObject', self.task_callback)
 
+        self.detected_objects = []
+        self.detected_boxes = []
+        self.detected_threshhold = 0.05
+        self.take_detected_flag = False
 
-        arm_msg = ArmTaskMessage()
-        arm_msg.header = Header()
-        arm_msg.header.stamp = self.get_clock().now().to_msg()
-        arm_msg.header.frame_id = "map"
-        arm_msg.point = Point()
-        arm_msg.point.x = 0.2
-        arm_msg.point.y = 0.2
-        arm_msg.point.z = 0.0
-        arm_msg.description = "DROPOFF"
+        # self.detection_subscriber = self.create_subscription(
+        #     DetectedDataArray, '/yolov8/detections_data', self.detected_callback, 10)
+
 
         # self.publisher_marker = self.create_publisher(Marker, '/visualization_marker', 10)
 
         # self.timer = self.create_timer(1.0, self.publish_object_marker)
+
+
+        self.l1 = 0.101
+        self.l2 = 0.095
+        self.l3 = 0.168
+        self.off_base = 0.118
+
+        self.base = 0.0
+        self.v1 = 0.0
+        self.v2 = 0.0
+        self.v3 = 0.0
 
     def task_callback(self,request,response):
         if request.description == "PICKUP":
@@ -71,11 +86,13 @@ class MultiServoPublisher(Node):
             response.result = 2
             return response
         return response
-
-
-        
-
-
+    
+    class detected_entity:
+        def __init__(self,label,x,y,timestamp):
+            self.x = x
+            self.y = y
+            self.label = label
+            self.timestamp = timestamp
 
     def pickup_callback(self, request):
         self.get_logger().info(f'Received pickup request at {request.point}')
@@ -118,7 +135,7 @@ class MultiServoPublisher(Node):
         base_arm,v1_arm,v2_arm,v3_arm = self.FindKinematics(position.x,position.y,position.z)
 
 
-        if base_arm == -1:
+        if v1_arm == -1:
             self.get_logger().info(f'COULD NOT FIND KINEMATIC SOLUTION FOR POSITION: {position}')
             return 1
 
@@ -192,7 +209,7 @@ class MultiServoPublisher(Node):
         base_arm,v1_arm,v2_arm,v3_arm = self.FindKinematics(position.x,position.y,position.z)
 
 
-        if base_arm == -1:
+        if v1_arm == -1:
             self.get_logger().info(f'COULD NOT FIND KINEMATIC SOLUTION FOR POSITION: {position}')
             return 1
 
@@ -266,47 +283,57 @@ class MultiServoPublisher(Node):
         base_arm,v1_arm,v2_arm,v3_arm = self.FindKinematics(position.x,position.y,position.z)
 
 
-        if base_arm == -1:
-            self.get_logger().info(f'COULD NOT FIND KINEMATIC SOLUTION FOR POSITION: {position}')
-            return 1
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
 
+        # Calc look-specific angles:
+        distance = self.distance_calc(0,0,position.x,position.y)
+        v3_arm = 12000 - int(math.degrees(math.asin((self.l1+self.off_base-position.z)/(distance - self.l2)))*100)
 
-
-        self.get_logger().info(f"APPLYING SERVO ANGLES: BASE={base_arm} SERVO5={v1_arm} SERVO4={v2_arm} SERVO3={v3_arm}")
+        self.get_logger().info(f"APPLYING SERVO ANGLES: BASE={base_arm} SERVO5={12000} SERVO4={12000} SERVO3={v3_arm}")
         self.get_logger().info(f"DROPOFF INITIATED")
-
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
         
-        pose = [14000,12000,v3_arm,v2_arm,v1_arm,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
+        pose = [14000,12000,v3_arm,21000,12000,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
+        self.base = base_arm
+        self.v3 = v3_arm
         msg.data = pose
         self.publisher.publish(msg)
 
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=40))
-        
-        pose = [14000,12000,v3_arm,v2_arm,v1_arm,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
-        msg.data = pose
-        self.publisher.publish(msg)
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=3))
+        self.get_logger().info(f"WAITING FOR SERVICE")
+        request = GetDetectedList.Request()
 
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
+        future = self.client.call_async(request)
+        rclpy.spin_until_future_complete(self, future)
+
+
+        self.get_logger().info(f"OBJECTS: {len(future.objects)}")
+
+        if len(future.objects) > 0:
+            self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
+            pose = [14000,12000,12000,12000,12000,12000,move_time,move_time,move_time,move_time,move_time,move_time]
+        
+            
+
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=10))
 
         pose = [14000,12000,12000,12000,12000,12000,move_time,move_time,move_time,move_time,move_time,move_time]
         msg.data = pose
         self.publisher.publish(msg)
-
-        self.get_logger().info(f"DROPOFF COMPLETE")
-
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
-
+    
         return 0
 
 
         
 
     def CalcKinematics(self,x,y,z,desired_grip_angle): #Servos 5 & 4
-        # self.get_logger().info(f'Position: {x},{y}')
-        l1 = 0.101
-        l2 = 0.095
-        l4 = 0.168
+        self.get_logger().info(f'Position: {x},{y}')
+        # l1 = 0.101
+        # l2 = 0.095
+        # l4 = 0.168
+
+        l1 = self.l1
+        l2 = self.l2
+        l4 = self.l3
 
         try:
             base_rotation_angle = (math.atan2(y,x))
@@ -331,11 +358,11 @@ class MultiServoPublisher(Node):
 
             return base_rotation_angle,(math.pi/2) - v1 - base_angle,math.pi - v2, -v3
         except ValueError as e:
-            return -1,-1,-1,-1
+            return base_rotation_angle,-1,-1,-1
 
     def FindKinematics(self,x,y,z):
 
-        offset = 500
+        offset = 250
 
         self.get_logger().info(f"OFFSET = {offset}")
 
@@ -358,7 +385,7 @@ class MultiServoPublisher(Node):
 
 
         self.get_logger().info("No configuration found!")
-        return -1,-1,-1,-1
+        return base_arm,-1,-1,-1
 
     def FindKinematics2(self,x,y,z):
 
@@ -381,10 +408,10 @@ class MultiServoPublisher(Node):
             if(v3_arm < (3000 + offset) or v3_arm > (21000 - offset)): continue
 
             self.get_logger().info("Configuration has been found!")
-            return base,v1,v2,v3
+            return base_arm,v1,v2,v3
 
         self.get_logger().info("No configuration found!")
-        return -1,-1,-1,-1
+        return base_arm,-1,-1,-1
 
 
     

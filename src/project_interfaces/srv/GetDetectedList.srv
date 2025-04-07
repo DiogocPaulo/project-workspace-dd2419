@@ -1,0 +1,5 @@
+# GetDetectedList.srv
+
+---
+DetectedData[] objects
+DetectedData[] boxes
