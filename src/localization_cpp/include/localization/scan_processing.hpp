@@ -24,62 +24,79 @@ Eigen::Vector2d correctCoordinate(const Eigen::Vector2d& point,
     // Change in robot motion
     double delta_x = linear_velocity * delta_time;
     double delta_theta = angular_velocity * delta_time;
-
-    // Create inverse rotation matrix (negative angle)
-    Eigen::Matrix2d inverse_rotation;
-    inverse_rotation << std::cos(-delta_theta), -std::sin(-delta_theta),
-                        std::sin(-delta_theta),  std::cos(-delta_theta);
-
-    // Translation in robot frame (negative to compensate)
-    Eigen::Vector2d translation(-delta_x, 0.0);
-
-    // Apply inverse motion to point
-    Eigen::Vector2d corrected_point = inverse_rotation * (point + translation);
-
+    
+    // Create rotation matrix for the motion compensation
+    Eigen::Matrix2d rotation;
+    rotation << std::cos(delta_theta), -std::sin(delta_theta),
+                std::sin(delta_theta), std::cos(delta_theta);
+    
+    // Translation in robot frame
+    Eigen::Vector2d translation(delta_x, 0.0);
+    
+    // Apply inverse motion to point:
+    // 1. Rotate the point by the negative angle
+    // 2. Subtract the linear displacement
+    Eigen::Vector2d corrected_point = point;
+    
+    // Rotate point opposite to robot rotation
+    corrected_point = Eigen::Matrix2d(
+        Eigen::Rotation2D<double>(-delta_theta)
+    ) * corrected_point;
+    
+    // Compensate for linear motion
+    corrected_point[0] -= delta_x;
+    
     return corrected_point;
 }
 
 // Convert a LaserScan message to a vector of 2D points in the sensor frame
-std::vector<Eigen::Vector2d> laserScanToPoints(const sensor_msgs::msg::LaserScan::ConstSharedPtr& scan, 
-                                                const rclcpp::Time& scan_start_time, 
-                                                double linear_velocity,
-                                                double angular_velocity) {
+std::vector<Eigen::Vector2d> laserScanToPoints(const sensor_msgs::msg::LaserScan::ConstSharedPtr& scan,
+                                             const rclcpp::Time& scan_start_time,
+                                             double linear_velocity,
+                                             double angular_velocity) {
     std::vector<Eigen::Vector2d> points;
     if (!scan || scan->ranges.empty()) {
         return points; // Return empty vector if scan is invalid
     }
-
+    
+    // Calculate total scan duration
+    double scan_duration = scan->time_increment * (scan->ranges.size() - 1);
+    
     points.reserve(scan->ranges.size());
-
     float angle = scan->angle_min;
     const float angle_increment = scan->angle_increment;
     float prev_range = scan->ranges[0]; // Previous range for comparison
-
+    
     for (size_t i = 0; i < scan->ranges.size(); ++i, angle += angle_increment) {
         float range = scan->ranges[i];
-        // Skip invalid ranges
+        
+        // Skip invalid ranges and out-of-bounds values
         if (!std::isfinite(range) || range < MIN_RANGE || range > MAX_RANGE) {
             continue;
         }
-
+        
         // Check against previous range to avoid noise
         if (std::abs(range - prev_range) > DEFAULT_SEGMENT_THRESHOLD) {
             if (i < scan->ranges.size() - 1 && std::abs(scan->ranges[i + 1] - range) > DEFAULT_SEGMENT_THRESHOLD) {
                 continue; // Skip this point if too far from the points on either side
             }
         }
-
+        
         // Convert polar coordinates to Cartesian
         double x = static_cast<double>(range * std::cos(angle));
         double y = static_cast<double>(range * std::sin(angle));
-        // Correct the coordinate based on velocity and time
-        //rclcpp::Time point_time = scan_start_time + rclcpp::Duration::from_nanoseconds(static_cast<int64_t>(i * scan->time_increment * 1e9));
-        //double delta_time = (point_time - scan_start_time).seconds();
-        //Eigen::Vector2d corrected_point = correctCoordinate(Eigen::Vector2d(x, y), delta_time, linear_velocity, angular_velocity);
-        points.emplace_back(x, y);
+        Eigen::Vector2d point(x, y);
+        
+        // Calculate time offset for this point from the start of the scan
+        double delta_time = i * scan->time_increment;
+        
+        // Apply motion compensation
+        Eigen::Vector2d corrected_point = correctCoordinate(point, delta_time, linear_velocity, angular_velocity);
+        
+        points.emplace_back(corrected_point);
         prev_range = range; // Update previous range
     }
-
+    
     return points;
 }
 

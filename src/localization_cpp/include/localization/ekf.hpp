@@ -123,5 +123,6 @@ public:
     void setControlNoise(const Eigen::MatrixXd& U) {
         U_ = U;
     }
+};
 
 }  // namespace Localization
