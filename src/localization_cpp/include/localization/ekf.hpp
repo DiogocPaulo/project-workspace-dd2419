@@ -124,9 +124,4 @@ public:
         U_ = U;
     }
 
-private:
-    double prev_imu_theta_ = 0.0;
-    bool first_imu_reading_ = true; 
-};
-
 }  // namespace Localization
