@@ -28,14 +28,14 @@ Node::Node() : rclcpp::Node("localization_node") {
     transform_z_ = 0.0;
 
     // Initialize LidarScanStorage and ICP
-    scan_storage_ = LidarScanStorage(0.5); // 50 cm grid size
+    scan_storage_ = LidarScanStorage(1); // 50 cm grid size
     icp_ = ICP(0.1, 50); // 10 cm threshold, 50 iterations
 
     RCLCPP_INFO(this->get_logger(), "Localization node initialized.");
 }
 
 void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) {
-    if (std::abs(angular_velocity_) > 0.5) {
+    if (std::abs(angular_velocity_) > 0.1) {
         RCLCPP_DEBUG(this->get_logger(), "Robot is rotating too fast, skipping scan processing.");
         return; // Skip processing if robot is not moving
     }
@@ -75,10 +75,11 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
             double icp_translation_y = icp_transform(1, 2);
             double icp_rotation_theta = std::atan2(icp_transform(1, 0), icp_transform(0, 0));
 
-            // Limit change per iteration
-            if (std::abs(icp_translation_x) > 0.2 || std::abs(icp_translation_y) > 0.2 || std::abs(icp_rotation_theta) > M_PI) {
+            // Skip invalid icp
+            if (std::abs(icp_translation_x) > 0.4 || std::abs(icp_translation_y) > 0.4 || std::abs(icp_rotation_theta) > M_PI / 4) {
                 return;
             }
+
 
             // Convert ICP rotation to quaternion
             tf2::Quaternion icp_rotation;
@@ -90,8 +91,8 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
             rotation_ = icp_rotation * rotation_;
 
             // Store the current scan in the LidarScanStorage
-            if ((current_pose_.position - stored_scan->pose.position).norm() > 0.05) {
-                stored_scan->agePoints(5); // Age points in the storage
+            if ((current_pose_.position - stored_scan->pose.position).norm() > 0.1) {
+                stored_scan->agePoints(10); // Age points in the storage
                 scan_storage_.addScan(aligned_points, current_pose_);
             }
 

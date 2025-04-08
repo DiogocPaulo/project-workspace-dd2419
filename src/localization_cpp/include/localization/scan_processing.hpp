@@ -14,7 +14,7 @@ namespace Localization {
 // Default distance threshold for segment splitting (in meters)
 constexpr double DEFAULT_SEGMENT_THRESHOLD = 0.1;
 constexpr double MIN_RANGE = 0.4;
-constexpr double MAX_RANGE = 10.0;
+constexpr double MAX_RANGE = 4.0;
 
 // Correct the coordinate of a point based on velocity and time
 Eigen::Vector2d correctCoordinate(const Eigen::Vector2d& point,
@@ -25,35 +25,30 @@ Eigen::Vector2d correctCoordinate(const Eigen::Vector2d& point,
     double delta_x = linear_velocity * delta_time;
     double delta_theta = angular_velocity * delta_time;
     
-    // Create rotation matrix for the motion compensation
+    // Create rotation matrix for the motion compensation (opposite of robot's motion)
     Eigen::Matrix2d rotation;
-    rotation << std::cos(delta_theta), -std::sin(delta_theta),
-                std::sin(delta_theta), std::cos(delta_theta);
+    rotation << std::cos(-delta_theta), -std::sin(-delta_theta),
+                std::sin(-delta_theta), std::cos(-delta_theta);
     
-    // Translation in robot frame
-    Eigen::Vector2d translation(delta_x, 0.0);
+    // Translation in robot frame (opposite of robot's movement)
+    Eigen::Vector2d translation(-delta_x, 0.0);
     
     // Apply inverse motion to point:
-    // 1. Rotate the point by the negative angle
-    // 2. Subtract the linear displacement
-    Eigen::Vector2d corrected_point = point;
+    // 1. Rotate the point by the negative angle (inverse rotation)
+    // 2. Subtract the linear displacement (compensate for linear motion)
+    Eigen::Vector2d corrected_point = rotation * point;  // Rotate first
     
-    // Rotate point opposite to robot rotation
-    corrected_point = Eigen::Matrix2d(
-        Eigen::Rotation2D<double>(-delta_theta)
-    ) * corrected_point;
-    
-    // Compensate for linear motion
-    corrected_point[0] -= delta_x;
-    
+    // Then compensate for the linear displacement
+    corrected_point += translation;
+
     return corrected_point;
 }
 
 // Convert a LaserScan message to a vector of 2D points in the sensor frame
 std::vector<Eigen::Vector2d> laserScanToPoints(const sensor_msgs::msg::LaserScan::ConstSharedPtr& scan,
-                                             const rclcpp::Time& scan_start_time,
-                                             double linear_velocity,
-                                             double angular_velocity) {
+                                               const rclcpp::Time& scan_start_time,
+                                               double linear_velocity,
+                                               double angular_velocity) {
     std::vector<Eigen::Vector2d> points;
     if (!scan || scan->ranges.empty()) {
         return points; // Return empty vector if scan is invalid
@@ -93,13 +88,12 @@ std::vector<Eigen::Vector2d> laserScanToPoints(const sensor_msgs::msg::LaserScan
         // Apply motion compensation
         Eigen::Vector2d corrected_point = correctCoordinate(point, delta_time, linear_velocity, angular_velocity);
         
-        points.emplace_back(corrected_point);
+        points.emplace_back(corrected_point); // Store the corrected point
         prev_range = range; // Update previous range
     }
     
     return points;
 }
-
 
 // Transform a set of 2D points using a given transform
 void transformPoints(std::vector<Eigen::Vector2d>& points, 
