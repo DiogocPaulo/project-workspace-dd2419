@@ -8,10 +8,11 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, HistoryPolicy, ReliabilityPolicy
 
 from robp_interfaces.msg import Encoders
-from nav_msgs.msg import Path, OccupancyGrid, Odometry
+from nav_msgs.msg import OccupancyGrid, Odometry
 from geometry_msgs.msg import PoseStamped
 from robp_interfaces.msg import DutyCycles
 from project_interfaces.srv import GoToPoint, Trigger
+from project_interfaces.msg import NavPoint, NavPath
 
 from mapping.map import Map
 from navigation.robot_state import RobotState
@@ -80,8 +81,7 @@ class Navigation(Node):
         )
 
         self.create_subscription(Odometry, "/odom", self.odom_callback, qos_profile)
-        self.create_subscription(Path, "/custom_path", self.path_callback, qos_profile)
-        self.create_subscription(Path, "/odom_path", self.odom_path_callback, qos_profile)
+        self.create_subscription(NavPath, "/custom_path", self.path_callback, qos_profile)
         self.create_subscription(OccupancyGrid, "/inflated_map", self.inflated_map_callback, qos_profile)
         self.motor_publisher = self.create_publisher(DutyCycles, "/motor/duty_cycles", 10)
 
@@ -90,7 +90,6 @@ class Navigation(Node):
         self.target_path = TargetPath(lookahead_gain, lookahead_min)
         self.previous_index = 0
         self.waiting_for_path = True
-        self.backing_up = False
         self.inflated_map = None
 
         self.create_timer(0.05, self.control_loop)
@@ -98,24 +97,11 @@ class Navigation(Node):
     def odom_callback(self, msg: Odometry):
         self.state.update_state(msg)
 
-    def path_callback(self, msg: Path):
-        if self.backing_up:
-            return
-        if len(msg.poses) > 0:
+    def path_callback(self, msg: NavPath):
+        if len(msg.path) > 0:
             self.waiting_for_path = False
             self.target_path.update_path(msg)
-            self.get_logger().info(f"Recived new path with end point: ({msg.poses[-1].pose.position.x:.2f}, {msg.poses[-1].pose.position.y:.2f})")
-        else:
-            self.waiting_for_path = True
-            self.get_logger().warn("Recived empty path")
-
-    def odom_path_callback(self, msg: Path):
-        if not self.backing_up or not self.waiting_for_path:
-            return
-        if len(msg.poses) > 0:
-            self.waiting_for_path = False
-            self.target_path.update_path_in_reverse(msg)
-            self.get_logger().info(f"Reversing odom path for backing up")
+            self.get_logger().info(f"Recived new path with end point: ({msg.path[-1].x:.2f}, {msg.path[-1].y:.2f})")
         else:
             self.waiting_for_path = True
             self.get_logger().warn("Recived empty path")
@@ -167,7 +153,7 @@ class Navigation(Node):
         #     self.target_path.y_points = []
         #     return
 
-        if not self.target_path.x_points or (self.waiting_for_path and not self.backing_up):
+        if not self.target_path.x_points or self.waiting_for_path:
             self.get_logger().info("Waiting for path")
             self.publish_duty_cycles(0.0, 0.0)
             return
@@ -179,10 +165,6 @@ class Navigation(Node):
             if distance <= distance_threshold and not self.waiting_for_path:
                 self.get_logger().info(f"Reached end of target path")
                 self.waiting_for_path = True
-                # if self.backing_up:
-                #     self.get_logger().info("Exiting backing up process")
-                #     self.state.target_velocity = target_velocity
-                #     self.backing_up = False
 
                 # Clear existing target path
                 self.target_path.x_points = []

@@ -1,6 +1,6 @@
 import numpy as np
 from navigation.robot_state import RobotState
-from nav_msgs.msg import Path
+from project_interfaces.msg import NavPath
 
 class TargetPath:
     """
@@ -14,17 +14,9 @@ class TargetPath:
         self.lookahead_gain = lookahead_gain
         self.lookahead_min = lookahead_min
 
-    def update_path(self, path_msg: Path):
-        self.x_points = [pose.pose.position.x for pose in path_msg.poses]
-        self.y_points = [pose.pose.position.y for pose in path_msg.poses]
-        
-        self.old_nearest_point_index = None
-
-    def update_path_in_reverse(self, path_msg: Path):
-        self.x_points = [pose.pose.position.x for pose in path_msg.poses]
-        self.y_points = [pose.pose.position.y for pose in path_msg.poses]
-        self.x_points.reverse()
-        self.y_points.reverse()
+    def update_path(self, path_msg: NavPath):
+        self.x_points = [point.x for point in path_msg.path]
+        self.y_points = [point.y for point in path_msg.path]
         
         self.old_nearest_point_index = None
 
