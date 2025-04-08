@@ -5,7 +5,6 @@ import numpy as np
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, HistoryPolicy, ReliabilityPolicy
-from sensor_msgs.msg import Image
 from sensor_msgs.msg import PointCloud2, PointField
 from nav_msgs.msg import OccupancyGrid
 import sensor_msgs_py.point_cloud2 as pc2
@@ -19,15 +18,11 @@ import tf2_geometry_msgs
 from tf2_geometry_msgs import do_transform_point
 from geometry_msgs.msg import PointStamped, TransformStamped
 import os
-from scipy.spatial import cKDTree
 from sklearn.cluster import DBSCAN
 from geometry_msgs.msg import Pose, Quaternion, Vector3
 from sklearn.decomposition import PCA
-from itertools import permutations
 from sensor_msgs_py.point_cloud2 import create_cloud
 import time
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 from project_interfaces.msg import Object, ObjectList, Vertex, WorkspaceVertices
 from mapping.map import Map
 
@@ -48,7 +43,7 @@ class ExamineImage(Node):
         self.create_subscription(PointCloud2, '/camera/camera/depth/color/points', self.cloud_callback, qos_profile)
         self.create_subscription(WorkspaceVertices, "/workspace", self.workspace_callback, 10)
         self.create_subscription(OccupancyGrid, "/map", self.obstacles_map_callback, 10)
-        self.pub = self.create_publisher(PointCloud2, '/depth_points_filtered', 100)
+
         # Publishers for detected objects as a list
         self.object_list_publisher = self.create_publisher(ObjectList, "/detected_objects", 10)
         # Publisher for clusters
@@ -57,7 +52,6 @@ class ExamineImage(Node):
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self, spin_thread=True)
         self.object_list_broadcaster = tf2_ros.TransformBroadcaster(self) #
-        self.shutdown_event = Event() #
 
         # Create the 'maps' folder if it doesn't exist
         folder_path = os.path.join(os.getcwd(), "maps") #
@@ -490,10 +484,6 @@ class ExamineImage(Node):
         point_in.point.x = x
         point_in.point.y = 0.09
         point_in.point.z = y
-
-        if self.shutdown_event.is_set():
-            self.get_logger().warn("Shutdown event set, skipping transform lookup")
-            return
 
         try:
             transform = self.tf_buffer.lookup_transform(

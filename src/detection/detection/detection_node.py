@@ -16,7 +16,7 @@ from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
 import tf2_geometry_msgs
 from tf2_geometry_msgs import do_transform_point
-from geometry_msgs.msg import PointStamped, TransformStamped
+from geometry_msgs.msg import PointStamped
 from sklearn.cluster import DBSCAN
 from geometry_msgs.msg import Pose, Quaternion, Vector3
 from sklearn.decomposition import PCA
