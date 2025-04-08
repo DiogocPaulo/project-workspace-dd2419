@@ -42,7 +42,7 @@ class ExamineImage(Node):
 
         self.create_subscription(PointCloud2, '/camera/camera/depth/color/points', self.cloud_callback, qos_profile)
         self.create_subscription(WorkspaceVertices, "/workspace", self.workspace_callback, 10)
-        self.create_subscription(OccupancyGrid, "/map", self.obstacles_map_callback, 10)
+        # self.create_subscription(OccupancyGrid, "/obstacles_map", self.obstacles_map_callback, 10)
 
         # Publishers for detected objects as a list
         self.object_list_publisher = self.create_publisher(ObjectList, "/detected_objects", 10)
@@ -68,10 +68,8 @@ class ExamineImage(Node):
         self.object_list = []
         self.initial_object_list = [] #
         self.message_counter = 0
-        self.read = 0 #
 
         self.broadcaster = self.create_timer(5.0, self.broadcast_object_list) #
-        self.create_timer(2.0, self.publish_object_list) #
 
         self.get_logger().info(f"Init detection")
         self.read_map_file() #
@@ -113,7 +111,6 @@ class ExamineImage(Node):
             object_msg.object_type = object_type
 
             self.object_list.append(object_msg)
-            self.read = 1
             self.get_logger().info(f"Adding object from file: {object_type} at ({x:.2f}, {y:.2f})")
 
         object_list_msg = ObjectList()
