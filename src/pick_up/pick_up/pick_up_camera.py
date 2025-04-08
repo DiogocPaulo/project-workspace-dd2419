@@ -26,7 +26,7 @@ class ArmCamera(Node):
     def __init__(self):
         super().__init__("multi_servo_publisher")
 
-        self.model = YOLO("runs/detect/train5/weights/best.pt")
+        self.model = YOLO("runs/detect/train2/weights/best.pt")
 
         self.srv = self.create_service(GetDetectedList, 'get_detected_list', self.get_detected_callback)
 
@@ -50,71 +50,70 @@ class ArmCamera(Node):
         
         
     def image_callback(self, msg):
-        if self.handle_camera:
-            cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
+        cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
 
-            results = self.model(cv_image)
+        results = self.model(cv_image)
 
-            
-            class_names = ['Box','objects']
-
-
-            found_objects = False
-            found_boxes = False
+        
+        class_names = ['Box','objects']
 
 
-            
-            for result in results[0].boxes: 
-                x1, y1, x2, y2 = map(int, result.xyxy[0])
-                confidence = float(result.conf[0])
-                class_idx = int(result.cls[0])
-
-                label = class_names[class_idx] if class_idx < len(class_names) else "Unknown"
-
-                # Draw rectangle around detected box
-                cv2.rectangle(cv_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
-
-                # Draw label text
-                cv2.putText(cv_image, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-
-                # Calculate center of the box
-                center_x = (x1 + x2) // 2
-                center_y = (y1 + y2) // 2
-
-                # Draw green dot at the center of the box
-                cv2.circle(cv_image, (center_x, center_y), 5, (0, 255, 0), -1)
-
-                entity = DetectedData()
-                entity.confidence = confidence
-                entity.xmin=x1
-                entity.xmax=x2
-                entity.ymin=y1
-                entity.ymax=y2
-                entity.timestamp=msg.header.stamp
-
-                if entity.label == 'objects':
-                    if not found_objects:
-                        self.detected_objects = []
-                        found_objects = True
-                    self.detected_objects.append(entity)
-                elif entity.label == 'Box':
-                    if not found_boxes:
-                        self.detected_boxes = []
-                        found_objects = True
-                    self.detected_boxes.append(entity)
+        found_objects = False
+        found_boxes = False
 
 
-            # Center crosshairs
-            height, width, _ = cv_image.shape
-            center_x, center_y = width // 2, height // 2
+        
+        for result in results[0].boxes: 
+            x1, y1, x2, y2 = map(int, result.xyxy[0])
+            confidence = float(result.conf[0])
+            class_idx = int(result.cls[0])
 
-            cv2.line(cv_image, (center_x - 20, center_y), (center_x + 20, center_y), (0, 0, 255), 2)
-            cv2.line(cv_image, (center_x, center_y - 20), (center_x, center_y + 20), (0, 0, 255), 2)
-            cv2.circle(cv_image, (center_x, center_y), 5, (0, 0, 255), -1)
+            label = class_names[class_idx] if class_idx < len(class_names) else "Unknown"
 
-            ros_image = self.bridge.cv2_to_imgmsg(cv_image, encoding="bgr8")
+            # Draw rectangle around detected box
+            cv2.rectangle(cv_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
-            self.publisher.publish(ros_image)
+            # Draw label text
+            cv2.putText(cv_image, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+
+            # Calculate center of the box
+            center_x = (x1 + x2) // 2
+            center_y = (y1 + y2) // 2
+
+            # Draw green dot at the center of the box
+            cv2.circle(cv_image, (center_x, center_y), 5, (0, 255, 0), -1)
+
+            entity = DetectedData()
+            entity.confidence = confidence
+            entity.xmin=x1
+            entity.xmax=x2
+            entity.ymin=y1
+            entity.ymax=y2
+            entity.timestamp=msg.header.stamp
+
+            if entity.label == 'objects':
+                if not found_objects:
+                    self.detected_objects = []
+                    found_objects = True
+                self.detected_objects.append(entity)
+            elif entity.label == 'Box':
+                if not found_boxes:
+                    self.detected_boxes = []
+                    found_objects = True
+                self.detected_boxes.append(entity)
+
+
+        # Center crosshairs
+        height, width, _ = cv_image.shape
+        center_x, center_y = width // 2, height // 2
+
+        cv2.line(cv_image, (center_x - 20, center_y), (center_x + 20, center_y), (0, 0, 255), 2)
+        cv2.line(cv_image, (center_x, center_y - 20), (center_x, center_y + 20), (0, 0, 255), 2)
+        cv2.circle(cv_image, (center_x, center_y), 5, (0, 0, 255), -1)
+
+        ros_image = self.bridge.cv2_to_imgmsg(cv_image, encoding="bgr8")
+
+        self.publisher.publish(ros_image)
 
     
     def get_detected_callback(self, request, response):
