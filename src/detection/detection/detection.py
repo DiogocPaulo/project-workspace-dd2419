@@ -56,33 +56,33 @@ class ExamineImage(Node):
 
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self, spin_thread=True)
-        self.object_list_broadcaster = tf2_ros.TransformBroadcaster(self)
-        self.shutdown_event = Event()
+        self.object_list_broadcaster = tf2_ros.TransformBroadcaster(self) #
+        self.shutdown_event = Event() #
 
         # Create the 'maps' folder if it doesn't exist
-        folder_path = os.path.join(os.getcwd(), "maps")
-        if not os.path.exists(folder_path):
-            os.makedirs(folder_path)
+        folder_path = os.path.join(os.getcwd(), "maps") #
+        if not os.path.exists(folder_path):#
+            os.makedirs(folder_path)#
 
         # Constants
-        self.file_path = os.path.join(folder_path, "map.csv")
+        self.file_path = os.path.join(folder_path, "map.csv") #
 
         # Variables
         self.workspace_vertices = []
         self.workspace_map = None
         self.obstacles_map = None
         self.object_list = []
-        self.initial_object_list = []
+        self.initial_object_list = [] #
         self.message_counter = 0
-        self.read = 0
+        self.read = 0 #
 
-        self.broadcaster = self.create_timer(5.0, self.broadcast_object_list)
-        self.create_timer(2.0, self.publish_object_list)
+        self.broadcaster = self.create_timer(5.0, self.broadcast_object_list) #
+        self.create_timer(2.0, self.publish_object_list) #
 
         self.get_logger().info(f"Init detection")
-        self.read_map_file()
+        self.read_map_file() #
 
-    def read_map_file(self):
+    def read_map_file(self): #ALL
         if not os.path.exists(self.file_path):
             self.get_logger().warn(f"Map file {self.file_path} does not exist.")
             return

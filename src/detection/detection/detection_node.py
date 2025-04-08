@@ -219,6 +219,7 @@ class ObjectDetectorNode(Node):
                 point_in.header.frame_id,
                 point_in.header.stamp,
                 rclpy.duration.Duration(seconds=1.0)
+            )
             
             # Transform the point to the map frame
             point_out = do_transform_point(point_in, transform)
