@@ -25,14 +25,12 @@ class ObjectFilterNode(Node):
         self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
         
         # Timers
-        self.create_timer(2.0, self.publish_object_list)  # Same as original
-        self.create_timer(5.0, self.broadcast_object_list)  # Same as original
-        self.create_timer(30.0, self.auto_save_map)  # Auto-save every 30 seconds
-        
+        self.create_timer(5.0, self.broadcast_object_list) 
+
         # Variables
         self.raw_objects = []
         self.filtered_objects = []
-        self.initial_object_list = []  # Same as original
+        self.initial_object_list = []  
         self.obstacles_map = None
         
         # File I/O setup
@@ -43,8 +41,6 @@ class ObjectFilterNode(Node):
         
         # Load existing map on startup
         self.load_map()
-        
-        self.get_logger().info("Object Filter Node initialized with file I/O support")
 
     def raw_objects_callback(self, msg: ObjectList):
         self.initial_object_list = msg.objects  # Same as original
@@ -157,7 +153,6 @@ class ObjectFilterNode(Node):
             
             # Merge with current objects through the standard processing pipeline
             self.initial_object_list.extend(objects)
-            self.check_duplicates()
             self.publish_object_list()
             self.get_logger().info(f"Loaded {len(objects)} objects from {self.map_file}")
             
@@ -178,21 +173,17 @@ class ObjectFilterNode(Node):
                     elif obj.object_type == Object.BOX:
                         type_label = "B"
                     else:
-                        type_label = "U"
+                        continue
                     
                     f.write(f"{type_label},{obj.x*100:.2f},{obj.y*100:.2f},{obj.angle:.1f}\n")
             
             self.get_logger().info(f"Saved {len(self.filtered_objects)} objects to {self.map_file}")
-            return True
+
             
         except Exception as e:
             self.get_logger().error(f"Error saving map: {str(e)}")
-            return False
 
-    def auto_save_map(self):
-        """Periodic auto-save functionality"""
-        if self.filtered_objects:
-            self.save_map()
+
 
 def main():
     rclpy.init()

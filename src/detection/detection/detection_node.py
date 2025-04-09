@@ -16,7 +16,7 @@ from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
 import tf2_geometry_msgs
 from tf2_geometry_msgs import do_transform_point
-from geometry_msgs.msg import PointStamped, TransformStamped
+from geometry_msgs.msg import PointStamped
 from sklearn.cluster import DBSCAN
 from geometry_msgs.msg import Pose, Quaternion, Vector3
 from sklearn.decomposition import PCA
@@ -40,8 +40,7 @@ class ObjectDetectorNode(Node):
                                self.cloud_callback, qos_profile)
         self.create_subscription(WorkspaceVertices, "/workspace", 
                                self.workspace_callback, 10)
-        self.create_subscription(OccupancyGrid, "/map", 
-                               self.obstacles_map_callback, 10)
+        # self.create_subscription(OccupancyGrid, "/obstacles_map", self.obstacles_map_callback, 10)
         
         # Publisher for raw detected objects
         self.raw_object_publisher = self.create_publisher(ObjectList, "/raw_detected_objects", 10)
@@ -247,11 +246,13 @@ class ObjectDetectorNode(Node):
             return None
 
     def publish_raw_objects(self, objects, stamp):
+        self.raw_object_list.extend(objects)
+
         object_list_msg = ObjectList()
         object_list_msg.header.frame_id = "odom"
         object_list_msg.header.stamp = stamp
-        object_list_msg.length = len(objects)
-        object_list_msg.objects = objects
+        object_list_msg.length = len(self.raw_object_list)
+        object_list_msg.objects = self.raw_object_list
         self.raw_object_publisher.publish(object_list_msg)
 
     def estimate_box_orientation(self, cluster_points):
