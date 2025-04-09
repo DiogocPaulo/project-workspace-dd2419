@@ -39,13 +39,13 @@ def generate_launch_description():
             emulate_tty=True,
             ros_arguments=["--log-level", "info"]
         ),
-        Node(
-            package="detection",
-            executable="detection",
-            name="robot_detection",
-            emulate_tty=True,
-            ros_arguments=["--log-level", "info"]
-        ),
+        # Node(
+        #     package="detection",
+        #     executable="detection",
+        #     name="robot_detection",
+        #     emulate_tty=True,
+        #     ros_arguments=["--log-level", "info"]
+        # ),
         # Node(
         #     package="detection",
         #     executable="detection_node",

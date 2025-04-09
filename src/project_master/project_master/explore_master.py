@@ -199,7 +199,7 @@ class ExploreMaster(Node):
     def __init__(self):
         super().__init__("explore_master")
 
-        workspace_file = "workspaces/large_workspace.tsv"
+        workspace_file = "workspaces/small_workspace.tsv"
         self.workspace_vertices = self.read_workspace(workspace_file, skip_header=True)
         self.workspace_publisher = self.create_publisher(WorkspaceVertices, "/workspace", 10)
         self.waypoints_path_publisher = self.create_publisher(Path, "/waypoints_path", 10)
@@ -209,9 +209,9 @@ class ExploreMaster(Node):
         self.map = Map(self.resolution)
         self.map.initialise_grid(self.workspace_vertices)
         self.map.inflate_grid(0.40)
-        self.show_waypoints = True
-        self.end_points = generate_waypoints_with_map(self.map, 0.35, self.resolution)
-        # self.end_points = offset_workspace_vertices(self.workspace_vertices, 0.50)
+        self.show_waypoints = False
+        # self.end_points = generate_waypoints_with_map(self.map, 0.35, self.resolution)
+        self.end_points = offset_workspace_vertices(self.workspace_vertices, 0.50)
 
         root = self.create_exploration_tree()
         self.tree = py_trees_ros.trees.BehaviourTree(root=root)

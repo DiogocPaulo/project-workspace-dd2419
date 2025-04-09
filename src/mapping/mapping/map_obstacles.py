@@ -56,7 +56,7 @@ class MapObstacles(Node):
         self.obstacles_map.initialise_grid(self.workspace_vertices, empty=True)
 
     def scan_callback(self, msg: LaserScan):
-        if self.obstacles_map.grid is None:
+        if self.obstacles_map is None:
             return
 
         try:
@@ -78,10 +78,6 @@ class MapObstacles(Node):
             valid = not (math.isinf(reading) or math.isnan(reading))
             if not valid:
                 reading = msg.range_max
-                
-            if not (angle > 0 and angle < (2 * math.pi)):
-                angle += msg.angle_increment
-                continue
 
             point_x = reading * math.cos(angle)
             point_y = reading * math.sin(angle)

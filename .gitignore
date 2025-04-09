@@ -6,6 +6,8 @@ install/
 bags/
 *.log
 maps/
+ros_bag_images/
+rosbag2_2025_04_04-18_45_02/
 
 
 # Based on github ROS gitignore
