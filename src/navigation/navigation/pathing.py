@@ -61,6 +61,7 @@ class Pathing(Node):
         # Variables
         self.start_point = (0.0, 0.0)
         self.end_point = (None, None)
+        self.safe_point = (0.0, 0.0)
         self.workspace_map = None
         self.objects_map = None
         self.obstacles_map = None
@@ -71,6 +72,12 @@ class Pathing(Node):
 
     def odom_callback(self, msg: Odometry):
         self.start_point = (msg.pose.pose.position.x, msg.pose.pose.position.y)
+        if self.inflated_map is None:
+            return
+        if self.reverse_travel and self.inflated_map.are_adjacent_cells_free(self.start_point[0], self.start_point[1], 5, 75):
+            self.get_logger().info("Exiting reverse travel mode")
+            self.reverse_travel = False
+            self.calculate_astar_path()
 
     def workspace_map_callback(self, msg: OccupancyGrid):
         width = msg.info.width
@@ -139,8 +146,10 @@ class Pathing(Node):
 
     def receive_end_point(self, request, response):
         if self.end_point != (request.x, request.y):
-            self.path_grid = None
+            if not self.pathing_failed:
+                self.safe_point = self.end_point
             self.end_point = (request.x, request.y)
+            self.path_grid = None
             self.pathing_failed = False
             self.calculate_astar_path()
 
@@ -228,7 +237,7 @@ class Pathing(Node):
             self.get_logger().warn("Publishing empty custom path")
 
         path_msg.angle = 0.0
-        path_msg.reverse = False
+        path_msg.reverse = self.reverse_travel
 
         self.path_publisher.publish(path_msg)
         self.get_logger().info("Published custom path")
@@ -244,19 +253,21 @@ class Pathing(Node):
             self.get_logger().warn("Inflated occupancy grid not created")
             return
 
-        occupancy_check = 75
-        self.reverse_travel = False
-
-        if not self.inflated_map.is_free(self.start_point[0], self.start_point[1], occupancy_check):
-            self.get_logger().warn("Creating path from inside inflation radius")
-            occupancy_check = 100
+        if not self.reverse_travel and not self.inflated_map.is_free(self.start_point[0], self.start_point[1], 75):
+            self.get_logger().info("Entering reverse travel mode")
             self.reverse_travel = True
-
-        start_x, start_y = self.inflated_map.world_to_grid(self.start_point[0], self.start_point[1])
-        end_x, end_y = self.inflated_map.world_to_grid(self.end_point[0], self.end_point[1])
+            self.calculate_astar_path()
 
         path_planner = AdaptiveAStar(self.inflated_map.grid)
-        path = path_planner.plan_path((start_y, start_x), (end_y, end_x), occupancy_check)
+        start_x, start_y = self.inflated_map.world_to_grid(self.start_point[0], self.start_point[1])
+        if not self.reverse_travel:
+            end_x, end_y = self.inflated_map.world_to_grid(self.end_point[0], self.end_point[1])
+            path = path_planner.plan_path((start_y, start_x), (end_y, end_x), 75)
+        else:
+            self.get_logger().warn("Creating path from inside inflation radius")
+            end_x, end_y = self.inflated_map.world_to_grid(self.safe_point[0], self.safe_point[0])
+            path = path_planner.plan_path((start_y, start_x), (end_y, end_x), 100)
+
         if path is None:
             self.pathing_failed = True
             self.path_grid = None
