@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 
 import numpy as np
+from shapely.geometry import Polygon
+from shapely.ops import transform
+
 import py_trees
 import py_trees_ros
 
@@ -120,50 +123,7 @@ class ReachedEndPoint(py_trees.behaviour.Behaviour):
         else:
             self.node.get_logger().info(f"{self.name}: Distance to end point is {distance:.2f}")
             return py_trees.common.Status.RUNNING
-
-def offset_workspace_vertices(workspace_vertices, offset_distance):
-    vertices = [np.array(vertex) for vertex in workspace_vertices]
-    num_vertices = len(vertices)
-
-    offset_vertices = []
-
-    def compute_offset_normal(p, q):
-        edge_vector = q - p
-        norm_edge = np.linalg.norm(edge_vector)
-        if norm_edge == 0:
-            return np.array([0, 0])
-        perp_vector = np.array([-edge_vector[1], edge_vector[0]])
-        normal_vector = perp_vector / np.linalg.norm(perp_vector)
-        cross_product = np.cross(edge_vector, perp_vector)
-        if cross_product < 0:
-            normal_vector = -normal_vector
-        return normal_vector
-
-    # Compute and add offset midpoints for each edge.
-    for i in range(num_vertices):
-        prev = vertices[i - 1]
-        current = vertices[i]
-        nxt = vertices[(i + 1) % num_vertices]
-
-        normal1 = compute_offset_normal(prev, current)
-        normal2 = compute_offset_normal(current, nxt)
-
-        p1 = current + normal1 * offset_distance
-        d1 = current - prev  # direction of the incoming edge
-        p2 = current + normal2 * offset_distance
-        d2 = nxt - current   # direction of the outgoing edge
-
-        denom = np.cross(d1, d2)
-        if np.abs(denom) < 1e-6:
-            offset_vertex = current + normal1 * offset_distance
-        else:
-            t = np.cross((p2 - p1), d2) / denom
-            offset_vertex = p1 + t * d1
-
-        offset_vertices.append((offset_vertex[0], offset_vertex[1], 0.0))
-
-    return offset_vertices
-
+    
 def generate_waypoints_with_map(map: Map, x_resolution, y_resolution):
 
     x_min = 0.0
@@ -194,12 +154,71 @@ def generate_waypoints_with_map(map: Map, x_resolution, y_resolution):
     
     return waypoints
 
+def offset_workspace_vertices(workspace_vertices, offset_distance):
+    vertices = [np.array(vertex) for vertex in workspace_vertices]
+    num_vertices = len(vertices)
+
+    offset_vertices = []
+
+    def compute_offset_normal(p, q):
+        edge_vector = q - p
+        norm_edge = np.linalg.norm(edge_vector)
+        if norm_edge == 0:
+            return np.array([0, 0])
+        perp_vector = np.array([-edge_vector[1], edge_vector[0]])
+        normal_vector = perp_vector / np.linalg.norm(perp_vector)
+        cross_product = np.cross(edge_vector, perp_vector)
+        if cross_product < 0:
+            normal_vector = -normal_vector
+        return normal_vector
+
+    for i in range(num_vertices + 1):
+        prev = vertices[(i - 1) % num_vertices]
+        current = vertices[(i) % num_vertices]
+        nxt = vertices[(i + 1) % num_vertices]
+
+        normal1 = compute_offset_normal(prev, current)
+        normal2 = compute_offset_normal(current, nxt)
+
+        p1 = current + normal1 * offset_distance
+        d1 = current - prev  # direction of the incoming edge
+        p2 = current + normal2 * offset_distance
+        d2 = nxt - current   # direction of the outgoing edge
+
+        denom = np.cross(d1, d2)
+        if np.abs(denom) < 1e-6:
+            offset_vertex = current + normal1 * offset_distance
+        else:
+            t = np.cross((p2 - p1), d2) / denom
+            offset_vertex = p1 + t * d1
+
+        offset_vertices.append((offset_vertex[0], offset_vertex[1]))
+
+    return offset_vertices
+
+def generate_waypoints(map: Map, workspace_vertices, outer_offset, inner_offset, waypoint_resolution):
+    offset_vertices = offset_workspace_vertices(workspace_vertices, outer_offset)
+    waypoints = []
+    # for x, y in offset_vertices:
+    #     if map.is_free(x, y, 1):
+    #         waypoints.append((x, y, 0.0))
+    for i in range(len(offset_vertices) - 1):
+        current_x, current_y = offset_vertices[i]
+        next_x, nexy_y = offset_vertices[i + 1]
+        distance = np.hypot(next_x - current_x, nexy_y - current_y)
+        for j in range(waypoint_resolution):
+            x = current_x + (next_x - current_x) * (j + 1) / waypoint_resolution
+            y = current_y + (nexy_y - current_y) * (j + 1) / waypoint_resolution
+            if map.is_free(x, y, 1):
+                waypoints.append((x, y, 0.0))
+    return waypoints
+
 class ExploreMaster(Node):
 
     def __init__(self):
         super().__init__("explore_master")
 
-        workspace_file = "workspaces/small_workspace.tsv"
+        workspace_file = "workspaces/large_workspace.tsv"
         self.workspace_vertices = self.read_workspace(workspace_file, skip_header=True)
         self.workspace_publisher = self.create_publisher(WorkspaceVertices, "/workspace", 10)
         self.waypoints_path_publisher = self.create_publisher(Path, "/waypoints_path", 10)
@@ -208,10 +227,9 @@ class ExploreMaster(Node):
         self.resolution = 0.05
         self.map = Map(self.resolution)
         self.map.initialise_grid(self.workspace_vertices)
-        self.map.inflate_grid(0.40)
-        self.show_waypoints = False
-        # self.end_points = generate_waypoints_with_map(self.map, 0.35, self.resolution)
-        self.end_points = offset_workspace_vertices(self.workspace_vertices, 0.50)
+        self.map.inflate_grid(0.35)
+        self.show_waypoints = True
+        self.end_points = generate_waypoints(self.map, self.workspace_vertices, 0.80, 0.80, 3)
 
         root = self.create_exploration_tree()
         self.tree = py_trees_ros.trees.BehaviourTree(root=root)
