@@ -23,7 +23,9 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'detection = detection.detection:main'
+            'detection = detection.detection:main',
+            'detection_node = detection.detection_node:main',
+            'object_filter_node = detection.object_filter_node:main',
         ],
     },
 )

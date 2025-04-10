@@ -259,11 +259,12 @@ class Pathing(Node):
         path = path_planner.plan_path((start_y, start_x), (end_y, end_x), occupancy_check)
         if path is None:
             self.pathing_failed = True
-
+            self.path_grid = None
         self.publish_path(path)
-        self.path_grid = np.full(self.inflated_map.grid.shape, -1, dtype=np.int8)
-        for x, y in path:
-            self.path_grid[x, y] = 100
+        if path is not None:
+            self.path_grid = np.full(self.inflated_map.grid.shape, -1, dtype=np.int8)
+            for x, y in path:
+                self.path_grid[x, y] = 100
         self.publish_path_map()
 
 def main():
