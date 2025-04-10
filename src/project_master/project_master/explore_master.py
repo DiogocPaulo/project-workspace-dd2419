@@ -101,11 +101,29 @@ class ReachedEndPoint(py_trees.behaviour.Behaviour):
             reliability=ReliabilityPolicy.BEST_EFFORT
         )
 
+        self.node.waypoint_broadcaster = TransformBroadcaster(self.node)
         self.node.create_subscription(Odometry, "/odom", self.odom_callback, qos_profile)
         return True
 
     def odom_callback(self, msg: Odometry):
         self.current_point = (msg.pose.pose.position.x, msg.pose.pose.position.y)
+
+    def broadcast_waypoint(self):
+        transform_msg = TransformStamped()
+        transform_msg.header.frame_id = "odom"
+        transform_msg.header.stamp = self.node.get_clock().now().to_msg()
+        transform_msg.child_frame_id = "waypoint"
+
+        transform_msg.transform.translation.x = self.end_point[0]
+        transform_msg.transform.translation.y = self.end_point[1]
+        transform_msg.transform.translation.z = 0.0
+
+        transform_msg.transform.rotation.x = 0.0
+        transform_msg.transform.rotation.y = 0.0
+        transform_msg.transform.rotation.z = 0.0
+        transform_msg.transform.rotation.w = 1.0
+
+        self.node.waypoint_broadcaster.sendTransform(transform_msg)
 
     def update(self):
         if self.current_point == (None, None):
@@ -122,6 +140,7 @@ class ReachedEndPoint(py_trees.behaviour.Behaviour):
             return py_trees.common.Status.SUCCESS
         else:
             self.node.get_logger().info(f"{self.name}: Distance to end point is {distance:.2f}")
+            self.broadcast_waypoint()
             return py_trees.common.Status.RUNNING
     
 def generate_waypoints_with_map(map: Map, x_resolution, y_resolution):
@@ -154,7 +173,7 @@ def generate_waypoints_with_map(map: Map, x_resolution, y_resolution):
     
     return waypoints
 
-def offset_workspace_vertices(workspace_vertices, offset_distance):
+def offset_outer_vertices(workspace_vertices, offset):
     vertices = [np.array(vertex) for vertex in workspace_vertices]
     num_vertices = len(vertices)
 
@@ -180,14 +199,14 @@ def offset_workspace_vertices(workspace_vertices, offset_distance):
         normal1 = compute_offset_normal(prev, current)
         normal2 = compute_offset_normal(current, nxt)
 
-        p1 = current + normal1 * offset_distance
+        p1 = current + normal1 * offset
         d1 = current - prev  # direction of the incoming edge
-        p2 = current + normal2 * offset_distance
+        p2 = current + normal2 * offset
         d2 = nxt - current   # direction of the outgoing edge
 
         denom = np.cross(d1, d2)
         if np.abs(denom) < 1e-6:
-            offset_vertex = current + normal1 * offset_distance
+            offset_vertex = current + normal1 * offset
         else:
             t = np.cross((p2 - p1), d2) / denom
             offset_vertex = p1 + t * d1
@@ -196,8 +215,23 @@ def offset_workspace_vertices(workspace_vertices, offset_distance):
 
     return offset_vertices
 
+def offset_inner_vertices(vertices, offset):
+    offset_vertices = []
+    polygon = Polygon(vertices)
+    offset_polygon = polygon.buffer(-offset)
+    if offset_polygon.geom_type == 'Polygon':
+        offset_vertices = list(offset_polygon.exterior.coords)
+    if offset_polygon.geom_type == 'MultiPolygon':
+        largest_polygon = max(offset_polygon.geoms, key=lambda p: p.area)
+        offset_vertices = list(largest_polygon.exterior.coords)
+    return offset_vertices
+
+
+
 def generate_waypoints(map: Map, workspace_vertices, outer_offset, inner_offset, waypoint_resolution):
-    offset_vertices = offset_workspace_vertices(workspace_vertices, outer_offset)
+    outer_vertices = offset_outer_vertices(workspace_vertices, outer_offset)
+    inner_vertices = offset_inner_vertices(workspace_vertices, inner_offset)
+    offset_vertices = outer_vertices + inner_vertices[::-1]
     waypoints = []
     # for x, y in offset_vertices:
     #     if map.is_free(x, y, 1):
@@ -218,7 +252,7 @@ class ExploreMaster(Node):
     def __init__(self):
         super().__init__("explore_master")
 
-        workspace_file = "workspaces/large_workspace.tsv"
+        workspace_file = "workspaces/small_workspace.tsv"
         self.workspace_vertices = self.read_workspace(workspace_file, skip_header=True)
         self.workspace_publisher = self.create_publisher(WorkspaceVertices, "/workspace", 10)
         self.waypoints_path_publisher = self.create_publisher(Path, "/waypoints_path", 10)
@@ -227,9 +261,9 @@ class ExploreMaster(Node):
         self.resolution = 0.05
         self.map = Map(self.resolution)
         self.map.initialise_grid(self.workspace_vertices)
-        self.map.inflate_grid(0.35)
-        self.show_waypoints = True
-        self.end_points = generate_waypoints(self.map, self.workspace_vertices, 0.80, 0.80, 3)
+        self.map.inflate_grid(0.30)
+        self.show_waypoints = False
+        self.end_points = generate_waypoints(self.map, self.workspace_vertices, 0.35, 1.0, 2)
 
         root = self.create_exploration_tree()
         self.tree = py_trees_ros.trees.BehaviourTree(root=root)
