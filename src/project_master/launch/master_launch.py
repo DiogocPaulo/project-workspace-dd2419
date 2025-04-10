@@ -26,11 +26,17 @@ def generate_launch_description():
             name='servo_pos_subscriber',
             # output='screen',
         ),
+        # Node(
+        #     package='pick_up',
+        #     executable='ArmCameraNode',
+        #     name='ArmNode',
+        #     output='screen',
+        # ),
         Node(
             package='micro_ros_agent',
             executable='micro_ros_agent',
             name='micro_ros_agent',
-            output='screen',
+            # output='screen',
             arguments=["serial", "--dev", "/dev/ttyUSB1", "-v6"] # Changed to 1
         ),
         # Node(

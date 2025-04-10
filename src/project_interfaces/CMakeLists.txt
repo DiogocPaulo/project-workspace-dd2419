@@ -29,6 +29,7 @@ set(srv_files
 	"srv/PickObject.srv"
 	"srv/Trigger.srv"
 	"srv/GetDetectedList.srv"
+	"srv/JointMove.srv"
 	)
 
 set(action_files

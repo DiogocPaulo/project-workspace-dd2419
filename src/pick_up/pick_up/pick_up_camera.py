@@ -12,6 +12,7 @@ import os
 import onnx
 from project_interfaces.msg import DetectedData, DetectedDataArray
 from project_interfaces.srv import GetDetectedList
+from project_interfaces.srv import PickObject
 from std_msgs.msg import Header
 import rclpy.time
 
@@ -24,11 +25,13 @@ class detected_entity:
 
 class ArmCamera(Node):
     def __init__(self):
-        super().__init__("multi_servo_publisher")
+        super().__init__("Arm_Camera_Detector")
 
         self.model = YOLO("runs/detect/train2/weights/best.pt")
 
         self.srv = self.create_service(GetDetectedList, 'get_detected_list', self.get_detected_callback)
+
+        self.service = self.create_service(PickObject, 'PickObject_test', self.test_debug_callback)
 
         
 
@@ -44,15 +47,15 @@ class ArmCamera(Node):
         self.detected_boxes = []
         self.clock = self.get_clock()
 
-        self.subscription = self.create_subscription(
-            Image, '/arm_camera/image_raw', self.image_callback, 10)
+        # self.subscription = self.create_subscription(
+        #     Image, '/arm_camera/image_raw', self.image_callback, 10)
         
         
         
     def image_callback(self, msg):
         cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
 
-        results = self.model(cv_image)
+        # results = self.model(cv_image)
 
         
         class_names = ['Box','objects']
@@ -63,44 +66,44 @@ class ArmCamera(Node):
 
 
         
-        for result in results[0].boxes: 
-            x1, y1, x2, y2 = map(int, result.xyxy[0])
-            confidence = float(result.conf[0])
-            class_idx = int(result.cls[0])
+        # for result in results[0].boxes: 
+        #     x1, y1, x2, y2 = map(int, result.xyxy[0])
+        #     confidence = float(result.conf[0])
+        #     class_idx = int(result.cls[0])
 
-            label = class_names[class_idx] if class_idx < len(class_names) else "Unknown"
+        #     label = class_names[class_idx] if class_idx < len(class_names) else "Unknown"
 
-            # Draw rectangle around detected box
-            cv2.rectangle(cv_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        #     # Draw rectangle around detected box
+        #     cv2.rectangle(cv_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
-            # Draw label text
-            cv2.putText(cv_image, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+        #     # Draw label text
+        #     cv2.putText(cv_image, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
-            # Calculate center of the box
-            center_x = (x1 + x2) // 2
-            center_y = (y1 + y2) // 2
+        #     # Calculate center of the box
+        #     center_x = (x1 + x2) // 2
+        #     center_y = (y1 + y2) // 2
 
-            # Draw green dot at the center of the box
-            cv2.circle(cv_image, (center_x, center_y), 5, (0, 255, 0), -1)
+        #     # Draw green dot at the center of the box
+        #     cv2.circle(cv_image, (center_x, center_y), 5, (0, 255, 0), -1)
 
-            entity = DetectedData()
-            entity.confidence = confidence
-            entity.xmin=x1
-            entity.xmax=x2
-            entity.ymin=y1
-            entity.ymax=y2
-            entity.timestamp=msg.header.stamp
+        # #     entity = DetectedData()
+        # #     entity.confidence = confidence
+        # #     entity.xmin=x1
+        # #     entity.xmax=x2
+        # #     entity.ymin=y1
+        # #     entity.ymax=y2
+        # #     entity.timestamp=msg.header.stamp
 
-            if entity.label == 'objects':
-                if not found_objects:
-                    self.detected_objects = []
-                    found_objects = True
-                self.detected_objects.append(entity)
-            elif entity.label == 'Box':
-                if not found_boxes:
-                    self.detected_boxes = []
-                    found_objects = True
-                self.detected_boxes.append(entity)
+        #     if entity.label == 'objects':
+        #         if not found_objects:
+        #             self.detected_objects = []
+        #             found_objects = True
+        #         self.detected_objects.append(entity)
+        #     elif entity.label == 'Box':
+        #         if not found_boxes:
+        #             self.detected_boxes = []
+        #             found_objects = True
+        #         self.detected_boxes.append(entity)
 
 
         # Center crosshairs
@@ -115,13 +118,50 @@ class ArmCamera(Node):
 
         self.publisher.publish(ros_image)
 
+    def test_debug_callback(self, request, response):
+        self.get_logger().info(f"REQUEST RECIEVED")
+
+        response.result = 0
+
+        self.get_logger().info(f"REQUEST HANDLED")
+
+        return response
     
     def get_detected_callback(self, request, response):
-        self.handle_camera = True
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
-        response.objects = self.detected_objects
-        response.boxes = self.detected_boxes
-        self.handle_camera = False
+        self.get_logger().info(f"REQUEST RECIEVED")
+
+        objects = []
+        entity = DetectedData()
+        entity.label = 'objects'
+        entity.confidence = 0.5
+        entity.xmin=1
+        entity.xmax=2
+        entity.ymin=1
+        entity.ymax=2
+        entity.timestamp=self.get_clock().now().to_msg()
+        objects = []
+        objects.append(entity)
+
+        # boxes = []
+        # entity = DetectedData()
+        # entity.label = 'box'
+        # entity.confidence = 0.5
+        # entity.xmin=1
+        # entity.xmax=2
+        # entity.ymin=1
+        # entity.ymax=2
+        # entity.timestamp=self.get_clock().now().to_msg()
+        # boxes = []
+        # boxes.append(entity)
+
+
+        # response.objects = objects
+        # response.boxes = boxes
+
+        response.object = entity
+
+        self.get_logger().info(f"REQUEST HANDLED")
+
         return response
 
 

@@ -14,6 +14,12 @@ def generate_launch_description():
         ),
         Node(
             package='pick_up',
+            executable='ArmCameraNode',
+            name='ArmNode',
+            output='screen',
+        ),
+        Node(
+            package='pick_up',
             executable='listener',
             name='servo_pos_subscriber',
             # output='screen',

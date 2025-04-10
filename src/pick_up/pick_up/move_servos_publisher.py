@@ -25,24 +25,23 @@ from tf2_ros import TransformBroadcaster
 from visualization_msgs.msg import Marker
 from visualization_msgs.msg import MarkerArray
 
-from project_interfaces.srv import PickObject
+from project_interfaces.srv import PickObject, JointMove
 from project_interfaces.msg import ArmTaskMessage
 
 from rclpy.action import ActionClient
 
 from project_interfaces.msg import DetectedData, DetectedDataArray
-from project_interfaces.srv import GetDetectedList
 from geometry_msgs.msg import TransformStamped
+
 
 class MultiServoPublisher(Node):
     def __init__(self):
         super().__init__("multi_servo_publisher")
         # self.timer = self.create_timer(5.0, self.publish_pose)
         self.publisher = self.create_publisher(Int16MultiArray, "/multi_servo_cmd_sub", 10)
-        self.publisher_sim = self.create_publisher(JointState, '/joint_states', 10)
+        self.publisher_sim = self.create_publisher(JointMove, '/joint_states', 10)
         self.i = 0
 
-        self.client = self.create_client(GetDetectedList, 'get_detected_list')
 
 
         self.tfBuffer = tf2_ros.Buffer()
@@ -50,6 +49,8 @@ class MultiServoPublisher(Node):
         self.clock = self.get_clock()
         
         self.service = self.create_service(PickObject, 'PickObject', self.task_callback)
+
+        self.service = self.create_service(JointMove, 'MoveArm', self.joint_callback)
 
         self.detected_objects = []
         self.detected_boxes = []
@@ -82,6 +83,8 @@ class MultiServoPublisher(Node):
             response.result = self.dropoff_callback(request)
         elif request.description == "LOOK":
             response.result = self.look_callback(request)
+        elif request.description == "RETURN":
+            response.result = self.return_callback(request)
         else:
             response.result = 2
             return response
@@ -298,23 +301,21 @@ class MultiServoPublisher(Node):
         msg.data = pose
         self.publisher.publish(msg)
 
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=3))
-        self.get_logger().info(f"WAITING FOR SERVICE")
-        request = GetDetectedList.Request()
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
 
-        future = self.client.call_async(request)
-        rclpy.spin_until_future_complete(self, future)
-
-
-        self.get_logger().info(f"OBJECTS: {len(future.objects)}")
-
-        if len(future.objects) > 0:
-            self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
-            pose = [14000,12000,12000,12000,12000,12000,move_time,move_time,move_time,move_time,move_time,move_time]
         
-            
+    
+        return 0
+    
+    def return_callback(self, request):
+        self.get_logger().info(f'Received return request')
+        msg = Int16MultiArray()
+        msg.layout = MultiArrayLayout(dim=[MultiArrayDimension(label="", size=12, stride=12)], data_offset=0)
+        move_time = 2000 #arm speed (milliseconds)
 
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=10))
+        zero_time = Time()
+        zero_time.sec = 0
+        zero_time.nanosec = 0
 
         pose = [14000,12000,12000,12000,12000,12000,move_time,move_time,move_time,move_time,move_time,move_time]
         msg.data = pose
@@ -455,6 +456,18 @@ class MultiServoPublisher(Node):
         # Publish the marker
         self.publisher_marker.publish(marker)
         self.get_logger().info("Publishing object marker")
+
+    def joint_callback(self,request):
+        self.get_logger().info(f'Received move request request')
+        msg = Int16MultiArray()
+        msg.layout = MultiArrayLayout(dim=[MultiArrayDimension(label="", size=12, stride=12)], data_offset=0)
+        move_time = 2000 #arm speed (milliseconds)
+        move_time = 500
+        pose = [14000,12000,request.v3,request.v2,request.v1,request.base,move_time,move_time,move_time,move_time,move_time,move_time]
+        msg.data = pose
+        self.publisher.publish(msg)
+
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
 
         
 

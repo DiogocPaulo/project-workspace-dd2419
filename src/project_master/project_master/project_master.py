@@ -10,18 +10,30 @@ from project_interfaces.srv import GoToPoint, Trigger
 import tf2_ros
 from geometry_msgs.msg import TransformStamped
 import math
+from project_interfaces.msg import DetectedData, DetectedDataArray
+from project_interfaces.srv import GetDetectedList
+from sensor_msgs.msg import JointState
 
 class ProjectMaster(Node):
 
     def __init__(self):
         super().__init__("project_master")
 
-
         self.clock = self.get_clock()
 
         self.arm_publisher = self.create_publisher(ArmTaskMessage, "/Arm_Task", 10)
 
+        # self.pos_subscriber = 
+
         self.client = self.create_client(PickObject, 'PickObject')
+
+        # self.client_test = self.create_client(PickObject, 'PickObject_test')
+        # while not self.client_test.wait_for_service(timeout_sec=1.0):
+        #     self.get_logger().info('Service not available, waiting...')
+
+        self.client_camera = self.create_client(GetDetectedList, 'get_detected_list')
+        while not self.client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Service not available, waiting...')
 
         
         # self.reached_destination_service = self.create_service(Trigger, "/reached_destination", self.reached_destination_callback)
@@ -42,6 +54,14 @@ class ProjectMaster(Node):
 
         self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
 
+        self.pos_subscriber = self.create_subscription(
+            JointState, '/servo_pos_publisher', self.pos_callback, 10)
+
+        self.base = 12000
+        self.v1 = 12000
+        self.v2 = 12000
+        self.v3 = 12000
+
         # self.send_arm_request(0.2,0.0,0.0,"PICKUP")
             
 
@@ -59,9 +79,15 @@ class ProjectMaster(Node):
     #     else:
     #         self.get_logger().info("GoToPoint service failed")
 
+    def pos_callback(self,msg):
+        self.base = msg.position[5]
+        self.v1 = msg.position[4]
+        self.v2 = msg.position[3]
+        self.v3 = msg.position[2]
+
     def send_arm_task(self, x, y, z, task):
         self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
-        self.get_logger().info("ARMTASK!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        # self.get_logger().info("ARMTASK!!!!!!!!!!!!!!!!!!!!!!!!!!")
         arm_msg = ArmTaskMessage()
         arm_msg.header = Header()
         arm_msg.header.stamp = self.get_clock().now().to_msg()
@@ -78,9 +104,14 @@ class ProjectMaster(Node):
 
         self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
 
+    def distance_calc(self, x1, y1, x2, y2):
+        return math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
+
+    def HoneIn(self,object):
+        diff = self.distance_calc(0,0,)
+
     def send_arm_request(self, x, y, z, task):
         self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
-        self.get_logger().info("ARMTASK!")
         arm_msg = PickObject.Request()
         arm_msg.header = Header()
         arm_msg.header.stamp = self.get_clock().now().to_msg()
@@ -107,6 +138,21 @@ class ProjectMaster(Node):
 
 
         self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
+
+    def send_camera_request(self):
+
+        request = GetDetectedList.Request()
+
+        self.get_logger().info(f"WAITING FOR SERVICE")
+
+        future = self.client_camera.call_async(request)
+        rclpy.spin_until_future_complete(self, future)
+
+        self.get_logger().info(f"SERVICE RECIEVED")
+
+        response = future.result() 
+        if response is not None:
+            self.get_logger().info(f"{response.objects}")
 
         
     class Object:
@@ -190,8 +236,10 @@ def main():
     # node.process_map_file("/home/robot/project-workspace-dd2419/maps/Map_test.txt")
     # node.publish_transforms()
     node.send_arm_request(0.5,-0.2,0.06,"LOOK")
-    node.send_arm_request(0.5,-0.2,0.06,"LOOK")
-    node.send_arm_request(0.5,-0.2,0.06,"LOOK")
+    node.send_camera_request()
+    node.send_arm_request(0.4,-0.,0.06,"RETURN")
+    # node.send_arm_request(0.5,-0.2,0.06,"LOOK")
+    # node.send_arm_request(0.5,-0.2,0.06,"LOOK")
     # node.send_arm_request(0.15,-0.15,0.0,"DROPOFF")
 
 
