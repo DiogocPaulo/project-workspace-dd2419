@@ -246,13 +246,11 @@ class ObjectDetectorNode(Node):
             return None
 
     def publish_raw_objects(self, objects, stamp):
-        self.raw_object_list.extend(objects)
-
         object_list_msg = ObjectList()
         object_list_msg.header.frame_id = "odom"
         object_list_msg.header.stamp = stamp
-        object_list_msg.length = len(self.raw_object_list)
-        object_list_msg.objects = self.raw_object_list
+        object_list_msg.length = len(objects)
+        object_list_msg.objects = objects
         self.raw_object_publisher.publish(object_list_msg)
 
     def estimate_box_orientation(self, cluster_points):
