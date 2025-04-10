@@ -42,7 +42,7 @@ class ExamineImage(Node):
 
         self.create_subscription(PointCloud2, '/camera/camera/depth/color/points', self.cloud_callback, qos_profile)
         self.create_subscription(WorkspaceVertices, "/workspace", self.workspace_callback, 10)
-        # self.create_subscription(OccupancyGrid, "/obstacles_map", self.obstacles_map_callback, 10)
+        self.create_subscription(OccupancyGrid, "/obstacles_map", self.obstacles_map_callback, 10)
 
         # Publishers for detected objects as a list
         self.object_list_publisher = self.create_publisher(ObjectList, "/detected_objects", 10)
