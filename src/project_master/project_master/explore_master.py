@@ -231,7 +231,7 @@ def offset_inner_vertices(vertices, offset):
 def generate_waypoints(map: Map, workspace_vertices, outer_offset, inner_offset, waypoint_resolution):
     outer_vertices = offset_outer_vertices(workspace_vertices, outer_offset)
     inner_vertices = offset_inner_vertices(workspace_vertices, inner_offset)
-    offset_vertices = outer_vertices + inner_vertices[::-1]
+    offset_vertices = outer_vertices[::-1] + inner_vertices
     waypoints = []
     # for x, y in offset_vertices:
     #     if map.is_free(x, y, 1):
