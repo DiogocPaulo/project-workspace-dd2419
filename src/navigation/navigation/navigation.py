@@ -41,13 +41,12 @@ def pure_pursuit_control(state, target_path, velocity):
         target_y = target_path.y_points[-1]
         index = len(target_path.x_points) - 1
 
-    # if velocity < 0:
-    #     effective_yaw = state.yaw + math.pi
-    # else:
-    #     effective_yaw = state.yaw
 
     alpha = math.atan2(target_y - state.y, target_x - state.x) - state.yaw
-    alpha = math.atan2(math.sin(alpha), math.cos(alpha))
+    if velocity < 0:
+        alpha = math.atan2(-math.sin(alpha), math.cos(alpha))
+    else:
+        alpha = math.atan2(math.sin(alpha), math.cos(alpha))
 
     speed_factor = np.exp(-2 * np.power(alpha, 2))
     linear_velocity = velocity * speed_factor
