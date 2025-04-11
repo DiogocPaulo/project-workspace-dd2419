@@ -451,13 +451,13 @@ class MultiServoPublisher(Node):
         marker.scale.y = 0.05
         marker.scale.z = 0.05
         marker.color.a = 1.0  # Fully opaque
-        marker.color.r = 1.0  # Red color
+        marker.color.r = 1.0  # Red color   
 
         # Publish the marker
         self.publisher_marker.publish(marker)
         self.get_logger().info("Publishing object marker")
 
-    def joint_callback(self,request):
+    def joint_callback(self,request,response):
         self.get_logger().info(f'Received move request request')
         msg = Int16MultiArray()
         msg.layout = MultiArrayLayout(dim=[MultiArrayDimension(label="", size=12, stride=12)], data_offset=0)

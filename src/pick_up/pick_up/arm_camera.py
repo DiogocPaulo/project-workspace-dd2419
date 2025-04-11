@@ -89,7 +89,7 @@ class ArmCamera(Node):
             entity.center_y = center_y
             entity.diff_x = center_x_screen - center_x
             entity.diff_y = center_y_screen - center_y
-            entity.distance = np.int32(self.compute_distance(center_x,center_y,center_x_screen,center_y_screen))
+            entity.distance = int(self.compute_distance(center_x,center_y,center_x_screen,center_y_screen))
             entity.timestamp=msg.header.stamp
 
             if entity.label == 'objects':
@@ -115,14 +115,14 @@ class ArmCamera(Node):
     def compute_distance(self,x1,y1,x2,y2):
         return math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
 
-    def test_debug_callback(self, request, response):
-        self.get_logger().info(f"REQUEST RECIEVED")
+    # def test_debug_callback(self, request, response):
+    #     self.get_logger().info(f"REQUEST RECIEVED")
 
-        response.result = 0
+    #     response.result = 0
 
-        self.get_logger().info(f"REQUEST HANDLED")
+    #     self.get_logger().info(f"REQUEST HANDLED")
 
-        return response
+    #     return response
     
     def get_detected_callback(self, request, response):
         self.get_logger().info(f"REQUEST RECIEVED")

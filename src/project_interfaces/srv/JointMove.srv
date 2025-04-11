@@ -1,6 +1,6 @@
-int32 base
-int32 v1
-int32 v2
-int32 v3
+int16 base
+int16 v1
+int16 v2
+int16 v3
 ---
 int8 result 

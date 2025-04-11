@@ -90,7 +90,7 @@ class ProjectMaster(Node):
         self.v2 = msg.position[3]
         self.v3 = msg.position[2]
 
-        self.get_logger().info(f"JOINT POSITION: BASE={self.base} V1={self.v1} V2={self.v2} V3={self.v3}")
+        # self.get_logger().info(f"JOINT POSITION: BASE={self.base} V1={self.v1} V2={self.v2} V3={self.v3}")
 
     def send_arm_task(self, x, y, z, task):
         self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
@@ -114,7 +114,7 @@ class ProjectMaster(Node):
     def distance_calc(self, x1, y1, x2, y2):
         return math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
 
-    def AquireTarget(self):
+    def AquireTarget(self,target):
         objects, boxes = self.send_camera_request()
         closest_obj = None
         if target == 'objects':
@@ -124,6 +124,10 @@ class ProjectMaster(Node):
 
         step_size = 2
         eps = 5
+
+        base = self.base
+        v3 = self.v3
+
         while closest_obj.distance > eps:
             #difference in x-axis
             if(closest_obj.diff_x > 0):
@@ -137,26 +141,24 @@ class ProjectMaster(Node):
             elif(closest_obj.diff_y < 0):
                 v3 -= step_size
 
-            if base < 23900 and base > 100
-                move_command.base = base
-            else
-                move_command.base = self.base
+            if not (base < 23900 and base > 100):
+                base = self.base
 
-            if v3 < 20900 and v3 > 3100
-                move_command.v3 = v3
-            else
-                move_command.v3 = self.v3
+            if  not (v3 < 20900 and v3 > 3100):
+                v3 = self.v3
 
             move_command = JointMove.Request()
-            move_command.base = base
-            move_command.v1 = self.v1
-            move_command.v2 = self.v2
-            move_command.v3 = v3
+            move_command.base = int(base)
+            move_command.v1 = int(self.v1)
+            move_command.v2 = int(self.v2)
+            move_command.v3 = int(v3)
             future = self.client_joint.call_async(move_command)
             rclpy.spin_until_future_complete(self, future)
             response = future.result()
 
             objects, boxes = self.send_camera_request()
+
+            self.clock.sleep_for(rclpy.duration.Duration(seconds=0.5))
 
             if target == 'objects':
                 closest_obj = min(objects, key=lambda DetectedData: DetectedData.distance)
@@ -166,7 +168,7 @@ class ProjectMaster(Node):
         return 0
 
     def estimate_endpoint(self):
-        base = = math.radians((12000 - self.base) / 100)
+        base = math.radians((12000 - self.base) / 100)
         alpha = math.radians((12000 - self.v1) / 100)
         beta = math.radians((12000 + self.v2) / 100)
         charlie = math.radians((12000 - self.v3) / 100)
@@ -294,6 +296,7 @@ def main():
     # node.process_map_file("/home/robot/project-workspace-dd2419/maps/Map_test.txt")
     # node.publish_transforms()
     node.send_arm_request(0.5,-0.2,0.06,"LOOK")
+    node.AquireTarget("objects")
     node.send_arm_request(0.4,-0.,0.06,"RETURN")
     # node.send_arm_request(0.5,-0.2,0.06,"LOOK")
     # node.send_arm_request(0.5,-0.2,0.06,"LOOK")
