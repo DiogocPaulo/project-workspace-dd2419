@@ -20,6 +20,9 @@ run-joystick:
 run-navigation:
 	ros2 launch navigation navigation_launch.py | tee logs/navigation.log
 
+run-collection:
+	ros2 launch project_master master_launch.py | tee logs/collection.log
+
 clean:
 	rm -rf build/ install/ package/ logs/
 
