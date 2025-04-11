@@ -20,7 +20,7 @@ class ObjectFilterNode(Node):
                               self.raw_objects_callback, 10)
         
         # Publisher for filtered objects
-        self.filtered_object_publisher = self.create_publisher(ObjectList, "/detected_objects", 10)
+        self.object_list_publisher = self.create_publisher(ObjectList, "/detected_objects", 10)
 
         self.create_subscription(OccupancyGrid, "/obstacles_map", self.obstacles_map_callback, 10)
         
@@ -113,7 +113,7 @@ class ObjectFilterNode(Node):
                 object_list_msg.objects = self.object_list
                 self.object_list_publisher.publish(object_list_msg)
 
-                self.get_logger().info(f"Published new object list now includes: {raw_obj.object_type} at ({x_transformed:.2f}, {y_transformed:.2f})")
+                self.get_logger().info(f"Published new object list now includes: {raw_obj.object_type} at ({raw_obj.x:.2f}, {raw_obj.y:.2f})")
 
                 # Confidence-based correction
             CONFIDENCE_RADIUS = 0.06 # 5cm
@@ -160,7 +160,7 @@ class ObjectFilterNode(Node):
                     object_list_msg.objects = self.object_list
                     self.object_list_publisher.publish(object_list_msg)
                     
-                    #self.get_logger().info(f"final:{self.object_list}")
+                    self.get_logger().info(f"final:{self.object_list}")
                     #self.get_logger().info(f"Corrected object at ({raw_obj.x:.2f}, {raw_obj.y:.2f}) to {most_common}")
             
     def check_duplicates(self):

@@ -201,6 +201,7 @@ class ObjectDetectorNode(Node):
 
         # Publish the raw detected objects from this frame
         if frame_objects:
+            self.get_logger().info(f"frame:{frame_objects}")
             self.publish_raw_objects(frame_objects, msg.header.stamp)
 
     def create_object(self, x, y, angle, object_type, stamp):
