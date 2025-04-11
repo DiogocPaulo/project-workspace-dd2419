@@ -12,6 +12,8 @@ from project_interfaces.srv import GetDetectedList
 from project_interfaces.srv import PickObject
 from std_msgs.msg import Header
 import rclpy.time
+import math
+import numpy as np
 
 
 class ArmCamera(Node):
@@ -55,6 +57,9 @@ class ArmCamera(Node):
         found_objects = False
         found_boxes = False
 
+        # Center crosshairs
+        height, width, _ = cv_image.shape
+        center_x_screen, center_y_screen = width // 2, height // 2
 
         
         for result in results[0].boxes: 
@@ -80,10 +85,11 @@ class ArmCamera(Node):
             entity = DetectedData()
             entity.label = label
             entity.confidence = confidence
-            entity.xmin=x1
-            entity.xmax=x2
-            entity.ymin=y1
-            entity.ymax=y2
+            entity.center_x = center_x
+            entity.center_y = center_y
+            entity.diff_x = center_x_screen - center_x
+            entity.diff_y = center_y_screen - center_y
+            entity.distance = np.int32(self.compute_distance(center_x,center_y,center_x_screen,center_y_screen))
             entity.timestamp=msg.header.stamp
 
             if entity.label == 'objects':
@@ -98,17 +104,16 @@ class ArmCamera(Node):
                 self.detected_boxes.append(entity)
 
 
-        # Center crosshairs
-        height, width, _ = cv_image.shape
-        center_x, center_y = width // 2, height // 2
-
-        cv2.line(cv_image, (center_x - 20, center_y), (center_x + 20, center_y), (0, 0, 255), 2)
-        cv2.line(cv_image, (center_x, center_y - 20), (center_x, center_y + 20), (0, 0, 255), 2)
-        cv2.circle(cv_image, (center_x, center_y), 5, (0, 0, 255), -1)
+        cv2.line(cv_image, (center_x_screen - 20, center_y_screen), (center_x_screen + 20, center_y_screen), (0, 0, 255), 2)
+        cv2.line(cv_image, (center_x_screen, center_y_screen - 20), (center_x_screen, center_y_screen + 20), (0, 0, 255), 2)
+        cv2.circle(cv_image, (center_x_screen, center_y_screen), 5, (0, 0, 255), -1)
 
         ros_image = self.bridge.cv2_to_imgmsg(cv_image, encoding="bgr8")
 
         self.publisher.publish(ros_image)
+
+    def compute_distance(self,x1,y1,x2,y2):
+        return math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
 
     def test_debug_callback(self, request, response):
         self.get_logger().info(f"REQUEST RECIEVED")

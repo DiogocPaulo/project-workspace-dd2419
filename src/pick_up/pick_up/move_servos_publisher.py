@@ -25,7 +25,7 @@ from tf2_ros import TransformBroadcaster
 from visualization_msgs.msg import Marker
 from visualization_msgs.msg import MarkerArray
 
-from project_interfaces.srv import PickObject, JointMove
+from project_interfaces.srv import PickObject
 from project_interfaces.msg import ArmTaskMessage
 
 from rclpy.action import ActionClient
@@ -39,7 +39,7 @@ class MultiServoPublisher(Node):
         super().__init__("multi_servo_publisher")
         # self.timer = self.create_timer(5.0, self.publish_pose)
         self.publisher = self.create_publisher(Int16MultiArray, "/multi_servo_cmd_sub", 10)
-        self.publisher_sim = self.create_publisher(JointMove, '/joint_states', 10)
+        # self.publisher_sim = self.create_publisher(JointMove, '/joint_states', 10)
         self.i = 0
 
 
@@ -50,7 +50,7 @@ class MultiServoPublisher(Node):
         
         self.service = self.create_service(PickObject, 'PickObject', self.task_callback)
 
-        self.service = self.create_service(JointMove, 'MoveArm', self.joint_callback)
+        # self.service = self.create_service(JointMove, 'MoveArm', self.joint_callback)
 
         self.detected_objects = []
         self.detected_boxes = []
