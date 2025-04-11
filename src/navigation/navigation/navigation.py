@@ -44,7 +44,7 @@ def pure_pursuit_control(state, target_path, velocity):
 
     alpha = math.atan2(target_y - state.y, target_x - state.x) - state.yaw
     if velocity < 0:
-        alpha = math.atan2(-math.sin(alpha), math.cos(alpha))
+        alpha = math.atan2(-math.sin(alpha), -math.cos(alpha))
     else:
         alpha = math.atan2(math.sin(alpha), math.cos(alpha))
 
