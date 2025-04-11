@@ -23,9 +23,7 @@ lookahead_gain = 0.1        # Look-ahead distance gain
 lookahead_min = 0.3         # Minimum look-ahead distance
 distance_threshold = 0.15   # Stop distance threshold
 yaw_threshold = 0.2         # Stop yaw threshold
-target_velocity = 0.15      # Robot's target velocity
-turning_velocity = 0.10     # Turning velocity
-backing_velocity = -0.10
+target_velocity = 0.18      # Robot's target velocity
 wheel_duty_min = 0.09
 
 def pure_pursuit_control(state, target_path):
@@ -48,8 +46,8 @@ def pure_pursuit_control(state, target_path):
     speed_factor = np.exp(-2 * np.power(alpha, 2))
     linear_velocity = target_velocity * speed_factor
 
-    kappa = 2.0 * np.arctan(alpha) / lookahead
-    angular_velocity = turning_velocity * kappa
+    kappa = 3.0 * np.arctan(alpha) / lookahead
+    angular_velocity = (target_velocity * 0.5) * kappa
 
     return linear_velocity, angular_velocity, index
 
