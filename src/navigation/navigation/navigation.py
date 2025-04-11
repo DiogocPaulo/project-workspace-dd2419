@@ -23,7 +23,7 @@ lookahead_gain = 0.1        # Look-ahead distance gain
 lookahead_min = 0.3         # Minimum look-ahead distance
 distance_threshold = 0.15   # Stop distance threshold
 yaw_threshold = 0.2         # Stop yaw threshold
-target_velocity = 0.18      # Robot's target velocity
+target_velocity = 0.16      # Robot's target velocity
 wheel_duty_min = 0.09
 
 def pure_pursuit_control(state, target_path):

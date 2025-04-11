@@ -62,26 +62,14 @@ class ObjectFilterNode(Node):
 
     def raw_objects_callback(self, msg: ObjectList):
         for raw_obj in msg.objects:
-            initial_object_msg = Object()
-            initial_object_msg.x = raw_obj.x
-            initial_object_msg.y = raw_obj.y
-            initial_object_msg.angle = raw_obj.angle
-            initial_object_msg.object_type = raw_obj.object_type
-            self.initial_object_list.append(initial_object_msg)
-
-            initial_list_msg = ObjectList()
-            initial_list_msg.header.frame_id = "odom"
-            initial_list_msg.header.stamp = msg.header.stamp
-            initial_list_msg.length = len(self.initial_object_list)
-            initial_list_msg.objects = self.initial_object_list
-            self.object_list_publisher.publish(initial_list_msg)
+            self.initial_object_list.append(raw_obj)
 
             # Check if the new object is a duplicate based on proximity
             is_duplicate = False
             for i, obj in enumerate(self.initial_object_list[:-1]):
                 distance = np.sqrt((raw_obj.x - obj.x)**2 + (raw_obj.y - obj.y)**2)
                 if raw_obj.object_type == "box" or obj.object_type == "box":
-                    if distance < 0.20:    #f the object is within 1 cm of an existing object
+                    if distance < 0.24:    #f the object is within 1 cm of an existing object
                         is_duplicate = True
                         break
                 elif distance < 0.06:   # If the object is within 1 cm of an existing object
@@ -125,7 +113,7 @@ class ObjectFilterNode(Node):
             for obj in self.initial_object_list:
                 dist = np.sqrt((raw_obj.x - obj.x)**2 + (raw_obj.y - obj.y)**2)
                 if raw_obj.object_type == "box" or obj.object_type == "box":
-                    if dist <= 0.20:
+                    if dist <= 0.24:
                         nearby.append(obj)
                 elif dist <= CONFIDENCE_RADIUS: # If the object is within 1 cm of an existing object
                     nearby.append(obj)
@@ -144,7 +132,7 @@ class ObjectFilterNode(Node):
                         for nearby_obj in nearby:
                             dist = np.sqrt((obj.x - nearby_obj.x)**2 + (obj.y - nearby_obj.y)**2)
                             if obj.object_type == "box":
-                                if dist <= 0.20:
+                                if dist <= 0.24:
                                     self.object_list[i].object_type = "box"
                                     break
                             elif dist <= CONFIDENCE_RADIUS:
@@ -197,7 +185,7 @@ class ObjectFilterNode(Node):
                     duplicates_removed += 1
 
         # Rebuild the list, excluding duplicates
-        self.object_list = [obj for idx, obj in enumerate(self.initial_object_list) if idx not in to_remove]
+        self.object_list = [obj for idx, obj in enumerate(self.object_list) if idx not in to_remove]
         return
 
     def publish_object_list(self):
