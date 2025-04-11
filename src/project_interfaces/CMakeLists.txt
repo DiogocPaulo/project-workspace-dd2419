@@ -19,6 +19,8 @@ set(msg_files
 	"msg/WorkspaceVertices.msg"
 	"msg/Object.msg"
 	"msg/ObjectList.msg"
+	"msg/NavPoint.msg"
+	"msg/NavPath.msg"
 	)
 
 set(srv_files
