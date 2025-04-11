@@ -11,8 +11,10 @@ import tf2_ros
 from geometry_msgs.msg import TransformStamped
 import math
 from project_interfaces.msg import DetectedData, DetectedDataArray
-from project_interfaces.srv import GetDetectedList
-# from sensor_msgs.msg import JointState
+from project_interfaces.srv import GetDetectedList, JointMove
+from sensor_msgs.msg import JointState
+import math
+import numpy as np
 
 class ProjectMaster(Node):
 
@@ -23,8 +25,6 @@ class ProjectMaster(Node):
 
         self.arm_publisher = self.create_publisher(ArmTaskMessage, "/Arm_Task", 10)
 
-        # self.pos_subscriber = 
-
         self.client = self.create_client(PickObject, 'PickObject')
 
         # self.client_test = self.create_client(PickObject, 'PickObject_test')
@@ -32,6 +32,10 @@ class ProjectMaster(Node):
         #     self.get_logger().info('Service not available, waiting...')
 
         self.client_camera = self.create_client(GetDetectedList, 'get_detected_list')
+        while not self.client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Service not available, waiting...')
+
+        self.client_joint = self.create_client(JointMove, 'MoveArm')
         while not self.client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('Service not available, waiting...')
 
@@ -54,13 +58,14 @@ class ProjectMaster(Node):
 
         self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
 
-        # self.pos_subscriber = self.create_subscription(
-        #     JointState, '/servo_pos_publisher', self.pos_callback, 10)
+        self.pos_subscriber = self.create_subscription(
+            JointState, '/servo_pos_publisher', self.pos_callback, 10)
 
         self.base = 12000
         self.v1 = 12000
         self.v2 = 12000
         self.v3 = 12000
+        self.off_base = 0.11
 
         # self.send_arm_request(0.2,0.0,0.0,"PICKUP")
             
@@ -85,6 +90,8 @@ class ProjectMaster(Node):
         self.v2 = msg.position[3]
         self.v3 = msg.position[2]
 
+        self.get_logger().info(f"JOINT POSITION: BASE={self.base} V1={self.v1} V2={self.v2} V3={self.v3}")
+
     def send_arm_task(self, x, y, z, task):
         self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
         # self.get_logger().info("ARMTASK!!!!!!!!!!!!!!!!!!!!!!!!!!")
@@ -107,19 +114,74 @@ class ProjectMaster(Node):
     def distance_calc(self, x1, y1, x2, y2):
         return math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
 
-    # def AquireTarget(self,target):
-    #     objects, boxes = self.send_camera_request()
-    #     closest_obj = None
-    #     if target == 'objects':
-    #         closest_obj = min(objects, key=lambda DetectedData: DetectedData.distance)
-    #     elif target == 'box':
-    #         closest_obj = min(boxes, key=lambda DetectedData: DetectedData.distance)
+    def AquireTarget(self):
+        objects, boxes = self.send_camera_request()
+        closest_obj = None
+        if target == 'objects':
+            closest_obj = min(objects, key=lambda DetectedData: DetectedData.distance)
+        elif target == 'box':
+            closest_obj = min(boxes, key=lambda DetectedData: DetectedData.distance)
 
-        
-    #     while True:
-    #         #difference in x-axis
-    #         if(closest_obj.diff_x > 0):
-    #             self.as
+        step_size = 2
+        eps = 5
+        while closest_obj.distance > eps:
+            #difference in x-axis
+            if(closest_obj.diff_x > 0):
+                base += step_size
+            elif(closest_obj.diff_x < 0):
+                base -= step_size
+
+            #difference in y-axis
+            if(closest_obj.diff_y > 0):
+                v3 += step_size
+            elif(closest_obj.diff_y < 0):
+                v3 -= step_size
+
+            if base < 23900 and base > 100
+                move_command.base = base
+            else
+                move_command.base = self.base
+
+            if v3 < 20900 and v3 > 3100
+                move_command.v3 = v3
+            else
+                move_command.v3 = self.v3
+
+            move_command = JointMove.Request()
+            move_command.base = base
+            move_command.v1 = self.v1
+            move_command.v2 = self.v2
+            move_command.v3 = v3
+            future = self.client_joint.call_async(move_command)
+            rclpy.spin_until_future_complete(self, future)
+            response = future.result()
+
+            objects, boxes = self.send_camera_request()
+
+            if target == 'objects':
+                closest_obj = min(objects, key=lambda DetectedData: DetectedData.distance)
+            elif target == 'box':
+                closest_obj = min(boxes, key=lambda DetectedData: DetectedData.distance)
+
+        return 0
+
+    def estimate_endpoint(self):
+        base = = math.radians((12000 - self.base) / 100)
+        alpha = math.radians((12000 - self.v1) / 100)
+        beta = math.radians((12000 + self.v2) / 100)
+        charlie = math.radians((12000 - self.v3) / 100)
+
+        distance_y = math.sin(alpha)*l1 + math.sin(beta)*l2 + self.off_base
+
+        distance = math.cos(alpha)*l1 + math.cos(beta)*l2 + math.cos(charlie)*distance_y
+
+        distance_z = 0 - self.off_base
+
+        distance_y = math.cos(base)*distance
+        distance_x = math.sin(base)*distance
+
+        return (distance_x,distance_y,distance_z)
+
 
 
     def send_arm_request(self, x, y, z, task):
@@ -168,25 +230,6 @@ class ProjectMaster(Node):
         #     self.get_logger().info(f"{response.objects}")
 
         return response.objects, response.boxes
-
-        
-    class Object:
-        def __init__(self,type,x,y):
-            self.x = x
-            self.y = y
-            self.type = type
-
-    def process_map_file(self, file_path):
-        with open(file_path, "r") as file:
-            for line in file:
-                parts = line.strip().split(" ")
-                O = self.Object(parts[0],float(parts[1])/1000,float(parts[2])/1000)
-                self.objects.append(O)
-
-    def publish_transforms(self):
-        for Object in self.objects:
-            self.publish_transform(Object.type,Object.x,Object.y,0)
-
 
     def publish_transform(self, name, x, y, theta):
         t = TransformStamped()

@@ -201,7 +201,7 @@ class YOLOTrainNode(Node):
 
 def main():
     rclpy.init()
-    node = ArmCamera()
+    node = FrameExtractor()
 
     try:
         rclpy.spin(node)
