@@ -93,7 +93,7 @@ class ObjectFilterNode(Node):
             else:
                 free_from_obstacles = True
 
-            #self.get_logger().info(f"initial:{self.initial_object_list}")
+            self.get_logger().info(f"initial:{self.initial_object_list}")
 
             # If not a duplicate, add the new object to the list
             if not is_duplicate and free_from_obstacles:
@@ -118,7 +118,7 @@ class ObjectFilterNode(Node):
                 # Confidence-based correction
             CONFIDENCE_RADIUS = 0.06 # 5cm
             MIN_CONSISTENT = 2        # Need at least 2 consistent observations
-            #self.get_logger().info(f"obstacles:{self.object_list}")
+            self.get_logger().info(f"obstacles:{self.object_list}")
             
             # Find all objects in this area
             nearby = []
