@@ -26,11 +26,14 @@ class TargetPath:
 
         self.old_nearest_point_index = None
 
-    def search_target_index(self,  state: RobotState):
+    def search_target_index(self,  state: RobotState, reverse=False):
         if not self.x_points or not self.y_points:
             # Checks if there exits a path
             return None, None
 
+        if reverse:
+            # Disables optimisation in reverse travel
+            self.old_nearest_point_index = None
         if self.old_nearest_point_index is None:
             # Search for nearest point on path to robot state
             dx = [state.x - i for i in self.x_points]
@@ -53,10 +56,17 @@ class TargetPath:
         # Compute the lookahead distance
         lookahead = self.lookahead_gain * abs(state.velocity) + self.lookahead_min
 
-        # Find index of target point within lookahead distance
-        while lookahead > state.distance_to_state(self.x_points[index], self.y_points[index]):
-            if (index + 1) >= len(self.x_points):
-                break
-            index += 1
+        if reverse:
+            # Find target behind the robot's current state
+            while lookahead > state.distance_to_state(self.x_points[index], self.y_points[index]):
+                if (index - 1) < 0
+                    break
+                index -= 1
+        else:
+            # Find index of target point within lookahead distance
+            while lookahead > state.distance_to_state(self.x_points[index], self.y_points[index]):
+                if (index + 1) >= len(self.x_points):
+                    break
+                index += 1
 
         return index, lookahead
