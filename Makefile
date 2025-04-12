@@ -18,6 +18,7 @@ run-joystick:
 	ros2 launch navigation joystick_launch.py | tee logs/joystick.log
 	
 run-explore:
+	rm -rf maps/map.csv
 	ros2 launch project_master explore_launch.py | tee logs/explore.log
 
 clean:
