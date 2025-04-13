@@ -18,7 +18,33 @@ def generate_launch_description():
         Node(
             package="tf2_ros",
             executable="static_transform_publisher",
-            arguments=["0", "0.085", "0.155", "0", "0", "0", "1", "base_link", "lidar_link"],
+            arguments=[
+                "--x", "0",
+                "--y", "0",
+                "--z", "0",
+                "--qx", "0",
+                "--qy", "0",
+                "--qz", "0",
+                "--qw", "1",
+                "--frame-id", "map",
+                "--child-frame-id", "odom"
+            ],
+            output="screen",
+        ),
+        Node(
+            package="tf2_ros",
+            executable="static_transform_publisher",
+            arguments=[
+                "--x", "0",
+                "--y", "0.085",
+                "--z", "0.155",
+                "--qx", "0",
+                "--qy", "0",
+                "--qz", "0",
+                "--qw", "1",
+                "--frame-id", "base_link",
+                "--child-frame-id", "lidar_link"
+            ],
             output="screen",
         ),
         Node(
@@ -27,11 +53,10 @@ def generate_launch_description():
             name='odometry_node',
             output='screen',
         ),
-        Node(
-            package='localization_cpp',
-            executable='localization_node',
-            name='localization_node',
-            output='screen',
-        ),
-        
+        # Node(
+        #     package='localization_cpp',
+        #     executable='localization_node',
+        #     name='localization_node',
+        #     output='screen',
+        # ),
     ])
