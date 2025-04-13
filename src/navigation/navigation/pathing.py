@@ -69,6 +69,7 @@ class Pathing(Node):
         self.path_grid = None
         self.pathing_failed = False
         self.reverse_travel = False
+        self.reverse = False
 
     def odom_callback(self, msg: Odometry):
         self.start_point = (msg.pose.pose.position.x, msg.pose.pose.position.y)
@@ -149,6 +150,7 @@ class Pathing(Node):
             # if not self.pathing_failed and self.end_point != (None, None):
             #     self.safe_point = self.end_point
             self.end_point = (request.x, request.y)
+            self.reverse = request.reverse
             self.path_grid = None
             self.pathing_failed = False
             self.calculate_astar_path()
@@ -237,7 +239,7 @@ class Pathing(Node):
             self.get_logger().warn("Publishing empty custom path")
 
         path_msg.angle = 0.0
-        path_msg.reverse = self.reverse_travel
+        path_msg.reverse = self.reverse_travel or self.reverse
 
         self.path_publisher.publish(path_msg)
         self.get_logger().info("Published custom path")

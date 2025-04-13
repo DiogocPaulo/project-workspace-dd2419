@@ -263,7 +263,11 @@ class ExploreMaster(Node):
         self.map.initialise_grid(self.workspace_vertices)
         self.map.inflate_grid(0.30)
         self.show_waypoints = False
-        self.end_points = generate_waypoints(self.map, self.workspace_vertices, 0.35, 1.0, 3)
+        # self.end_points = generate_waypoints(self.map, self.workspace_vertices, 0.35, 1.0, 3)
+        self.end_points = [
+            (3.0, 0.0, 0.0, False),
+            (0.0, 0.0, 0.0, True),
+        ]
 
         root = self.create_exploration_tree()
         self.tree = py_trees_ros.trees.BehaviourTree(root=root)
@@ -336,7 +340,7 @@ class ExploreMaster(Node):
         root = py_trees.composites.Selector("ExplorationRoot", memory=True)
         exploration_sequence = py_trees.composites.Sequence("Exploration", memory=True)
 
-        for i, (x, y, yaw) in enumerate(self.end_points):
+        for i, (x, y, yaw, reverse_travel) in enumerate(self.end_points):
             point_selector = py_trees.composites.Selector(f"EndPoint{i}", memory=True)
 
             service_check_sequence = py_trees.composites.Sequence(f"ServiceCheck{i}", memory=True)
@@ -348,6 +352,7 @@ class ExploreMaster(Node):
                 x=x,
                 y=y,
                 yaw=yaw
+                reverse=reverse_travel
             )
 
             retry_on_endpoint_failure = py_trees.composites.Sequence(f"RetryOnEndpointFailure{i}", memory=False)
