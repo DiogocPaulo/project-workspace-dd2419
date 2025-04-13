@@ -42,15 +42,19 @@ def pure_pursuit_control(state, target_path, velocity, reverse=False):
         index = len(target_path.x_points) - 1
 
     heading_error = math.atan2(target_y - state.y, target_x - state.x) - state.yaw
+    alpha = math.atan2(math.sin(heading_error), math.cos(heading_error))
 
-    if reverse and (abs(heading_error) > (math.pi * 0.5)):
-        alpha = math.atan2(math.sin(heading_error + math.pi), math.cos(heading_error + math.pi))
-        velocity *= -1
+    # if reverse and (abs(heading_error) > (math.pi * 0.5)):
+    #     alpha = math.atan2(math.sin(heading_error + math.pi), math.cos(heading_error + math.pi))
+    #     velocity *= -1
+    # else:
+    #     alpha = math.atan2(math.sin(heading_error), math.cos(heading_error))
+
+    if abs(alpha) > (math.pi * 0.5):
+        linear_velocity = 0.0
     else:
-        alpha = math.atan2(math.sin(heading_error), math.cos(heading_error))
-
-    speed_factor = np.exp(-2 * np.power(alpha, 2))
-    linear_velocity = velocity * speed_factor
+        speed_factor = np.exp(-2 * np.power(alpha, 2))
+        linear_velocity = velocity * speed_factor
 
     kappa = 3.0 * np.arctan(alpha) / lookahead
     angular_velocity = (velocity * 0.5) * kappa

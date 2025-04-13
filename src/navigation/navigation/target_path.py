@@ -59,7 +59,7 @@ class TargetPath:
         if reverse:
             # Find target behind the robot's current state
             while lookahead > state.distance_to_state(self.x_points[index], self.y_points[index]):
-                if (index - 1) < 0
+                if (index - 1) < 0:
                     break
                 index -= 1
         else:
