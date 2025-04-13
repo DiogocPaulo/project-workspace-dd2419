@@ -28,7 +28,7 @@ target_velocity = 0.16      # Robot's target velocity
 wheel_duty_min = 0.09       # Minimum wheel duty cycles
 
 def pure_pursuit_control(state, target_path, velocity, reverse=False):
-    index, lookahead = target_path.search_target_index(state, reverse)
+    index, lookahead = target_path.search_target_index(state)
     
     if index is None:
         return 0.0, 0
@@ -41,13 +41,13 @@ def pure_pursuit_control(state, target_path, velocity, reverse=False):
         target_y = target_path.y_points[-1]
         index = len(target_path.x_points) - 1
 
-    heading_error = math.atan2(target_y - state.y, target_x - state.x) - state.yaw
-
-    if reverse and abs(heading_error) > (math.pi * 0.5):
-        alpha = math.atan2(math.sin(heading_error - math.pi), math.cos(heading_error - math.pi))
-        velocity *= -1
+    if reverse:
+        heading_error = math.atan2(target_y - state.y, target_x - state.x) - (state.yaw + math.pi)
+        velocity = -abs(velocity)
     else:
-        alpha = math.atan2(math.sin(heading_error), math.cos(heading_error))
+        heading_error = math.atan2(target_y - state.y, target_x - state.x) - state.yaw
+
+    alpha = math.atan2(math.sin(heading_error), math.cos(heading_error))
 
     speed_factor = np.exp(-2 * np.power(alpha, 2))
     linear_velocity = velocity * speed_factor
