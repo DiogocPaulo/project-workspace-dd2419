@@ -28,7 +28,7 @@ target_velocity = 0.16      # Robot's target velocity
 wheel_duty_min = 0.09       # Minimum wheel duty cycles
 
 def pure_pursuit_control(state, target_path, velocity, reverse=False):
-    index, lookahead = target_path.search_target_index(state, False)
+    index, lookahead = target_path.search_target_index(state)
     
     if index is None:
         return 0.0, 0
@@ -42,21 +42,17 @@ def pure_pursuit_control(state, target_path, velocity, reverse=False):
         index = len(target_path.x_points) - 1
 
     heading_error = math.atan2(target_y - state.y, target_x - state.x) - state.yaw
-    alpha = math.atan2(math.sin(heading_error), math.cos(heading_error))
 
-    # if reverse and (abs(heading_error) > (math.pi * 0.5)):
-    #     alpha = math.atan2(math.sin(heading_error + math.pi), math.cos(heading_error + math.pi))
-    #     velocity *= -1
-    # else:
-    #     alpha = math.atan2(math.sin(heading_error), math.cos(heading_error))
-
-    if abs(alpha) > (math.pi * 0.5):
-        linear_velocity = 0.0
+    if reverse and abs(heading_error) > (math.pi * 0.5):
+        alpha = math.atan2(math.sin(heading_error + math.pi), math.cos(heading_error + math.pi))
+        velocity *= -1
     else:
-        speed_factor = np.exp(-2 * np.power(alpha, 2))
-        linear_velocity = velocity * speed_factor
+        alpha = math.atan2(math.sin(heading_error), math.cos(heading_error))
 
-    kappa = 3.0 * np.arctan(alpha) / lookahead
+    speed_factor = np.exp(-2 * np.power(alpha, 2))
+    linear_velocity = velocity * speed_factor
+
+    kappa = 2.0 * np.arctan(alpha) / lookahead
     angular_velocity = (velocity * 0.5) * kappa
 
     return linear_velocity, angular_velocity, index
@@ -151,12 +147,7 @@ class Navigation(Node):
             self.publish_duty_cycles(0.0, 0.0)
             return
 
-        if not self.reverse_travel:
-            velocity = target_velocity
-        else:
-            velocity = -target_velocity
-        
-        linear_velocity, angular_velocity, self.previous_index = pure_pursuit_control(self.state, self.target_path, velocity)
+        linear_velocity, angular_velocity, self.previous_index = pure_pursuit_control(self.state, self.target_path, target_velocity, reverse=self.reverse_travel)
 
         if self.previous_index >= (len(self.target_path.x_points) - 1):
             distance = self.state.distance_to_state(self.target_path.x_points[-1], self.target_path.y_points[-1])

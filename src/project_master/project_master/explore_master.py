@@ -265,7 +265,7 @@ class ExploreMaster(Node):
         self.show_waypoints = False
         # self.end_points = generate_waypoints(self.map, self.workspace_vertices, 0.35, 1.0, 3)
         self.end_points = [
-            (3.0, 0.0, 0.0, False),
+            (2.0, 0.0, 0.0, False),
             (0.0, 0.0, 0.0, True),
         ]
 
@@ -351,7 +351,7 @@ class ExploreMaster(Node):
                 service_name="/pathing_end_point",
                 x=x,
                 y=y,
-                yaw=yaw
+                yaw=yaw,
                 reverse=reverse_travel
             )
 

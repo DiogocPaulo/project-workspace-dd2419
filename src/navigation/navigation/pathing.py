@@ -44,7 +44,7 @@ class Pathing(Node):
         self.create_subscription(Odometry, "/odom", self.odom_callback, qos_profile)
         self.create_subscription(OccupancyGrid, "/workspace_map", self.workspace_map_callback, qos_profile)
         self.create_subscription(OccupancyGrid, "/objects_map", self.objects_map_callback, qos_profile)
-        self.create_subscription(OccupancyGrid, "/obstacles_map", self.obstacles_map_callback, qos_profile)
+        # self.create_subscription(OccupancyGrid, "/obstacles_map", self.obstacles_map_callback, qos_profile)
         self.path_publisher = self.create_publisher(NavPath, "/custom_path", 10)
         self.path_map_publisher = self.create_publisher(OccupancyGrid, "/path_map", 10)
         self.inflated_map_publisher = self.create_publisher(OccupancyGrid, "/inflated_map", 10)
