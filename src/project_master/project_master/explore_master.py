@@ -316,7 +316,7 @@ class ExploreMaster(Node):
     def broadcast_waypoints(self):
         for i, point in enumerate(self.end_points):
             transform = TransformStamped()
-            transform.header.frame_id = 'map'  # Change to your desired parent frame
+            transform.header.frame_id = "odom"  # Change to your desired parent frame
             transform.header.stamp = self.get_clock().now().to_msg()
             transform.child_frame_id = f'EndPoint{i}'
             
