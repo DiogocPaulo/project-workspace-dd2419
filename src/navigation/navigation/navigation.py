@@ -53,7 +53,7 @@ def pure_pursuit_control(state, target_path, velocity, reverse=False):
     linear_velocity = velocity * speed_factor
 
     kappa = 3.0 * np.arctan(alpha) / lookahead
-    angular_velocity = (velocity * 0.5) * kappa
+    angular_velocity = (abs(velocity) * 0.5) * kappa
 
     return linear_velocity, angular_velocity, index
 

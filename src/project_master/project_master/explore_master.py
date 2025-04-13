@@ -231,11 +231,8 @@ def offset_inner_vertices(vertices, offset):
 def generate_waypoints(map: Map, workspace_vertices, outer_offset, inner_offset, waypoint_resolution):
     outer_vertices = offset_outer_vertices(workspace_vertices, outer_offset)
     inner_vertices = offset_inner_vertices(workspace_vertices, inner_offset)
-    offset_vertices = outer_vertices[::-1] + inner_vertices
+    offset_vertices = outer_vertices + inner_vertices[::-1]
     waypoints = []
-    # for x, y in offset_vertices:
-    #     if map.is_free(x, y, 1):
-    #         waypoints.append((x, y, 0.0))
     for i in range(len(offset_vertices) - 1):
         current_x, current_y = offset_vertices[i]
         next_x, nexy_y = offset_vertices[i + 1]
@@ -263,11 +260,7 @@ class ExploreMaster(Node):
         self.map.initialise_grid(self.workspace_vertices)
         self.map.inflate_grid(0.30)
         self.show_waypoints = False
-        # self.end_points = generate_waypoints(self.map, self.workspace_vertices, 0.35, 1.0, 3)
-        self.end_points = [
-            (2.0, 0.0, 0.0, False),
-            (0.0, 0.0, 0.0, True),
-        ]
+        self.end_points = generate_waypoints(self.map, self.workspace_vertices, 0.35, 1.0, 3)
 
         root = self.create_exploration_tree()
         self.tree = py_trees_ros.trees.BehaviourTree(root=root)
@@ -340,7 +333,7 @@ class ExploreMaster(Node):
         root = py_trees.composites.Selector("ExplorationRoot", memory=True)
         exploration_sequence = py_trees.composites.Sequence("Exploration", memory=True)
 
-        for i, (x, y, yaw, reverse_travel) in enumerate(self.end_points):
+        for i, (x, y, yaw) in enumerate(self.end_points):
             point_selector = py_trees.composites.Selector(f"EndPoint{i}", memory=True)
 
             service_check_sequence = py_trees.composites.Sequence(f"ServiceCheck{i}", memory=True)
@@ -352,7 +345,7 @@ class ExploreMaster(Node):
                 x=x,
                 y=y,
                 yaw=yaw,
-                reverse=reverse_travel
+                reverse=False
             )
 
             retry_on_endpoint_failure = py_trees.composites.Sequence(f"RetryOnEndpointFailure{i}", memory=False)
