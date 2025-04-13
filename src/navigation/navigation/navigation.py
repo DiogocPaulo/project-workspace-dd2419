@@ -8,10 +8,11 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, HistoryPolicy, ReliabilityPolicy
 
 from robp_interfaces.msg import Encoders
-from nav_msgs.msg import Path, OccupancyGrid, Odometry
+from nav_msgs.msg import OccupancyGrid, Odometry
 from geometry_msgs.msg import PoseStamped
 from robp_interfaces.msg import DutyCycles
 from project_interfaces.srv import GoToPoint, Trigger
+from project_interfaces.msg import NavPoint, NavPath
 
 from mapping.map import Map
 from navigation.robot_state import RobotState
@@ -24,9 +25,9 @@ lookahead_min = 0.3         # Minimum look-ahead distance
 distance_threshold = 0.15   # Stop distance threshold
 yaw_threshold = 0.2         # Stop yaw threshold
 target_velocity = 0.16      # Robot's target velocity
-wheel_duty_min = 0.09
+wheel_duty_min = 0.09       # Minimum wheel duty cycles
 
-def pure_pursuit_control(state, target_path):
+def pure_pursuit_control(state, target_path, velocity, reverse=False):
     index, lookahead = target_path.search_target_index(state)
     
     if index is None:
@@ -40,14 +41,19 @@ def pure_pursuit_control(state, target_path):
         target_y = target_path.y_points[-1]
         index = len(target_path.x_points) - 1
 
-    alpha = math.atan2(target_y - state.y, target_x - state.x) - state.yaw
-    alpha = math.atan2(math.sin(alpha), math.cos(alpha))
+    if reverse:
+        heading_error = math.atan2(target_y - state.y, target_x - state.x) - (state.yaw + math.pi)
+        velocity = -abs(velocity)
+    else:
+        heading_error = math.atan2(target_y - state.y, target_x - state.x) - state.yaw
+
+    alpha = math.atan2(math.sin(heading_error), math.cos(heading_error))
 
     speed_factor = np.exp(-2 * np.power(alpha, 2))
-    linear_velocity = target_velocity * speed_factor
+    linear_velocity = velocity * speed_factor
 
     kappa = 3.0 * np.arctan(alpha) / lookahead
-    angular_velocity = (target_velocity * 0.5) * kappa
+    angular_velocity = (abs(velocity) * 0.5) * kappa
 
     return linear_velocity, angular_velocity, index
 
@@ -78,8 +84,7 @@ class Navigation(Node):
         )
 
         self.create_subscription(Odometry, "/odom", self.odom_callback, qos_profile)
-        self.create_subscription(Path, "/custom_path", self.path_callback, qos_profile)
-        self.create_subscription(Path, "/odom_path", self.odom_path_callback, qos_profile)
+        self.create_subscription(NavPath, "/custom_path", self.path_callback, qos_profile)
         self.create_subscription(OccupancyGrid, "/inflated_map", self.inflated_map_callback, qos_profile)
         self.motor_publisher = self.create_publisher(DutyCycles, "/motor/duty_cycles", 10)
 
@@ -88,7 +93,7 @@ class Navigation(Node):
         self.target_path = TargetPath(lookahead_gain, lookahead_min)
         self.previous_index = 0
         self.waiting_for_path = True
-        self.backing_up = False
+        self.reverse_travel = False
         self.inflated_map = None
 
         self.create_timer(0.05, self.control_loop)
@@ -96,24 +101,12 @@ class Navigation(Node):
     def odom_callback(self, msg: Odometry):
         self.state.update_state(msg)
 
-    def path_callback(self, msg: Path):
-        if self.backing_up:
-            return
-        if len(msg.poses) > 0:
+    def path_callback(self, msg: NavPath):
+        if len(msg.path) > 0:
             self.waiting_for_path = False
+            self.reverse_travel = msg.reverse
             self.target_path.update_path(msg)
-            self.get_logger().info(f"Recived new path with end point: ({msg.poses[-1].pose.position.x:.2f}, {msg.poses[-1].pose.position.y:.2f})")
-        else:
-            self.waiting_for_path = True
-            self.get_logger().warn("Recived empty path")
-
-    def odom_path_callback(self, msg: Path):
-        if not self.backing_up or not self.waiting_for_path:
-            return
-        if len(msg.poses) > 0:
-            self.waiting_for_path = False
-            self.target_path.update_path_in_reverse(msg)
-            self.get_logger().info(f"Reversing odom path for backing up")
+            self.get_logger().info(f"Recived new path with end point: ({msg.path[-1].x:.2f}, {msg.path[-1].y:.2f})")
         else:
             self.waiting_for_path = True
             self.get_logger().warn("Recived empty path")
@@ -149,38 +142,18 @@ class Navigation(Node):
         self.motor_publisher.publish(duty_msg)
 
     def control_loop(self):
-        # in_inflated_region = self.inflated_map is not None and not self.inflated_map.is_free(self.state.x, self.state.y, 50)
-        # if in_inflated_region and not self.backing_up and self.waiting_for_path:
-        #     self.get_logger().info("Entering backing up process")
-        #     self.state.target_velocity = backing_velocity
-        #     self.backing_up = True
-        #     return
-        # elif not in_inflated_region and self.backing_up:
-        #     self.get_logger().info("Exiting backing up process")
-        #     self.state.target_velocity = target_velocity
-        #     self.backing_up = False
-        #
-        #     self.waiting_for_path = True
-        #     self.target_path.x_points = []
-        #     self.target_path.y_points = []
-        #     return
-
-        if not self.target_path.x_points or (self.waiting_for_path and not self.backing_up):
+        if not self.target_path.x_points or self.waiting_for_path:
             self.get_logger().info("Waiting for path")
             self.publish_duty_cycles(0.0, 0.0)
             return
 
-        linear_velocity, angular_velocity, self.previous_index = pure_pursuit_control(self.state, self.target_path)
+        linear_velocity, angular_velocity, self.previous_index = pure_pursuit_control(self.state, self.target_path, target_velocity, reverse=self.reverse_travel)
 
         if self.previous_index >= (len(self.target_path.x_points) - 1):
             distance = self.state.distance_to_state(self.target_path.x_points[-1], self.target_path.y_points[-1])
             if distance <= distance_threshold and not self.waiting_for_path:
                 self.get_logger().info(f"Reached end of target path")
                 self.waiting_for_path = True
-                # if self.backing_up:
-                #     self.get_logger().info("Exiting backing up process")
-                #     self.state.target_velocity = target_velocity
-                #     self.backing_up = False
 
                 # Clear existing target path
                 self.target_path.x_points = []

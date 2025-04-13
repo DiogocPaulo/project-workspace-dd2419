@@ -148,7 +148,7 @@ def generate_waypoints_with_map(map: Map, x_resolution, y_resolution):
     x_min = 0.0
     x_max = map.cells_to_distance(map.grid_width)
     y_min = 0.0
-    y_max = map.cells_to_distance(map.grid_height)
+    y_max = map.cells_to_distance(map.grid_height)-0.35
 
     waypoints = []
     reverse = False
@@ -231,11 +231,8 @@ def offset_inner_vertices(vertices, offset):
 def generate_waypoints(map: Map, workspace_vertices, outer_offset, inner_offset, waypoint_resolution):
     outer_vertices = offset_outer_vertices(workspace_vertices, outer_offset)
     inner_vertices = offset_inner_vertices(workspace_vertices, inner_offset)
-    offset_vertices = outer_vertices[::-1] + inner_vertices
+    offset_vertices = outer_vertices + inner_vertices[::-1]
     waypoints = []
-    # for x, y in offset_vertices:
-    #     if map.is_free(x, y, 1):
-    #         waypoints.append((x, y, 0.0))
     for i in range(len(offset_vertices) - 1):
         current_x, current_y = offset_vertices[i]
         next_x, nexy_y = offset_vertices[i + 1]
@@ -263,7 +260,7 @@ class ExploreMaster(Node):
         self.map.initialise_grid(self.workspace_vertices)
         self.map.inflate_grid(0.30)
         self.show_waypoints = False
-        self.end_points = generate_waypoints(self.map, self.workspace_vertices, 0.35, 1.0, 2)
+        self.end_points = generate_waypoints(self.map, self.workspace_vertices, 0.35, 1.0, 3)
 
         root = self.create_exploration_tree()
         self.tree = py_trees_ros.trees.BehaviourTree(root=root)
@@ -316,7 +313,7 @@ class ExploreMaster(Node):
     def broadcast_waypoints(self):
         for i, point in enumerate(self.end_points):
             transform = TransformStamped()
-            transform.header.frame_id = 'map'  # Change to your desired parent frame
+            transform.header.frame_id = "odom"  # Change to your desired parent frame
             transform.header.stamp = self.get_clock().now().to_msg()
             transform.child_frame_id = f'EndPoint{i}'
             
@@ -347,7 +344,8 @@ class ExploreMaster(Node):
                 service_name="/pathing_end_point",
                 x=x,
                 y=y,
-                yaw=yaw
+                yaw=yaw,
+                reverse=False
             )
 
             retry_on_endpoint_failure = py_trees.composites.Sequence(f"RetryOnEndpointFailure{i}", memory=False)

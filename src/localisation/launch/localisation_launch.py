@@ -1,4 +1,4 @@
-# Launches odometry and lidar (requires setup_launch to be run first)
+# Launches odometry node (requires setup_launch to be run first)
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
@@ -55,7 +55,13 @@ def generate_launch_description():
             executable="odometry",
             name="robot_odometry",
             emulate_tty=True,
-            ros_arguments=["--log-level", "info"]
+            ros_arguments=["--log-level", "info"],
+            output="screen",
         ),
     ])
+
+
+
+    
+
 

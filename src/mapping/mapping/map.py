@@ -200,14 +200,14 @@ class Map:
             x, y = self.world_to_grid(x, y)
         return (0 <= x < self.grid_width and 0 <= y < self.grid_height)
 
-    def is_free(self, x, y, value_threshold):
+    def is_free(self, x, y, value):
         # Check if a grid cell is free based on a value threshold
         if self.grid is None:
             return False
         grid_x, grid_y = self.world_to_grid(x, y)
         if not (0 <= grid_x < self.grid_width and 0 <= grid_y < self.grid_height):
             return False
-        return self.grid[grid_y, grid_x] < value_threshold
+        return self.grid[grid_y, grid_x] < value
 
     def get_occupancy(self, x, y):
         # Check if a grid cell is free based on a value threshold
@@ -254,11 +254,11 @@ class Map:
         # Converts a number of grid cells to world distance
         return float(cells * self.resolution)
 
-    def inflate_grid(self, inflation_radius, percent=80):
+    def inflate_grid(self, inflation_radius, percent=75):
         if self.grid is None:
             return
 
-        occupied_mask = self.grid > 70
+        occupied_mask = self.grid > 75
 
         distance_map = distance_transform_edt(~occupied_mask, sampling=self.resolution)
 
