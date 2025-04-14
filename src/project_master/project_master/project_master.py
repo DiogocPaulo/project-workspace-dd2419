@@ -218,7 +218,7 @@ class ProjectMaster(Node):
 
         distance_y = l1 + self.off_base #math.sin(alpha)*l1 + math.sin(beta)*l2
 
-        distance = l2 + math.sin(charlie)*distance_y  #math.cos(alpha)*l1 + math.cos(beta)*l2
+        distance = l2 + math.tan((math.pi/2)-charlie)*distance_y  #math.cos(alpha)*l1 + math.cos(beta)*l2
 
         distance_z = 0 - self.off_base
 
