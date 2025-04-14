@@ -200,14 +200,15 @@ class Map:
             x, y = self.world_to_grid(x, y)
         return (0 <= x < self.grid_width and 0 <= y < self.grid_height)
 
-    def is_free(self, x, y, value):
+    def is_free(self, x, y, threshold, world=True):
         # Check if a grid cell is free based on a value threshold
         if self.grid is None:
             return False
-        grid_x, grid_y = self.world_to_grid(x, y)
-        if not (0 <= grid_x < self.grid_width and 0 <= grid_y < self.grid_height):
+        if world:
+            x, y = self.world_to_grid(x, y)
+        if not self.is_within_grid(x, y):
             return False
-        return self.grid[grid_y, grid_x] < value
+        return self.grid[y, x] < threshold
 
     def get_occupancy(self, x, y):
         # Check if a grid cell is free based on a value threshold
@@ -218,21 +219,41 @@ class Map:
             return 100
         return self.grid[grid_y, grid_x]
 
-    def are_adjacent_cells_free(self, x, y, adjacent_radius, free_threshold):
+    def are_adjacent_free(self, x, y, radius, threshold, world=True):
         if self.grid is None:
             return False
-        grid_x, grid_y = self.world_to_grid(x, y)
-        if not (0 <= grid_x < self.grid_width and 0 <= grid_y < self.grid_height):
+        if world:
+            x, y = self.world_to_grid(x, y)
+        if not self.is_within_grid(x, y):
             return False
-
-        for dy in range(-adjacent_radius, adjacent_radius + 1):
-            for dx in range(-adjacent_radius, adjacent_radius + 1):
-                nx, ny = grid_x + dx, grid_y + dy
-                if not (0 <= nx < self.grid_width and 0 <= ny < self.grid_height):
+        for dy in range(-radius, radius + 1):
+            for dx in range(-radius, radius + 1):
+                nx, ny = x + dx, y + dy
+                if not self.is_within_grid(nx, ny):
                     continue
                 if self.grid[ny, nx] >= free_threshold:
                     return False
         return True
+
+    def get_safe_point(self, x, y, radius, threshold, world=True):
+        if self.grid is None:
+            return None
+        if world:
+            x, y = self.world_to_grid(x, y)
+        if not self.is_within_grid(x, y):
+            return None
+        search_radius = 0
+        while True:
+            search_radius += 1
+            for i in range(grid_y - search_radius, grid_y + search_radius + 1):
+                for j in range(grid_x - search_radius, grid_x + search_radius + 1):
+                    if (abs(i - grid_y) != search_radius and abs(j - grid_x) != search_radius):
+                        continue
+                    if self.are_adjacent_free(i, j, radius, threshold, world=False):
+                        sx, sy = self.grid_to_world(j, i)
+                        return (sx, sy)
+                    if search_radius > max(self.grid_height, self.grid_width):
+                        return None
 
     def world_to_grid(self, x, y):
         # Convert world coordinates to grid indices

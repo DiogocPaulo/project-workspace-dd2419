@@ -75,7 +75,7 @@ class Pathing(Node):
         self.start_point = (msg.pose.pose.position.x, msg.pose.pose.position.y)
         if self.inflated_map is None:
             return
-        if self.reverse_travel and self.inflated_map.are_adjacent_cells_free(self.start_point[0], self.start_point[1], 5, 75):
+        if self.reverse_travel and self.inflated_map.are_adjacent_free(self.start_point[0], self.start_point[1], 1, 75):
             self.get_logger().info("Exiting reverse travel mode")
             self.reverse_travel = False
             self.calculate_astar_path()
@@ -147,8 +147,6 @@ class Pathing(Node):
 
     def receive_end_point(self, request, response):
         if self.end_point != (request.x, request.y):
-            # if not self.pathing_failed and self.end_point != (None, None):
-            #     self.safe_point = self.end_point
             self.end_point = (request.x, request.y)
             self.reverse = request.reverse
             self.path_grid = None
@@ -258,7 +256,9 @@ class Pathing(Node):
         if not self.reverse_travel and not self.inflated_map.is_free(self.start_point[0], self.start_point[1], 75):
             self.get_logger().info("Entering reverse travel mode")
             self.reverse_travel = True
-            self.calculate_astar_path()
+            self.safe_point = self.inflated_map.get_safe_point(self.start_point[0], self.start_point[1], 2, 75)
+            if self.safe_point is None:
+                self.safe_point = (0.0, 0.0)
 
         path_planner = AdaptiveAStar(self.inflated_map.grid)
         start_x, start_y = self.inflated_map.world_to_grid(self.start_point[0], self.start_point[1])
