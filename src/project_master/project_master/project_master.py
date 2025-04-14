@@ -15,6 +15,12 @@ from project_interfaces.srv import GetDetectedList, JointMove
 from sensor_msgs.msg import JointState
 import math
 import numpy as np
+from std_msgs.msg import Int16MultiArray, MultiArrayLayout, MultiArrayDimension
+from builtin_interfaces.msg import Time
+from tf2_ros import TransformException
+from tf2_geometry_msgs import do_transform_point
+from geometry_msgs.msg import PointStamped, TransformStamped
+
 
 class ProjectMaster(Node):
 
@@ -30,6 +36,9 @@ class ProjectMaster(Node):
         # self.client_test = self.create_client(PickObject, 'PickObject_test')
         # while not self.client_test.wait_for_service(timeout_sec=1.0):
         #     self.get_logger().info('Service not available, waiting...')
+
+        self.tfBuffer = tf2_ros.Buffer()
+        self.listener = tf2_ros.TransformListener(self.tfBuffer,self)
 
         self.client_camera = self.create_client(GetDetectedList, 'get_detected_list')
         while not self.client.wait_for_service(timeout_sec=1.0):
@@ -67,7 +76,7 @@ class ProjectMaster(Node):
         self.v1 = 12000
         self.v2 = 12000
         self.v3 = 12000
-        self.off_base = 0.11
+        self.off_base = 0.13
 
         # self.send_arm_request(0.2,0.0,0.0,"PICKUP")
             
@@ -124,13 +133,15 @@ class ProjectMaster(Node):
         elif target == 'box':
             closest_obj = min(boxes, key=lambda DetectedData: DetectedData.distance)
 
-        step_size = 5
+        step_size = 50
         eps = 5
 
         base = self.base
         v3 = self.v3
 
         while closest_obj.distance > eps:
+            if closest_obj.distance < 30:
+                step_size = 10
             #difference in x-axis
             if(closest_obj.diff_x > 0):
                 base += step_size
@@ -157,12 +168,12 @@ class ProjectMaster(Node):
             
             msg = Int16MultiArray()
             msg.layout = MultiArrayLayout(dim=[MultiArrayDimension(label="", size=12, stride=12)], data_offset=0)
-            move_time =250
+            move_time = 100
             pose = [14000,12000,int(v3),int(self.v2),int(self.v1),int(base),move_time,move_time,move_time,move_time,move_time,move_time]
             msg.data = pose
             self.joint_publisher.publish(msg)
 
-            self.clock.sleep_for(rclpy.duration.Duration(seconds=0.25))
+            self.clock.sleep_for(rclpy.duration.Duration(seconds=0.1))
 
             objects, boxes = self.send_camera_request()
 
@@ -174,21 +185,58 @@ class ProjectMaster(Node):
         return 0
 
     def estimate_endpoint(self):
+        zero_time = Time()
+        zero_time.sec = 0
+        zero_time.nanosec = 0
+        # Transform ---------------------------------------
+        tf_future = self.tfBuffer.wait_for_transform_async(
+            target_frame = 'map',
+            source_frame = 'arm_base',
+            time = zero_time # Get latest transform instead of timestamped, since we want to pickup when the robot is standing still
+        )
+
+        rclpy.spin_until_future_complete(self,tf_future, timeout_sec=1)
+
+        try:
+            t = self.tfBuffer.lookup_transform(
+                'map',
+                'arm_base',
+                zero_time
+        )
+        except TransformException as ex:
+            self.get_logger().info(
+                f'Could not transform map to arm_base: {ex}'
+            )
+        # Transform ---------------------------------------
+
+        l1 = 0.101
+        l2 = 0.095
         base = math.radians((12000 - self.base) / 100)
         alpha = math.radians((12000 - self.v1) / 100)
         beta = math.radians((12000 + self.v2) / 100)
-        charlie = math.radians((12000 - self.v3) / 100)
+        charlie = math.radians((12000 - (self.v3 - 50)) / 100)
 
-        distance_y = math.sin(alpha)*l1 + math.sin(beta)*l2 + self.off_base
+        distance_y = l1 + self.off_base #math.sin(alpha)*l1 + math.sin(beta)*l2
 
-        distance = math.cos(alpha)*l1 + math.cos(beta)*l2 + math.cos(charlie)*distance_y
+        distance = l2 + math.sin(charlie)*distance_y  #math.cos(alpha)*l1 + math.cos(beta)*l2
 
         distance_z = 0 - self.off_base
 
-        distance_y = math.cos(base)*distance
-        distance_x = math.sin(base)*distance
+        distance_y = math.sin(-base)*distance
+        distance_x = math.cos(base)*distance
 
-        return (distance_x,distance_y,distance_z)
+        point = PointStamped()
+        point.header.stamp = self.get_clock().now().to_msg()  # or rclpy.time.Time().to_msg()
+        point.header.frame_id = "arm_base"
+        point.point.x = distance_x
+        point.point.y = distance_y
+        point.point.z = distance_z + self.off_base
+
+        position = do_transform_point(point,t)
+
+        self.publish_transform("object",point.point)
+
+        return (point.point.x,point.point.y,point.point.z)
 
 
 
@@ -239,26 +287,24 @@ class ProjectMaster(Node):
 
         return response.objects, response.boxes
 
-    def publish_transform(self, name, x, y, theta):
+    def publish_transform(self, name, point):
         t = TransformStamped()
         t.header.stamp = self.get_clock().now().to_msg()
         t.header.frame_id = "map"
         t.child_frame_id = name
 
-        t.transform.translation.x = x
-        t.transform.translation.y = y
-        t.transform.translation.z = 0.0
+        t.transform.translation.x = point.x
+        t.transform.translation.y = point.y
+        t.transform.translation.z = point.z
 
         # Convert yaw to quaternion
-        qz = math.sin(theta / 2.0)
-        qw = math.cos(theta / 2.0)
         t.transform.rotation.x = 0.0
         t.transform.rotation.y = 0.0
-        t.transform.rotation.z = qz
-        t.transform.rotation.w = qw
+        t.transform.rotation.z = 0.0
+        t.transform.rotation.w = 1.0
 
         self.tf_broadcaster.sendTransform(t)
-        self.get_logger().info(f"Published transform for {name} at ({x}, {y})")
+        self.get_logger().info(f"Published transform for {name} at ({point.x}, {point.y})")
         
 
 
@@ -271,9 +317,12 @@ def main():
     
     # node.process_map_file("/home/robot/project-workspace-dd2419/maps/Map_test.txt")
     # node.publish_transforms()
-    node.send_arm_request(0.5,-0.2,0.06,"LOOK")
+    node.send_arm_request(0.5,-0.3,0.0,"LOOK")
     node.AquireTarget("objects")
-    node.send_arm_request(0.4,-0.,0.06,"RETURN")
+    (x,y,z) = node.estimate_endpoint()
+    node.get_logger().info(f"X = {x},Y = {y}, Z = {z}")
+    node.send_arm_request(x,y,z,"RETURN")
+    # node.send_arm_request(x,y,z,"PICKUP")
     # node.send_arm_request(0.5,-0.2,0.06,"LOOK")
     # node.send_arm_request(0.5,-0.2,0.06,"LOOK")
     # node.send_arm_request(0.15,-0.15,0.0,"DROPOFF")
