@@ -24,9 +24,10 @@ lookahead_gain = 0.1        # Look-ahead distance gain
 lookahead_min = 0.2         # Minimum look-ahead distance
 distance_threshold = 0.05   # Stop distance threshold
 yaw_threshold = 0.08        # Stop yaw threshold
+min_velocity = 0.10         # Minimum velocity
 wheel_duty_min = 0.09       # Minimum wheel duty cycles
 
-def pure_pursuit_control(state, target_path, velocity, reverse=False):
+def pure_pursuit_control(state, target_path, velocity, reverse=False, slow_approach=False):
     index, lookahead = target_path.search_target_index(state)
     
     if index is None:
@@ -39,6 +40,11 @@ def pure_pursuit_control(state, target_path, velocity, reverse=False):
         target_x = target_path.x_points[-1]
         target_y = target_path.y_points[-1]
         index = len(target_path.x_points) - 1
+
+    if slow_approach:
+        distance_error = state.distance_to_state(target_path.x_points[-1], target_path.y_points[-1])
+        if distance_error <= 1.0
+            velocity = max(min_velocity, velocity * (distance_error/1.0))
 
     if reverse:
         heading_error = math.atan2(target_y - state.y, target_x - state.x) - (state.yaw + math.pi)
@@ -84,8 +90,9 @@ class Navigation(Node):
         # Navigation parameters
         self.state = RobotState()
         self.target_path = TargetPath(lookahead_gain, lookahead_min)
-        self.target_velocity = 0.0
         self.target_yaw = 0.0
+        self.target_velocity = 0.0
+        self.slow_approach = False
         self.previous_index = 0
         self.waiting_for_path = True
         self.reverse_travel = False
@@ -102,6 +109,7 @@ class Navigation(Node):
             self.target_yaw = msg.yaw
             self.target_velocity = msg.velocity
             self.reverse_travel = msg.reverse
+            self.slow_approach = msg.slow_approach
             self.target_path.update_path(msg)
             self.get_logger().info(f"Recived new path with end point: ({msg.path[-1].x:.2f}, {msg.path[-1].y:.2f})")
         else:
@@ -144,16 +152,32 @@ class Navigation(Node):
             self.publish_duty_cycles(0.0, 0.0)
             return
 
-        distance_error = self.state.distance_to_state(self.target_path.x_points[-1], self.target_path.y_points[-1])
-        yaw_error = math.atan2(math.sin(self.target_yaw - self.state.yaw), math.cos(self.target_yaw - self.state.yaw))
+        distance_error = self.state.distance_to_state(
+            self.target_path.x_points[-1],
+            self.target_path.y_points[-1],
+        )
+        yaw_error = math.atan2(
+            math.sin(self.target_yaw - self.state.yaw),
+            math.cos(self.target_yaw - self.state.yaw),
+        )
 
         if distance_error > distance_threshold:
-            linear_velocity, angular_velocity = pure_pursuit_control(self.state, self.target_path, self.target_velocity, reverse=self.reverse_travel)
+            linear_velocity, angular_velocity = pure_pursuit_control(
+                self.state,
+                self.target_path,
+                self.target_velocity,
+                reverse=self.reverse_travel,
+                slow_approach=self.slow_approach,
+            )
 
             left_wheel = linear_velocity - (base/2) * angular_velocity
             right_wheel = linear_velocity + (base/2) * angular_velocity
         elif yaw_error > yaw_threshold:
-            angular_velocity = angular_control(self.state, self.target_yaw, self.target_velocity)
+            angular_velocity = angular_control(
+                self.state,
+                self.target_yaw,
+                self.target_velocity,
+            )
 
             left_wheel = 0.0 - (base/2) * angular_velocity
             right_wheel = 0.0 + (base/2) * angular_velocity

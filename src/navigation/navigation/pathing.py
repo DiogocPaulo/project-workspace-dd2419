@@ -73,6 +73,7 @@ class Pathing(Node):
         self.pathing_failed = False
         self.backing = False
         self.reversing = False
+        self.slow_approach = False
 
     def odom_callback(self, msg: Odometry):
         self.start_point = (msg.pose.pose.position.x, msg.pose.pose.position.y)
@@ -154,6 +155,7 @@ class Pathing(Node):
             self.target_yaw = request.yaw
             self.target_velocity = request.velocity
             self.reversing = request.reverse
+            self.slow_approach = request.slow_approach
             self.path_grid = None
             self.pathing_failed = False
             self.calculate_astar_path()
@@ -263,6 +265,7 @@ class Pathing(Node):
         path_msg.yaw = self.target_yaw
         path_msg.velocity = self.target_velocity
         path_msg.reverse = self.backing or self.reversing
+        path_msg.slow_approach = self.slow_approach
 
         self.path_publisher.publish(path_msg)
         self.get_logger().info("Published custom path")

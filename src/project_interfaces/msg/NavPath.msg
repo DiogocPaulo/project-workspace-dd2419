@@ -9,3 +9,4 @@ project_interfaces/NavPoint[] path
 float64 yaw
 float64 velocity
 bool reverse
+bool slow_approach

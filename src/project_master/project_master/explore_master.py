@@ -376,6 +376,7 @@ class ExploreMaster(Node):
                 yaw=yaw,
                 velocity=self.target_velocity,
                 reverse=False,
+                slow_approach=False
             )
 
             retry_on_endpoint_failure = py_trees.composites.Sequence(f"RetryOnEndpointFailure{i}", memory=False)

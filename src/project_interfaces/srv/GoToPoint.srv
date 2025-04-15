@@ -3,6 +3,7 @@ float64 y
 float64 yaw
 float64 velocity
 bool reverse
+bool slow_approach
 ---
 bool success
 string message
