@@ -55,22 +55,16 @@ def pure_pursuit_control(state, target_path, velocity, reverse=False):
     kappa = 3.0 * np.arctan(alpha) / lookahead
     angular_velocity = (abs(velocity) * 0.5) * kappa
 
-    return linear_velocity, angular_velocity, index
+    return linear_velocity, angular_velocity
 
-def calculate_angular_velocity(state, state_yaw, target_yaw):
-    state_yaw = (state_yaw + 180) % 360 - 180
-    target_yaw = (target_yaw + 180) % 360 - 180
-
-    error = target_yaw - state_yaw
-    if error > 180:
-        error -= 360
-    elif error < -180:
-        error += 360
-
+def angular_control(state, target_yaw, velocity):
+    heading_error = target_yaw - state.yaw
     alpha = math.atan2(math.sin(error), math.cos(error))
-    kappa = 2.0 * math.sin(alpha)
-    omega = state.target_velocity * kappa
-    return omega, alpha
+
+    kappa = 3.0 * math.arctan(alpha)
+    angular_velocity = (abs(velocity) * 0.5) * kappa
+
+    return angular_velocity
 
 class Navigation(Node):
 
@@ -91,6 +85,7 @@ class Navigation(Node):
         # Navigation parameters
         self.state = RobotState()
         self.target_path = TargetPath(lookahead_gain, lookahead_min)
+        self.target_yaw = 0.0
         self.previous_index = 0
         self.waiting_for_path = True
         self.reverse_travel = False
@@ -105,6 +100,7 @@ class Navigation(Node):
         if len(msg.path) > 0:
             self.waiting_for_path = False
             self.reverse_travel = msg.reverse
+            self.target_yaw = msg.yaw
             self.target_path.update_path(msg)
             self.get_logger().info(f"Recived new path with end point: ({msg.path[-1].x:.2f}, {msg.path[-1].y:.2f})")
         else:
@@ -147,25 +143,31 @@ class Navigation(Node):
             self.publish_duty_cycles(0.0, 0.0)
             return
 
-        linear_velocity, angular_velocity, self.previous_index = pure_pursuit_control(self.state, self.target_path, target_velocity, reverse=self.reverse_travel)
+        distance_error = self.state.distance_to_state(self.target_path.x_points[-1], self.target_path.y_points[-1])
+        yaw_error = self.target_yaw - self.state.yaw
 
-        if self.previous_index >= (len(self.target_path.x_points) - 1):
-            distance = self.state.distance_to_state(self.target_path.x_points[-1], self.target_path.y_points[-1])
-            if distance <= distance_threshold and not self.waiting_for_path:
-                self.get_logger().info(f"Reached end of target path")
-                self.waiting_for_path = True
+        if distance_error > distance_threshold:
+            linear_velocity, angular_velocity = pure_pursuit_control(self.state, self.target_path, target_velocity, reverse=self.reverse_travel)
 
-                # Clear existing target path
-                self.target_path.x_points = []
-                self.target_path.y_points = []
-                return
+            left_wheel = linear_velocity - (base/2) * angular_velocity
+            right_wheel = linear_velocity + (base/2) * angular_velocity
+        elif yaw_error > yaw_threshold:
+            angular_velocity = angular_control(self.state, self.target_yaw)
 
-        left_wheel = linear_velocity - (base/2) * angular_velocity
-        right_wheel = linear_velocity + (base/2) * angular_velocity
+            left_wheel = 0.0 - (base/2) * angular_velocity
+            right_wheel = 0.0 + (base/2) * angular_velocity
+        else:
+            self.get_logger().info(f"Reached end of target path")
+            self.waiting_for_path = True
 
+            # Clear existing target path
+            self.target_path.x_points = []
+            self.target_path.y_points = []
+            return
+
+        # Clamp left and right wheel duty cycles
         left_wheel = np.copysign(np.maximum(np.abs(left_wheel), wheel_duty_min), left_wheel)
         right_wheel = np.copysign(np.maximum(np.abs(right_wheel), wheel_duty_min), right_wheel)
-
         self.get_logger().info(f"Velocity: {self.state.velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
 
         self.publish_duty_cycles(left_wheel, right_wheel)

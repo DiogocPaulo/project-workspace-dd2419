@@ -10,7 +10,7 @@ import py_trees_ros
 import rclpy
 from rclpy.node import Node
 from tf2_ros import TransformBroadcaster
-from geometry_msgs.msg import PoseStamped, TransformStamped
+from geometry_msgs.msg import PoseStamped, TransformStamped, Quaternion
 from rclpy.qos import QoSProfile, HistoryPolicy, ReliabilityPolicy
 from project_interfaces.srv import GoToPoint, Trigger
 from nav_msgs.msg import Path, Odometry
@@ -82,11 +82,14 @@ class ReachedEndPoint(py_trees.behaviour.Behaviour):
     """
     A behaviour that checks is an end point has been reached
     """
-    def __init__(self, name, x, y, tolerance=0.2):
+    def __init__(self, name, x, y, yaw, distance_threshold=0.2, yaw_threshold=0.1):
         super().__init__(name)
         self.current_point = (None, None)
+        self.current_yaw = 0.0
         self.end_point = (x, y)
-        self.tolerance = tolerance
+        self.target_yaw = yaw
+        self.distance_threshold = distance_threshold
+        self.yaw_threshold = yaw_threshold
 
     def setup(self, **kwargs):
         try:
@@ -107,8 +110,18 @@ class ReachedEndPoint(py_trees.behaviour.Behaviour):
 
     def odom_callback(self, msg: Odometry):
         self.current_point = (msg.pose.pose.position.x, msg.pose.pose.position.y)
+        q = odom_msg.pose.pose.orientation
+        siny_cosp = 2 * (q.w * q.z + q.x * q.y)
+        cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z)
+        self.current_yaw = np.arctan2(siny_cosp, cosy_cosp)
 
     def broadcast_waypoint(self):
+        quaternion = Quaternion()
+        quaternion.x = 0.0
+        quaternion.y = 0.0
+        quaternion.z = np.sin(self.current_yaw * 0.5)
+        quaternion.w = np.cos(self.current_yaw * 0.5)
+
         transform_msg = TransformStamped()
         transform_msg.header.frame_id = "odom"
         transform_msg.header.stamp = self.node.get_clock().now().to_msg()
@@ -118,10 +131,10 @@ class ReachedEndPoint(py_trees.behaviour.Behaviour):
         transform_msg.transform.translation.y = self.end_point[1]
         transform_msg.transform.translation.z = 0.0
 
-        transform_msg.transform.rotation.x = 0.0
-        transform_msg.transform.rotation.y = 0.0
-        transform_msg.transform.rotation.z = 0.0
-        transform_msg.transform.rotation.w = 1.0
+        transform_msg.transform.rotation.x = quaternion.x
+        transform_msg.transform.rotation.y = quaternion.y
+        transform_msg.transform.rotation.z = quaternion.z
+        transform_msg.transform.rotation.w = quaternion.w
 
         self.node.waypoint_broadcaster.sendTransform(transform_msg)
 
@@ -130,18 +143,23 @@ class ReachedEndPoint(py_trees.behaviour.Behaviour):
             self.node.get_logger().info(f"{self.name}: Waiting for current point ...")
             return py_trees.common.Status.RUNNING
         
-        distance = np.hypot(
+        distance_error = np.hypot(
             self.current_point[0] - self.end_point[0],
             self.current_point[1] - self.end_point[1]
         )
+        yaw_error = self.target_yaw - self.current_yaw
 
-        if distance <= self.tolerance:
-            self.node.get_logger().info(f"{self.name}: Reached end point of ({self.end_point[0], self.end_point[1]})")
-            return py_trees.common.Status.SUCCESS
-        else:
-            self.node.get_logger().info(f"{self.name}: Distance to end point is {distance:.2f}")
+        if distance_error > self.distance_threshold:
+            self.node.get_logger().info(f"{self.name}: Distance to waypoint is {distance_error:.2f}")
             self.broadcast_waypoint()
             return py_trees.common.Status.RUNNING
+        elif yaw_error > self.yaw_threshold:
+            self.node.get_logger().info(f"{self.name}: Correcting yaw by {yaw_error:.2f}")
+            self.broadcast_waypoint()
+            return py_trees.common.Status.RUNNING
+        else:
+            self.node.get_logger().info(f"{self.name}: Reached waypoint of ({self.end_point[0], self.end_point[1]}) at {self.current_yaw}")
+            return py_trees.common.Status.SUCCESS
     
 def generate_waypoints_with_map(map: Map, x_resolution, y_resolution):
 
@@ -260,7 +278,11 @@ class ExploreMaster(Node):
         self.map.initialise_grid(self.workspace_vertices)
         self.map.inflate_grid(0.30)
         self.show_waypoints = False
-        self.end_points = generate_waypoints(self.map, self.workspace_vertices, 0.35, 1.0, 3)
+        # self.end_points = generate_waypoints(self.map, self.workspace_vertices, 0.35, 1.0, 3)
+        self.end_points = [
+            (2.0, 0.0, math.pi),
+            (0.0, 0.0, -math.pi),
+        ]
 
         root = self.create_exploration_tree()
         self.tree = py_trees_ros.trees.BehaviourTree(root=root)
@@ -345,7 +367,7 @@ class ExploreMaster(Node):
                 x=x,
                 y=y,
                 yaw=yaw,
-                reverse=False
+                reverse=False,
             )
 
             retry_on_endpoint_failure = py_trees.composites.Sequence(f"RetryOnEndpointFailure{i}", memory=False)
@@ -353,12 +375,13 @@ class ExploreMaster(Node):
             end_point_check = ReachedEndPoint(
                 name=f"ReachedEndPoint{i}",
                 x=x,
-                y=y
+                y=y,
+                yaw=yaw,
             )
 
             retry_endpoint = py_trees.decorators.FailureIsRunning(
                 name=f"RetryEndpoint{i}",
-                child=end_point_check
+                child=end_point_check,
             )
 
             retry_on_endpoint_failure.add_children([pathing_service, retry_endpoint])

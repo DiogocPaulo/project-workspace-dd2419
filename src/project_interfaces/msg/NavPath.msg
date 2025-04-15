@@ -6,5 +6,5 @@ std_msgs/Header header
 project_interfaces/NavPoint[] path
 
 # Attributes relating to navigating using path
-float64 angle
+float64 yaw
 bool reverse

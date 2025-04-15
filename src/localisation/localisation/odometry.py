@@ -87,8 +87,8 @@ class Odometry(Node):
         quaternion = Quaternion()
         quaternion.x = 0.0
         quaternion.y = 0.0
-        quaternion.z = sin(self.theta / 2)
-        quaternion.w = cos(self.theta / 2)
+        quaternion.z = sin(self.theta * 0.5)
+        quaternion.w = cos(self.theta * 0.5)
 
         transform_msg = TransformStamped()
         transform_msg.header.stamp = now_time.to_msg()

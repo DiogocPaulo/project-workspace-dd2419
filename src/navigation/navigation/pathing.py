@@ -62,6 +62,7 @@ class Pathing(Node):
         self.start_point = (0.0, 0.0)
         self.end_point = (None, None)
         self.safe_point = (0.0, 0.0)
+        self.target_yaw = 0.0
         self.workspace_map = None
         self.objects_map = None
         self.obstacles_map = None
@@ -148,6 +149,7 @@ class Pathing(Node):
     def receive_end_point(self, request, response):
         if self.end_point != (request.x, request.y):
             self.end_point = (request.x, request.y)
+            self.target_yaw = request.yaw
             self.reverse = request.reverse
             self.path_grid = None
             self.pathing_failed = False
@@ -236,7 +238,7 @@ class Pathing(Node):
             path_msg.path = []
             self.get_logger().warn("Publishing empty custom path")
 
-        path_msg.angle = 0.0
+        path_msg.yaw = self.target_yaw
         path_msg.reverse = self.reverse_travel or self.reverse
 
         self.path_publisher.publish(path_msg)
