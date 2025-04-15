@@ -43,7 +43,7 @@ def pure_pursuit_control(state, target_path, velocity, reverse=False, slow_appro
 
     if slow_approach:
         distance_error = state.distance_to_state(target_path.x_points[-1], target_path.y_points[-1])
-        if distance_error <= 1.0
+        if distance_error <= 1.0:
             velocity = max(min_velocity, velocity * (distance_error/1.0))
 
     if reverse:

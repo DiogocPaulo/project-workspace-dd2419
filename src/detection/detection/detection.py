@@ -533,7 +533,7 @@ class ExamineImage(Node):
                         break
 
                 if self.obstacles_map is not None:
-                    free_from_obstacles = self.obstacles_map.are_adjacent_cells_free(x_transformed, y_transformed, 1, 75)
+                    free_from_obstacles = self.obstacles_map.are_adjacent_free(x_transformed, y_transformed, 1, 75)
                 else:
                     free_from_obstacles = True
 

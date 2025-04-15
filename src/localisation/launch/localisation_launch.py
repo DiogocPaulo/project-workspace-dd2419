@@ -58,9 +58,14 @@ def generate_launch_description():
             ros_arguments=["--log-level", "info"],
             output="screen",
         ),
+        # Node(
+        #     package="localization_cpp",
+        #     executable="localization_node",
+        #     name="robot_localization_node",
+        #     emulate_tty=True,
+        #     output="screen",
+        # ),
     ])
-
-
 
     
 

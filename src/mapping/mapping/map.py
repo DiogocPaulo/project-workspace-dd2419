@@ -231,7 +231,7 @@ class Map:
                 nx, ny = x + dx, y + dy
                 if not self.is_within_grid(nx, ny):
                     continue
-                if self.grid[ny, nx] >= free_threshold:
+                if self.grid[ny, nx] >= threshold:
                     return False
         return True
 
@@ -245,9 +245,9 @@ class Map:
         search_radius = 0
         while True:
             search_radius += 1
-            for i in range(grid_y - search_radius, grid_y + search_radius + 1):
-                for j in range(grid_x - search_radius, grid_x + search_radius + 1):
-                    if (abs(i - grid_y) != search_radius and abs(j - grid_x) != search_radius):
+            for i in range(y - search_radius, y + search_radius + 1):
+                for j in range(x - search_radius, x + search_radius + 1):
+                    if (abs(i - y) != search_radius and abs(j - x) != search_radius):
                         continue
                     if self.are_adjacent_free(i, j, radius, threshold, world=False):
                         sx, sy = self.grid_to_world(j, i)
