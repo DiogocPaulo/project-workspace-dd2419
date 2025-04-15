@@ -283,18 +283,13 @@ class ExploreMaster(Node):
         self.waypoints_path_publisher = self.create_publisher(Path, "/waypoints_path", 10)
         self.end_points_broadcaster = TransformBroadcaster(self)
 
-        self.target_velocity = 0.20
+        self.target_velocity = 0.16
         self.resolution = 0.05
         self.map = Map(self.resolution)
         self.map.initialise_grid(self.workspace_vertices)
         self.map.inflate_grid(0.30)
         self.show_waypoints = False
-        # self.end_points = generate_waypoints(self.map, self.workspace_vertices, 0.35, 1.05, 3)
-        self.end_points = [
-            (2.0, 0.0, 0.0),
-            (3.0, 1.5, 0.0),
-            (0.0, 0.0, 0.0),
-        ]
+        self.end_points = generate_waypoints(self.map, self.workspace_vertices, 0.40, 1.05, 3)
 
         root = self.create_exploration_tree()
         self.tree = py_trees_ros.trees.BehaviourTree(root=root)
@@ -381,7 +376,7 @@ class ExploreMaster(Node):
                 yaw=yaw,
                 velocity=self.target_velocity,
                 reverse=False,
-                slow_approach=True
+                slow_approach=False
             )
 
             retry_on_endpoint_failure = py_trees.composites.Sequence(f"RetryOnEndpointFailure{i}", memory=False)
