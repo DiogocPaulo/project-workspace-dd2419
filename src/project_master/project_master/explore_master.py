@@ -255,11 +255,12 @@ def generate_waypoints(map: Map, workspace_vertices, outer_offset, inner_offset,
         current_x, current_y = offset_vertices[i]
         next_x, nexy_y = offset_vertices[i + 1]
         distance = np.hypot(next_x - current_x, nexy_y - current_y)
+        yaw = np.arctan2(next_y - current_y, next_x - current_x)
         for j in range(waypoint_resolution):
             x = current_x + (next_x - current_x) * (j + 1) / waypoint_resolution
             y = current_y + (nexy_y - current_y) * (j + 1) / waypoint_resolution
             if map.is_free(x, y, 1):
-                waypoints.append((x, y, 0.0))
+                waypoints.append((x, y, yaw))
     return waypoints
 
 class ExploreMaster(Node):
