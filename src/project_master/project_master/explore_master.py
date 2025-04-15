@@ -262,10 +262,10 @@ def generate_waypoints(map: Map, workspace_vertices, outer_offset, inner_offset,
             if map.is_free(x, y, 1):
                 waypoints.append((x, y, 0.0))
 
-    num_waypoints = len(waypoints)
+    num_waypoints = len(waypoints) 
     for i in range(num_waypoints):
         current_x, current_y, _ = waypoints[i]
-        next_x, next_y, _ = waypoints[(i + i) % num_waypoints]
+        next_x, next_y, _ = waypoints[(i + 1) % num_waypoints]
         heading = np.arctan2(next_y - current_y, next_x - current_x)
         waypoints[i] = (current_x, current_y, heading)
 
