@@ -283,6 +283,7 @@ class ExploreMaster(Node):
         self.waypoints_path_publisher = self.create_publisher(Path, "/waypoints_path", 10)
         self.end_points_broadcaster = TransformBroadcaster(self)
 
+        self.target_velocity = 0.20
         self.resolution = 0.05
         self.map = Map(self.resolution)
         self.map.initialise_grid(self.workspace_vertices)
@@ -373,6 +374,7 @@ class ExploreMaster(Node):
                 x=x,
                 y=y,
                 yaw=yaw,
+                velocity=self.target_velocity,
                 reverse=False,
             )
 

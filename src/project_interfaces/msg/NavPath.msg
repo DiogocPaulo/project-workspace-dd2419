@@ -7,4 +7,5 @@ project_interfaces/NavPoint[] path
 
 # Attributes relating to navigating using path
 float64 yaw
+float64 velocity
 bool reverse

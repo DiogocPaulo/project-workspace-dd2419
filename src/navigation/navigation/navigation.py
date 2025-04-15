@@ -23,8 +23,7 @@ base = 0.3                  # Wheelbase of the vehicle
 lookahead_gain = 0.1        # Look-ahead distance gain
 lookahead_min = 0.2         # Minimum look-ahead distance
 distance_threshold = 0.05   # Stop distance threshold
-yaw_threshold = 0.08         # Stop yaw threshold
-target_velocity = 0.16      # Robot's target velocity
+yaw_threshold = 0.08        # Stop yaw threshold
 wheel_duty_min = 0.09       # Minimum wheel duty cycles
 
 def pure_pursuit_control(state, target_path, velocity, reverse=False):
@@ -85,6 +84,7 @@ class Navigation(Node):
         # Navigation parameters
         self.state = RobotState()
         self.target_path = TargetPath(lookahead_gain, lookahead_min)
+        self.target_velocity = 0.0
         self.target_yaw = 0.0
         self.previous_index = 0
         self.waiting_for_path = True
@@ -99,8 +99,9 @@ class Navigation(Node):
     def path_callback(self, msg: NavPath):
         if len(msg.path) > 0:
             self.waiting_for_path = False
-            self.reverse_travel = msg.reverse
             self.target_yaw = msg.yaw
+            self.target_velocity = msg.velocity
+            self.reverse_travel = msg.reverse
             self.target_path.update_path(msg)
             self.get_logger().info(f"Recived new path with end point: ({msg.path[-1].x:.2f}, {msg.path[-1].y:.2f})")
         else:
@@ -147,12 +148,12 @@ class Navigation(Node):
         yaw_error = math.atan2(math.sin(self.target_yaw - self.state.yaw), math.cos(self.target_yaw - self.state.yaw))
 
         if distance_error > distance_threshold:
-            linear_velocity, angular_velocity = pure_pursuit_control(self.state, self.target_path, target_velocity, reverse=self.reverse_travel)
+            linear_velocity, angular_velocity = pure_pursuit_control(self.state, self.target_path, self.target_velocity, reverse=self.reverse_travel)
 
             left_wheel = linear_velocity - (base/2) * angular_velocity
             right_wheel = linear_velocity + (base/2) * angular_velocity
         elif yaw_error > yaw_threshold:
-            angular_velocity = angular_control(self.state, self.target_yaw, target_velocity)
+            angular_velocity = angular_control(self.state, self.target_yaw, self.target_velocity)
 
             left_wheel = 0.0 - (base/2) * angular_velocity
             right_wheel = 0.0 + (base/2) * angular_velocity
