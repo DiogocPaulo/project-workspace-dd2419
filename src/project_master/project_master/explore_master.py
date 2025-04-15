@@ -267,7 +267,8 @@ def generate_waypoints(map: Map, workspace_vertices, outer_offset, inner_offset,
         current_x, current_y, _ = waypoints[i]
         next_x, next_y, _ = waypoints[(i + 1) % num_waypoints]
         heading = np.arctan2(next_y - current_y, next_x - current_x)
-        waypoints[i] = (current_x, current_y, heading)
+        rounded_x, rounded_y = map.round_world(current_x, current_y)
+        waypoints[i] = (rounded_x, rounded_y, heading)
 
     return waypoints
 

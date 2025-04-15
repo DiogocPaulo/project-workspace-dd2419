@@ -267,6 +267,11 @@ class Map:
         world_y = self.origin_y + (y + 0.5) * self.resolution
         return world_x, world_y
 
+    def round_world(self, x, y):
+        grid_x, grid_y = self.world_to_grid(x, y)
+        world_x, world_y = self.grid_to_world(grid_x, grid_y)
+        return world_x, world_y
+
     def distance_to_cells(self, distance):
         # Convert world distance to a number of grid cells
         return int(distance / self.resolution)
