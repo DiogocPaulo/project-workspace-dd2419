@@ -67,7 +67,7 @@ class MapObstacles(Node):
                 rclpy.duration.Duration(seconds=1.0)
             )
             lidar_origin_x, lidar_origin_y = self.transform_point(0.0, 0.0, lidar_transform)
-        except TransformException as ex:
+        except tf2_ros.TransformException as ex:
             self.get_logger().warn(f"Could not transform lidar origin reading ({lidar_origin.point.x}, {lidar_origin.point.y}): {ex}")
             return
 

@@ -22,8 +22,8 @@ from navigation.target_path import TargetPath
 base = 0.3                  # Wheelbase of the vehicle
 lookahead_gain = 0.1        # Look-ahead distance gain
 lookahead_min = 0.3         # Minimum look-ahead distance
-distance_threshold = 0.15   # Stop distance threshold
-yaw_threshold = 0.2         # Stop yaw threshold
+distance_threshold = 0.05   # Stop distance threshold
+yaw_threshold = 0.08         # Stop yaw threshold
 target_velocity = 0.16      # Robot's target velocity
 wheel_duty_min = 0.09       # Minimum wheel duty cycles
 
@@ -59,9 +59,9 @@ def pure_pursuit_control(state, target_path, velocity, reverse=False):
 
 def angular_control(state, target_yaw, velocity):
     heading_error = target_yaw - state.yaw
-    alpha = math.atan2(math.sin(error), math.cos(error))
+    alpha = math.atan2(math.sin(heading_error), math.cos(heading_error))
 
-    kappa = 3.0 * math.arctan(alpha)
+    kappa = 3.0 * np.arctan(alpha)
     angular_velocity = (abs(velocity) * 0.5) * kappa
 
     return angular_velocity
@@ -152,7 +152,7 @@ class Navigation(Node):
             left_wheel = linear_velocity - (base/2) * angular_velocity
             right_wheel = linear_velocity + (base/2) * angular_velocity
         elif yaw_error > yaw_threshold:
-            angular_velocity = angular_control(self.state, self.target_yaw)
+            angular_velocity = angular_control(self.state, self.target_yaw, target_velocity)
 
             left_wheel = 0.0 - (base/2) * angular_velocity
             right_wheel = 0.0 + (base/2) * angular_velocity

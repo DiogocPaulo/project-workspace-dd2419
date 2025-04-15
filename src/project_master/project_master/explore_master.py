@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import math
 import numpy as np
 from shapely.geometry import Polygon
 from shapely.ops import transform
@@ -82,7 +83,7 @@ class ReachedEndPoint(py_trees.behaviour.Behaviour):
     """
     A behaviour that checks is an end point has been reached
     """
-    def __init__(self, name, x, y, yaw, distance_threshold=0.2, yaw_threshold=0.1):
+    def __init__(self, name, x, y, yaw, distance_threshold=0.1, yaw_threshold=0.1):
         super().__init__(name)
         self.current_point = (None, None)
         self.current_yaw = 0.0
@@ -110,7 +111,7 @@ class ReachedEndPoint(py_trees.behaviour.Behaviour):
 
     def odom_callback(self, msg: Odometry):
         self.current_point = (msg.pose.pose.position.x, msg.pose.pose.position.y)
-        q = odom_msg.pose.pose.orientation
+        q = msg.pose.pose.orientation
         siny_cosp = 2 * (q.w * q.z + q.x * q.y)
         cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z)
         self.current_yaw = np.arctan2(siny_cosp, cosy_cosp)
@@ -119,8 +120,8 @@ class ReachedEndPoint(py_trees.behaviour.Behaviour):
         quaternion = Quaternion()
         quaternion.x = 0.0
         quaternion.y = 0.0
-        quaternion.z = np.sin(self.current_yaw * 0.5)
-        quaternion.w = np.cos(self.current_yaw * 0.5)
+        quaternion.z = np.sin(self.target_yaw * 0.5)
+        quaternion.w = np.cos(self.target_yaw * 0.5)
 
         transform_msg = TransformStamped()
         transform_msg.header.frame_id = "odom"
@@ -280,8 +281,8 @@ class ExploreMaster(Node):
         self.show_waypoints = False
         # self.end_points = generate_waypoints(self.map, self.workspace_vertices, 0.35, 1.0, 3)
         self.end_points = [
-            (2.0, 0.0, math.pi),
-            (0.0, 0.0, -math.pi),
+            (2.0, 1.0, math.pi * 0.5),
+            (0.0, 0.0, -(math.pi * 0.5)),
         ]
 
         root = self.create_exploration_tree()
