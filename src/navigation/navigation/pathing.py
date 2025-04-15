@@ -46,6 +46,7 @@ class Pathing(Node):
         # self.create_subscription(OccupancyGrid, "/objects_map", self.objects_map_callback, qos_profile)
         # self.create_subscription(OccupancyGrid, "/obstacles_map", self.obstacles_map_callback, qos_profile)
         self.path_publisher = self.create_publisher(NavPath, "/custom_path", 10)
+        self.temp_path_publisher = self.create_publisher(Path, "/temp_path", 10)
         self.path_map_publisher = self.create_publisher(OccupancyGrid, "/path_map", 10)
         self.inflated_map_publisher = self.create_publisher(OccupancyGrid, "/inflated_map", 10)
         self.end_point_service = self.create_service(GoToPoint, "/pathing_end_point", self.receive_end_point)
@@ -218,6 +219,25 @@ class Pathing(Node):
         self.path_map_publisher.publish(map_msg)
         self.get_logger().info("Published custom path as occupancy map")
 
+    def publish_temp_path(self, path):
+        path_msg = Path()
+        path_msg.header.stamp = self.get_clock().now().to_msg()
+        path_msg.header.frame_id = "odom"
+
+        if path is not None:
+            for point in path:
+                x, y = self.inflated_map.grid_to_world(point[1], point[0])
+                pose = PoseStamped()
+                pose.header = path_msg.header
+                pose.pose.position.x = x
+                pose.pose.position.y = y
+                pose.pose.position.z = 0.0
+                path_msg.poses.append(pose)
+        else:
+            path_msg.poses = []
+
+        self.temp_path_publisher.publish(path_msg)
+
     def publish_path(self, path):
         path_msg = NavPath()
         path_msg.header.stamp = self.get_clock().now().to_msg()
@@ -276,6 +296,7 @@ class Pathing(Node):
             self.pathing_failed = True
             self.path_grid = None
         self.publish_path(path)
+        self.publish_temp_path(path)
         if path is not None:
             self.path_grid = np.full(self.inflated_map.grid.shape, -1, dtype=np.int8)
             for x, y in path:
