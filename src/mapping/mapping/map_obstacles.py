@@ -66,10 +66,11 @@ class MapObstacles(Node):
                 rclpy.time.Time(seconds=0),
                 rclpy.duration.Duration(seconds=1.0)
             )
-            lidar_origin_x, lidar_origin_y = self.transform_point(0.0, 0.0, lidar_transform)
         except tf2_ros.TransformException as ex:
-            self.get_logger().warn(f"Could not transform lidar origin reading ({lidar_origin.point.x}, {lidar_origin.point.y}): {ex}")
+            self.get_logger().warn(f"Could not find transform between lidar to odom frames: {ex}")
             return
+
+        lidar_origin_x, lidar_origin_y = self.transform_point(0.0, 0.0, lidar_transform)
 
         angle = msg.angle_min
 
