@@ -148,7 +148,7 @@ class ReachedEndPoint(py_trees.behaviour.Behaviour):
             self.current_point[0] - self.end_point[0],
             self.current_point[1] - self.end_point[1]
         )
-        yaw_error = self.target_yaw - self.current_yaw
+        yaw_error = math.atan2(math.sin(self.target_yaw - self.current_yaw), math.cos(self.target_yaw - self.current_yaw))
 
         if distance_error > self.distance_threshold:
             self.node.get_logger().info(f"{self.name}: Distance to waypoint is {distance_error:.2f}")

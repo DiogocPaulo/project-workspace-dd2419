@@ -144,7 +144,7 @@ class Navigation(Node):
             return
 
         distance_error = self.state.distance_to_state(self.target_path.x_points[-1], self.target_path.y_points[-1])
-        yaw_error = self.target_yaw - self.state.yaw
+        yaw_error = math.atan2(math.sin(self.target_yaw - self.state.yaw), math.cos(self.target_yaw - self.state.yaw))
 
         if distance_error > distance_threshold:
             linear_velocity, angular_velocity = pure_pursuit_control(self.state, self.target_path, target_velocity, reverse=self.reverse_travel)
