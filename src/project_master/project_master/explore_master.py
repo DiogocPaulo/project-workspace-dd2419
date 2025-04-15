@@ -247,21 +247,28 @@ def offset_inner_vertices(vertices, offset):
 
 
 
-def generate_waypoints(map: Map, workspace_vertices, outer_offset, inner_offset, waypoint_resolution):
+def generate_waypoints(map: Map, workspace_vertices, outer_offset, inner_offset, resolution):
     outer_vertices = offset_outer_vertices(workspace_vertices, outer_offset)
     inner_vertices = offset_inner_vertices(workspace_vertices, inner_offset)
     offset_vertices = outer_vertices + inner_vertices[::-1]
     waypoints = []
     for i in range(len(offset_vertices) - 1):
         current_x, current_y = offset_vertices[i]
-        next_x, nexy_y = offset_vertices[i + 1]
-        distance = np.hypot(next_x - current_x, nexy_y - current_y)
-        yaw = np.arctan2(next_y - current_y, next_x - current_x)
-        for j in range(waypoint_resolution):
-            x = current_x + (next_x - current_x) * (j + 1) / waypoint_resolution
-            y = current_y + (nexy_y - current_y) * (j + 1) / waypoint_resolution
+        next_x, next_y = offset_vertices[i + 1]
+        distance = np.hypot(next_x - current_x, next_y - current_y)
+        for j in range(resolution):
+            x = current_x + (next_x - current_x) * (j + 1) / resolution
+            y = current_y + (next_y - current_y) * (j + 1) / resolution
             if map.is_free(x, y, 1):
-                waypoints.append((x, y, yaw))
+                waypoints.append((x, y, 0.0))
+
+    num_waypoints = len(waypoints)
+    for i in range(num_waypoints):
+        current_x, current_y, _ = waypoints[i]
+        next_x, next_y, _ = waypoints[(i + i) % num_waypoints]
+        heading = np.arctan2(next_y - current_y, next_x - current_x)
+        waypoints[i] = (current_x, current_y, heading)
+
     return waypoints
 
 class ExploreMaster(Node):
@@ -280,11 +287,7 @@ class ExploreMaster(Node):
         self.map.initialise_grid(self.workspace_vertices)
         self.map.inflate_grid(0.30)
         self.show_waypoints = False
-        # self.end_points = generate_waypoints(self.map, self.workspace_vertices, 0.35, 1.0, 3)
-        self.end_points = [
-            (2.0, 1.0, math.pi * 0.5),
-            (0.0, 0.0, -(math.pi * 0.5)),
-        ]
+        self.end_points = generate_waypoints(self.map, self.workspace_vertices, 0.40, 1.0, 3)
 
         root = self.create_exploration_tree()
         self.tree = py_trees_ros.trees.BehaviourTree(root=root)
