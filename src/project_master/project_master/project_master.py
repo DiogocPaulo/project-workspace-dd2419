@@ -169,7 +169,7 @@ class ProjectMaster(Node):
             msg = Int16MultiArray()
             msg.layout = MultiArrayLayout(dim=[MultiArrayDimension(label="", size=12, stride=12)], data_offset=0)
             move_time = 100
-            pose = [14000,12000,int(v3),int(self.v2),int(self.v1),int(base),move_time,move_time,move_time,move_time,move_time,move_time]
+            pose = [3000,12000,int(v3),int(self.v2),int(self.v1),int(base),move_time,move_time,move_time,move_time,move_time,move_time]
             msg.data = pose
             self.joint_publisher.publish(msg)
 
@@ -218,7 +218,7 @@ class ProjectMaster(Node):
 
         distance_y = l1 + self.off_base #math.sin(alpha)*l1 + math.sin(beta)*l2
 
-        distance = l2 + math.tan((math.pi/2)-charlie)*distance_y + 0.045  #math.cos(alpha)*l1 + math.cos(beta)*l2
+        distance = l2 + math.tan((math.pi/2)-charlie)*distance_y + 0.07  #math.cos(alpha)*l1 + math.cos(beta)*l2
 
         distance_z = 0 - self.off_base
 
@@ -317,12 +317,12 @@ def main():
     
     # node.process_map_file("/home/robot/project-workspace-dd2419/maps/Map_test.txt")
     # node.publish_transforms()
-    node.send_arm_request(0.5,-0.3,0.0,"LOOK")
+    node.send_arm_request(0.4,-0.3,0.0,"LOOK")
     node.AquireTarget("objects")
     (x,y,z) = node.estimate_endpoint()
     node.get_logger().info(f"X = {x},Y = {y}, Z = {z}")
-    node.send_arm_request(x,y,z,"RETURN")
-    node.send_arm_request(x,y,-0.16,"PICKUP")
+    #node.send_arm_request(x,y,z,"RETURN")
+    node.send_arm_request(x,y,0.0,"PICKUP")
     # node.send_arm_request(0.5,-0.2,0.06,"LOOK")
     # node.send_arm_request(0.5,-0.2,0.06,"LOOK")
     # node.send_arm_request(0.15,-0.15,0.0,"DROPOFF")

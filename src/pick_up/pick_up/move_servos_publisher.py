@@ -71,7 +71,7 @@ class MultiServoPublisher(Node):
         self.l1 = 0.101
         self.l2 = 0.095
         self.l3 = 0.168
-        self.off_base = 0.118
+        self.off_base = 0.14
 
         self.base = 0.0
         self.v1 = 0.0
@@ -103,7 +103,7 @@ class MultiServoPublisher(Node):
         self.get_logger().info(f'Received pickup request at {request.point}')
         msg = Int16MultiArray()
         msg.layout = MultiArrayLayout(dim=[MultiArrayDimension(label="", size=12, stride=12)], data_offset=0)
-        move_time = 4000 #arm speed (milliseconds)
+        move_time = 3000 #arm speed (milliseconds)
 
         zero_time = Time()
         zero_time.sec = 0
@@ -347,10 +347,12 @@ class MultiServoPublisher(Node):
             px = d - math.cos(desired_grip_angle)*l4
 
             # Calc joint 1-3
-            l3 = math.sqrt(px**2 + py**2)
+            l3 = math.sqrt((px**2) + (py**2))
 
             c2 = (l1**2 + l2**2 - l3**2) / (2 * l1 * l2)
             v2 = math.acos(c2)
+
+            q = (math.pi/2) - math.asin(px/l3)
 
             c1 = (l1**2 + l3**2 - l2**2) / (2*l1*l3)
             v1 = math.acos(c1)
@@ -359,7 +361,9 @@ class MultiServoPublisher(Node):
 
             v3 = (math.pi/2 - base_angle) + (math.pi - v1 - v2) + (math.pi/2 - desired_grip_angle) - math.pi
 
-            return base_rotation_angle,(math.pi/2) - v1 - base_angle,math.pi - v2, -v3
+            self.get_logger().info(f"ANGLES: V1={v1} SERVO4={v2} SERVO3={desired_grip_angle}")
+
+            return base_rotation_angle,(math.pi/2) - (v1 - q) - base_angle,math.pi - v2, -v3
         except ValueError as e:
             return base_rotation_angle,-1,-1,-1
 
