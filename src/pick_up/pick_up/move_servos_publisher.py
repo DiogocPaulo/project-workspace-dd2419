@@ -70,8 +70,8 @@ class MultiServoPublisher(Node):
 
         self.l1 = 0.101
         self.l2 = 0.095
-        self.l3 = 0.168
-        self.off_base = 0.14
+        self.l3 = 0.17
+        self.off_base = 0.11
 
         self.base = 0.0
         self.v1 = 0.0
@@ -134,9 +134,9 @@ class MultiServoPublisher(Node):
         #     )
         # # Transform ---------------------------------------
 
-        #self.clock.sleep_for(rclpy.duration.Duration(seconds=1)) #Give arm time to do its thing
+        # self.clock.sleep_for(rclpy.duration.Duration(seconds=1)) #Give arm time to do its thing
         # position = do_transform_point(request,t)
-        # position = position.point
+        # position = position
         base_arm,v1_arm,v2_arm,v3_arm = self.FindKinematics(request.point.x,request.point.y,request.point.z)
 
 
@@ -151,25 +151,25 @@ class MultiServoPublisher(Node):
 
         self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
         
-        pose = [3000,12000,v3_arm,v2_arm,v1_arm,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
-        msg.data = pose
-        self.publisher.publish(msg)
-
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
-        
         pose = [14000,12000,v3_arm,v2_arm,v1_arm,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
         msg.data = pose
         self.publisher.publish(msg)
 
         self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
+        
+        # pose = [14000,12000,v3_arm,v2_arm,v1_arm,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
+        # msg.data = pose
+        # self.publisher.publish(msg)
 
-        pose = [14000,12000,12000,12000,12000,12000,move_time,move_time,move_time,move_time,move_time,move_time]
-        msg.data = pose
-        self.publisher.publish(msg)
+        # self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
+
+        # pose = [14000,12000,12000,12000,12000,12000,move_time,move_time,move_time,move_time,move_time,move_time]
+        # msg.data = pose
+        # self.publisher.publish(msg)
 
         self.get_logger().info(f"PICKUP COMPLETE")
 
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
 
         return 0
 
@@ -352,8 +352,6 @@ class MultiServoPublisher(Node):
             c2 = (l1**2 + l2**2 - l3**2) / (2 * l1 * l2)
             v2 = math.acos(c2)
 
-            q = (math.pi/2) - math.asin(px/l3)
-
             c1 = (l1**2 + l3**2 - l2**2) / (2*l1*l3)
             v1 = math.acos(c1)
 
@@ -361,19 +359,20 @@ class MultiServoPublisher(Node):
 
             v3 = (math.pi/2 - base_angle) + (math.pi - v1 - v2) + (math.pi/2 - desired_grip_angle) - math.pi
 
-            self.get_logger().info(f"ANGLES: V1={v1} SERVO4={v2} SERVO3={desired_grip_angle}")
+            self.get_logger().info(f"UN - ANGLES: V1={v1} SERVO4={v2} SERVO3={v3}")
 
-            return base_rotation_angle,(math.pi/2) - (v1 - q) - base_angle,math.pi - v2, -v3
+            return base_rotation_angle,(math.pi/2) - v1 + base_angle,math.pi - v2, -v3
         except ValueError as e:
+            self.get_logger().info(f"OOPS")
             return base_rotation_angle,-1,-1,-1
 
     def FindKinematics(self,x,y,z):
 
-        offset = 150
+        offset = 200
 
         self.get_logger().info(f"OFFSET = {offset}")
 
-        for angle in range(0 + offset,9000 - offset):
+        for angle in range(9000 - offset,0 + offset,-1):
             angle = math.radians(angle/100)
 
             base,v1,v2,v3 = self.CalcKinematics(x,y,z,angle)
@@ -383,16 +382,26 @@ class MultiServoPublisher(Node):
             v3_arm = 12000 - int(math.degrees(v3)*100)
 
             if(base_arm < (0 + offset) or base_arm > (24000 - offset)): continue
-            if(v1_arm < (6000 + offset) or v1_arm > (14000 - offset)): continue
+            if(v1_arm < (3000 + offset) or v1_arm > (13000 - offset)): continue
             if(v2_arm < (3000 + offset) or v2_arm > (18000 - offset)): continue
-            if(v3_arm < (3000 + offset) or v3_arm > (21000 - offset)): continue
+            if(v3_arm < (3000 + offset) or v3_arm > (18000 - offset)): continue
 
             self.get_logger().info("Configuration has been found!")
             return base_arm,v1_arm,v2_arm,v3_arm
 
+        # base,v1,v2,v3 = self.CalcKinematics(x,y,z,math.pi/4)
+        # base_arm = 12000 + int(math.degrees(base)*100)
+        # v1_arm = 12000 - int(math.degrees(v1)*100)
+        # v2_arm = 12000 + int(math.degrees(v2)*100)
+        # v3_arm = 12000 - int(math.degrees(v3)*100)
+
+        # self.get_logger().info(f"ANGLES: V1={v1_arm} SERVO4={v2_arm} SERVO3={v3_arm}")
+
+
+
 
         self.get_logger().info("No configuration found!")
-        return base_arm,-1,-1,-1
+        return -1,-1,-1,-1
 
     def FindKinematics2(self,x,y,z):
 
