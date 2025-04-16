@@ -236,7 +236,7 @@ class ProjectMaster(Node):
 
         self.publish_transform("object",point.point)
 
-        return (point.point.x,point.point.y,point.point.z)
+        return (position.point.x,position.point.y,position.point.z)
 
 
 
