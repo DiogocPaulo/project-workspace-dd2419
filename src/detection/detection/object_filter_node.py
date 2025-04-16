@@ -77,7 +77,7 @@ class ObjectFilterNode(Node):
                     break
 
             if self.obstacles_map is not None:
-                free_from_obstacles = self.obstacles_map.are_adjacent_cells_free(raw_obj.x, raw_obj.y, 1, 75)
+                free_from_obstacles = self.obstacles_map.are_adjacent_free(raw_obj.x, raw_obj.y, 1, 75)
             else:
                 free_from_obstacles = True
 

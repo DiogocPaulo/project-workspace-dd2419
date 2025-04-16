@@ -216,33 +216,45 @@ class ObjectDetectorNode(Node):
         point_in.point.z = y
 
         try:
-            transform = self.tf_buffer.lookup_transform(
-                "odom",
-                point_in.header.frame_id,
-                point_in.header.stamp,
-                rclpy.duration.Duration(seconds=1.0)
-            )
+            tf_future = self.tf_buffer.wait_for_transform_async(
+            target_frame="odom",
+            source_frame=point_in.header.frame_id,
+            time=stamp
+        )
             
-            # Transform the point to the map frame
-            point_out = do_transform_point(point_in, transform)
+            rclpy.spin_until_future_complete(self, tf_future, timeout_sec=1.0)
 
-            # Extract the transformed coordinates
-            x_transformed = point_out.point.x
-            y_transformed = point_out.point.y
+            if tf_future.done():
+                transform = self.tf_buffer.lookup_transform(
+                    "odom",
+                    point_in.header.frame_id,
+                    point_in.header.stamp,
+                    rclpy.duration.Duration(seconds=1.0)
+                )
+                
+                # Transform the point to the map frame
+                point_out = do_transform_point(point_in, transform)
 
-            # Check if within workspace
-            if self.workspace_map is not None:
-                is_in = self.workspace_map.is_free(x_transformed, y_transformed, 50)
+                # Extract the transformed coordinates
+                x_transformed = point_out.point.x
+                y_transformed = point_out.point.y
+
+                # Check if within workspace
+                if self.workspace_map is not None:
+                    is_in = self.workspace_map.is_free(x_transformed, y_transformed, 50)
+                else:
+                    is_in = False
+
+                if is_in:
+                    object_msg = Object()
+                    object_msg.x = x_transformed
+                    object_msg.y = y_transformed
+                    object_msg.angle = angle
+                    object_msg.object_type = object_type
+                    return object_msg
             else:
-                is_in = False
-
-            if is_in:
-                object_msg = Object()
-                object_msg.x = x_transformed
-                object_msg.y = y_transformed
-                object_msg.angle = angle
-                object_msg.object_type = object_type
-                return object_msg
+                self.get_logger().error("Transform future not completed in time.")
+                return None
 
         except TransformException as e:
             self.get_logger().error(f"Failed coordinate transform: {e}")
