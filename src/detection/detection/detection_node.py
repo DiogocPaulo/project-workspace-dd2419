@@ -177,12 +177,11 @@ class ObjectDetectorNode(Node):
             elif blue_ratio > 0.001 and red_ratio == 0.0 and green_ratio == 0.0:
                 pure_blue = True
 
-            # Classify based on floor contact points for the current cluster
-            object_type = self.classify_based_on_floor_contact(cluster_points)
-
             x, y, z = np.mean(cluster_points, axis=0)
 
             if pure_red or pure_green or pure_blue:
+                # Classify based on floor contact points for the current cluster
+                object_type = self.classify_based_on_floor_contact(cluster_points)
                 if object_type == "sphere":
                     obj = self.create_object(x, z + 0.02, 0.0, Object.SPHERE, msg.header.stamp)
                     if obj is not None:
@@ -191,13 +190,13 @@ class ObjectDetectorNode(Node):
                     obj = self.create_object(x, z + 0.02, 0.0, Object.CUBE, msg.header.stamp)
                     if obj is not None:
                         frame_objects.append(obj)
+            elif self.is_plushie(cluster_points):
+                obj = self.create_object(x + 0.01, z, 0.0, Object.PLUSHIE, msg.header.stamp)
+                if obj is not None:
+                    frame_objects.append(obj)
             elif self.is_box(cluster_points):
                 angle = self.estimate_box_orientation(cluster_points)
                 obj = self.create_object(x, z + 0.08, angle, Object.BOX, msg.header.stamp)
-                if obj is not None:
-                    frame_objects.append(obj)
-            elif self.is_plushie(cluster_points):
-                obj = self.create_object(x + 0.01, z, 0.0, Object.PLUSHIE, msg.header.stamp)
                 if obj is not None:
                     frame_objects.append(obj)
 

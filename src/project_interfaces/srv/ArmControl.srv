@@ -1,0 +1,4 @@
+int16 base
+int32 distance
+---
+int8 result 
