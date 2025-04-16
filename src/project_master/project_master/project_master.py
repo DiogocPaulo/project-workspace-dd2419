@@ -11,7 +11,7 @@ import tf2_ros
 from geometry_msgs.msg import TransformStamped
 import math
 from project_interfaces.msg import DetectedData, DetectedDataArray
-from project_interfaces.srv import GetDetectedList, JointMove
+from project_interfaces.srv import GetDetectedList, JointMove, ArmControl
 from sensor_msgs.msg import JointState
 import math
 import numpy as np
@@ -76,7 +76,7 @@ class ProjectMaster(Node):
         self.v1 = 12000
         self.v2 = 12000
         self.v3 = 12000
-        self.off_base = 0.13
+        self.off_base = 0.14
 
         # self.send_arm_request(0.2,0.0,0.0,"PICKUP")
             
@@ -218,7 +218,7 @@ class ProjectMaster(Node):
 
         distance_y = l1 + self.off_base #math.sin(alpha)*l1 + math.sin(beta)*l2
 
-        distance = l2 + math.tan((math.pi/2)-charlie)*distance_y  #math.cos(alpha)*l1 + math.cos(beta)*l2
+        distance = l2 + math.tan((math.pi/2)-charlie)*distance_y + 0.045  #math.cos(alpha)*l1 + math.cos(beta)*l2
 
         distance_z = 0 - self.off_base
 
@@ -245,7 +245,7 @@ class ProjectMaster(Node):
         arm_msg = PickObject.Request()
         arm_msg.header = Header()
         arm_msg.header.stamp = self.get_clock().now().to_msg()
-        arm_msg.header.frame_id = "base_link"
+        arm_msg.header.frame_id = "map"
         arm_msg.point = Point()
         arm_msg.point.x = x
         arm_msg.point.y = y
@@ -304,7 +304,7 @@ class ProjectMaster(Node):
         t.transform.rotation.w = 1.0
 
         self.tf_broadcaster.sendTransform(t)
-        self.get_logger().info(f"Published transform for {name} at ({point.x}, {point.y})")
+        #self.get_logger().info(f"Published transform for {name} at ({point.x}, {point.y})")
         
 
 
@@ -322,7 +322,7 @@ def main():
     (x,y,z) = node.estimate_endpoint()
     node.get_logger().info(f"X = {x},Y = {y}, Z = {z}")
     node.send_arm_request(x,y,z,"RETURN")
-    # node.send_arm_request(x,y,z,"PICKUP")
+    node.send_arm_request(x,y,-0.16,"PICKUP")
     # node.send_arm_request(0.5,-0.2,0.06,"LOOK")
     # node.send_arm_request(0.5,-0.2,0.06,"LOOK")
     # node.send_arm_request(0.15,-0.15,0.0,"DROPOFF")

@@ -30,6 +30,7 @@ set(srv_files
 	"srv/Trigger.srv"
 	"srv/GetDetectedList.srv"
 	"srv/JointMove.srv"
+	"srv/ArmControl.srv"
 	)
 
 set(action_files

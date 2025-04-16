@@ -25,7 +25,7 @@ from tf2_ros import TransformBroadcaster
 from visualization_msgs.msg import Marker
 from visualization_msgs.msg import MarkerArray
 
-from project_interfaces.srv import PickObject, JointMove
+from project_interfaces.srv import PickObject, JointMove, ArmControl
 from project_interfaces.msg import ArmTaskMessage
 
 from rclpy.action import ActionClient
@@ -50,7 +50,9 @@ class MultiServoPublisher(Node):
         
         self.service = self.create_service(PickObject, 'PickObject', self.task_callback)
 
-        self.service = self.create_service(JointMove, 'MoveArm', self.joint_callback)
+        self.service_fine_tune = self.create_service(JointMove, 'MoveArm', self.joint_callback)
+        
+        #self.service_arm_frame = self.create_service(ArmControl, 'ArmControl', self.control_callback)
 
         self.detected_objects = []
         self.detected_boxes = []
@@ -111,35 +113,35 @@ class MultiServoPublisher(Node):
         msg.data = pose
         self.publisher.publish(msg)
 
-        # Transform ---------------------------------------
-        tf_future = self.tfBuffer.wait_for_transform_async(
-            target_frame = 'arm_base',
-            source_frame = request.header.frame_id,
-            time = zero_time # Get latest transform instead of timestamped, since we want to pickup when the robot is standing still
-        )
+        # # Transform ---------------------------------------
+        # tf_future = self.tfBuffer.wait_for_transform_async(
+        #     target_frame = 'arm_base',
+        #     source_frame = request.header.frame_id,
+        #     time = zero_time # Get latest transform instead of timestamped, since we want to pickup when the robot is standing still
+        # )
 
-        rclpy.spin_until_future_complete(self,tf_future, timeout_sec=1)
+        # rclpy.spin_until_future_complete(self,tf_future, timeout_sec=1)
 
-        try:
-            t = self.tfBuffer.lookup_transform(
-                'arm_base',
-                request.header.frame_id,
-                zero_time
-        )
-        except TransformException as ex:
-            self.get_logger().info(
-                f'Could not transform map to arm_base: {ex}'
-            )
-        # Transform ---------------------------------------
+        # try:
+        #     t = self.tfBuffer.lookup_transform(
+        #         'arm_base',
+        #         request.header.frame_id,
+        #         zero_time
+        # )
+        # except TransformException as ex:
+        #     self.get_logger().info(
+        #         f'Could not transform map to arm_base: {ex}'
+        #     )
+        # # Transform ---------------------------------------
 
         self.clock.sleep_for(rclpy.duration.Duration(seconds=2)) #Give arm time to do its thing
-        position = do_transform_point(request,t)
-        position = position.point
-        base_arm,v1_arm,v2_arm,v3_arm = self.FindKinematics(position.x,position.y,position.z)
+        # position = do_transform_point(request,t)
+        # position = position.point
+        base_arm,v1_arm,v2_arm,v3_arm = self.FindKinematics(request.point.x,request.point.y,request.point.z)
 
 
         if v1_arm == -1:
-            self.get_logger().info(f'COULD NOT FIND KINEMATIC SOLUTION FOR POSITION: {position}')
+            self.get_logger().info(f'COULD NOT FIND KINEMATIC SOLUTION FOR POSITION: {request.point}')
             return 1
 
 
@@ -327,7 +329,7 @@ class MultiServoPublisher(Node):
         
 
     def CalcKinematics(self,x,y,z,desired_grip_angle): #Servos 5 & 4
-        self.get_logger().info(f'Position: {x},{y}')
+        # self.get_logger().info(f'Position: {x},{y}')
         # l1 = 0.101
         # l2 = 0.095
         # l4 = 0.168
@@ -363,7 +365,7 @@ class MultiServoPublisher(Node):
 
     def FindKinematics(self,x,y,z):
 
-        offset = 250
+        offset = 50
 
         self.get_logger().info(f"OFFSET = {offset}")
 
@@ -377,9 +379,9 @@ class MultiServoPublisher(Node):
             v3_arm = 12000 - int(math.degrees(v3)*100)
 
             if(base_arm < (0 + offset) or base_arm > (24000 - offset)): continue
-            if(v1_arm < (6000 + offset) or v1_arm > (18000 - offset)): continue
-            if(v2_arm < (3000 + offset) or v2_arm > (21000 - offset)): continue
-            if(v3_arm < (3000 + offset) or v3_arm > (21000 - offset)): continue
+            if(v1_arm < (6000 + offset) or v1_arm > (14000 - offset)): continue
+            if(v2_arm < (3000 + offset) or v2_arm > (14000 - offset)): continue
+            if(v3_arm < (3000 + offset) or v3_arm > (14000 - offset)): continue
 
             self.get_logger().info("Configuration has been found!")
             return base_arm,v1_arm,v2_arm,v3_arm
