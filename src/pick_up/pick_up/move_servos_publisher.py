@@ -109,39 +109,39 @@ class MultiServoPublisher(Node):
         zero_time.sec = 0
         zero_time.nanosec = 0
 
-        # pose = [3000,12000,12000,12000,12000,12000,move_time,move_time,move_time,move_time,move_time,move_time]
-        # msg.data = pose
-        # self.publisher.publish(msg)
+        pose = [3000,12000,12000,12000,12000,12000,move_time,move_time,move_time,move_time,move_time,move_time]
+        msg.data = pose
+        self.publisher.publish(msg)
 
-        # # Transform ---------------------------------------
-        # tf_future = self.tfBuffer.wait_for_transform_async(
-        #     target_frame = 'arm_base',
-        #     source_frame = request.header.frame_id,
-        #     time = zero_time # Get latest transform instead of timestamped, since we want to pickup when the robot is standing still
-        # )
+        # Transform ---------------------------------------
+        tf_future = self.tfBuffer.wait_for_transform_async(
+            target_frame = 'arm_base',
+            source_frame = request.header.frame_id,
+            time = zero_time # Get latest transform instead of timestamped, since we want to pickup when the robot is standing still
+        )
 
-        # rclpy.spin_until_future_complete(self,tf_future, timeout_sec=1)
+        rclpy.spin_until_future_complete(self,tf_future, timeout_sec=1)
 
-        # try:
-        #     t = self.tfBuffer.lookup_transform(
-        #         'arm_base',
-        #         request.header.frame_id,
-        #         zero_time
-        # )
-        # except TransformException as ex:
-        #     self.get_logger().info(
-        #         f'Could not transform map to arm_base: {ex}'
-        #     )
-        # # Transform ---------------------------------------
+        try:
+            t = self.tfBuffer.lookup_transform(
+                'arm_base',
+                request.header.frame_id,
+                zero_time
+        )
+        except TransformException as ex:
+            self.get_logger().info(
+                f'Could not transform map to arm_base: {ex}'
+            )
+        # Transform ---------------------------------------
 
-        #self.clock.sleep_for(rclpy.duration.Duration(seconds=1)) #Give arm time to do its thing
-        # position = do_transform_point(request,t)
-        # position = position.point
-        base_arm,v1_arm,v2_arm,v3_arm = self.FindKinematics(request.point.x,request.point.y,request.point.z)
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=1)) #Give arm time to do its thing
+        position = do_transform_point(request,t)
+        position = position.point
+        base_arm,v1_arm,v2_arm,v3_arm = self.FindKinematics(position.point.x,position.point.y,position.point.z)
 
 
         if v1_arm == -1:
-            self.get_logger().info(f'COULD NOT FIND KINEMATIC SOLUTION FOR POSITION: {request.point}')
+            self.get_logger().info(f'COULD NOT FIND KINEMATIC SOLUTION FOR POSITION: {position.point}')
             return 1
 
 
@@ -352,8 +352,6 @@ class MultiServoPublisher(Node):
             c2 = (l1**2 + l2**2 - l3**2) / (2 * l1 * l2)
             v2 = math.acos(c2)
 
-            q = (math.pi/2) - math.asin(px/l3)
-
             c1 = (l1**2 + l3**2 - l2**2) / (2*l1*l3)
             v1 = math.acos(c1)
 
@@ -363,7 +361,7 @@ class MultiServoPublisher(Node):
 
             self.get_logger().info(f"ANGLES: V1={v1} SERVO4={v2} SERVO3={desired_grip_angle}")
 
-            return base_rotation_angle,(math.pi/2) - (v1 - q) - base_angle,math.pi - v2, -v3
+            return base_rotation_angle,(math.pi/2) - v1 - base_angle,math.pi - v2, -v3
         except ValueError as e:
             return base_rotation_angle,-1,-1,-1
 
@@ -383,7 +381,7 @@ class MultiServoPublisher(Node):
             v3_arm = 12000 - int(math.degrees(v3)*100)
 
             if(base_arm < (0 + offset) or base_arm > (24000 - offset)): continue
-            if(v1_arm < (6000 + offset) or v1_arm > (14000 - offset)): continue
+            if(v1_arm < (6000 + offset) or v1_arm > (18000 - offset)): continue
             if(v2_arm < (3000 + offset) or v2_arm > (18000 - offset)): continue
             if(v3_arm < (3000 + offset) or v3_arm > (21000 - offset)): continue
 
