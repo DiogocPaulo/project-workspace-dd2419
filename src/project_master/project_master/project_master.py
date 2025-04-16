@@ -11,7 +11,7 @@ import tf2_ros
 from geometry_msgs.msg import TransformStamped
 import math
 from project_interfaces.msg import DetectedData, DetectedDataArray
-from project_interfaces.srv import GetDetectedList, JointMove, ArmControl
+from project_interfaces.srv import GetDetectedList, JointMove
 from sensor_msgs.msg import JointState
 import math
 import numpy as np

@@ -25,7 +25,7 @@ from tf2_ros import TransformBroadcaster
 from visualization_msgs.msg import Marker
 from visualization_msgs.msg import MarkerArray
 
-from project_interfaces.srv import PickObject, JointMove, ArmControl
+from project_interfaces.srv import PickObject, JointMove
 from project_interfaces.msg import ArmTaskMessage
 
 from rclpy.action import ActionClient
@@ -103,15 +103,15 @@ class MultiServoPublisher(Node):
         self.get_logger().info(f'Received pickup request at {request.point}')
         msg = Int16MultiArray()
         msg.layout = MultiArrayLayout(dim=[MultiArrayDimension(label="", size=12, stride=12)], data_offset=0)
-        move_time = 2000 #arm speed (milliseconds)
+        move_time = 4000 #arm speed (milliseconds)
 
         zero_time = Time()
         zero_time.sec = 0
         zero_time.nanosec = 0
 
-        pose = [3000,12000,12000,12000,12000,12000,move_time,move_time,move_time,move_time,move_time,move_time]
-        msg.data = pose
-        self.publisher.publish(msg)
+        # pose = [3000,12000,12000,12000,12000,12000,move_time,move_time,move_time,move_time,move_time,move_time]
+        # msg.data = pose
+        # self.publisher.publish(msg)
 
         # # Transform ---------------------------------------
         # tf_future = self.tfBuffer.wait_for_transform_async(
@@ -134,7 +134,7 @@ class MultiServoPublisher(Node):
         #     )
         # # Transform ---------------------------------------
 
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=2)) #Give arm time to do its thing
+        #self.clock.sleep_for(rclpy.duration.Duration(seconds=1)) #Give arm time to do its thing
         # position = do_transform_point(request,t)
         # position = position.point
         base_arm,v1_arm,v2_arm,v3_arm = self.FindKinematics(request.point.x,request.point.y,request.point.z)
@@ -155,13 +155,13 @@ class MultiServoPublisher(Node):
         msg.data = pose
         self.publisher.publish(msg)
 
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
         
         pose = [14000,12000,v3_arm,v2_arm,v1_arm,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
         msg.data = pose
         self.publisher.publish(msg)
 
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=12))
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
 
         pose = [14000,12000,12000,12000,12000,12000,move_time,move_time,move_time,move_time,move_time,move_time]
         msg.data = pose
@@ -297,7 +297,7 @@ class MultiServoPublisher(Node):
         self.get_logger().info(f"APPLYING SERVO ANGLES: BASE={base_arm} SERVO5={12000} SERVO4={12000} SERVO3={v3_arm}")
         self.get_logger().info(f"DROPOFF INITIATED")
         
-        pose = [14000,12000,v3_arm,21000,12000,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
+        pose = [3000,12000,v3_arm,21000,12000,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
         self.base = base_arm
         self.v3 = v3_arm
         msg.data = pose
@@ -365,7 +365,7 @@ class MultiServoPublisher(Node):
 
     def FindKinematics(self,x,y,z):
 
-        offset = 50
+        offset = 150
 
         self.get_logger().info(f"OFFSET = {offset}")
 
@@ -380,8 +380,8 @@ class MultiServoPublisher(Node):
 
             if(base_arm < (0 + offset) or base_arm > (24000 - offset)): continue
             if(v1_arm < (6000 + offset) or v1_arm > (14000 - offset)): continue
-            if(v2_arm < (3000 + offset) or v2_arm > (14000 - offset)): continue
-            if(v3_arm < (3000 + offset) or v3_arm > (14000 - offset)): continue
+            if(v2_arm < (3000 + offset) or v2_arm > (18000 - offset)): continue
+            if(v3_arm < (3000 + offset) or v3_arm > (21000 - offset)): continue
 
             self.get_logger().info("Configuration has been found!")
             return base_arm,v1_arm,v2_arm,v3_arm
@@ -396,7 +396,7 @@ class MultiServoPublisher(Node):
 
         self.get_logger().info(f"OFFSET = {offset}")
 
-        for angle in range(0 + offset,9000 - offset):
+        for angle in range(0 + offset,12000 - offset):
             angle = math.radians(angle/100)
 
             base,v1,v2,v3 = self.CalcKinematics(x,y,z,angle)
