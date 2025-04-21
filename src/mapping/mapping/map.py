@@ -27,13 +27,13 @@ class Map:
         x_list = [vertex[0] for vertex in workspace_vertices]
         y_list = [vertex[1] for vertex in workspace_vertices]
 
-        x_min = math.floor(min(x_list) / self.resolution) - 1
-        x_max = math.ceil(max(x_list) / self.resolution)
-        y_min = math.floor(min(y_list) / self.resolution) - 1
-        y_max = math.ceil(max(y_list) / self.resolution)
+        x_min = math.floor(min(x_list) / self.resolution) - 1.5
+        x_max = math.ceil(max(x_list) / self.resolution) + 0.5
+        y_min = math.floor(min(y_list) / self.resolution) - 1.5
+        y_max = math.ceil(max(y_list) / self.resolution) + 0.5
 
-        self.grid_width = x_max - x_min + 1
-        self.grid_height = y_max - y_min
+        self.grid_width = math.ceil(x_max - x_min)
+        self.grid_height = math.ceil(y_max - y_min) - 1
         
         self.origin_x = (x_min) * self.resolution
         self.origin_y = (y_min) * self.resolution
@@ -81,8 +81,8 @@ class Map:
             height = 0.25
 
         grid_x, grid_y = self.world_to_grid(x, y)
-        grid_half_width = self.distance_to_cells(width) / 2
-        grid_half_height = self.distance_to_cells(height) / 2
+        grid_half_width = math.ceil(self.distance_to_cells(width) / 2)
+        grid_half_height = math.ceil(self.distance_to_cells(height) / 2)
 
         if not (0 <= grid_x < self.grid_width and 0 <= grid_y < self.grid_height):
             # Grid coordinates out of bounds
@@ -100,6 +100,7 @@ class Map:
         ])
 
         if angle > 0.0:
+            angle = angle * float(math.pi / 180)
             cos_angle = np.cos(angle)
             sin_angle = np.sin(angle)
 
@@ -119,7 +120,8 @@ class Map:
         for j in range(min_y, max_y):
             for i in range(min_x, max_x):
                 if self.winding_number(i, j, object_vertices):
-                    self.grid[j, i] = 100
+                    if self.is_within_grid(i, j):
+                        self.grid[j, i] = 100
 
     def add_obstacle_point(self, x, y):
         grid_x, grid_y = self.world_to_grid(x, y)
@@ -231,7 +233,7 @@ class Map:
                 nx, ny = x + dx, y + dy
                 if not self.is_within_grid(nx, ny):
                     continue
-                if self.grid[ny, nx] >= threshold:
+                if not self.grid[ny, nx] < threshold:
                     return False
         return True
 
@@ -245,15 +247,34 @@ class Map:
         search_radius = 0
         while True:
             search_radius += 1
-            for i in range(y - search_radius, y + search_radius + 1):
-                for j in range(x - search_radius, x + search_radius + 1):
-                    if (abs(i - y) != search_radius and abs(j - x) != search_radius):
-                        continue
-                    if self.are_adjacent_free(i, j, radius, threshold, world=False):
-                        sx, sy = self.grid_to_world(j, i)
-                        return (sx, sy)
-                    if search_radius > max(self.grid_height, self.grid_width):
-                        return None
+            for dy in range(-search_radius, search_radius + 1):
+                # Bottom edge
+                nx = x - search_radius
+                ny = y + dy
+                if self.are_adjacent_free(nx, ny, radius, threshold, world=False):
+                    sx, sy = self.grid_to_world(nx, ny)
+                    return (sx, sy)
+                # Top edge
+                nx = x + search_radius
+                ny = y + dy
+                if self.are_adjacent_free(nx, ny, radius, threshold, world=False):
+                    sx, sy = self.grid_to_world(nx, ny)
+                    return (sx, sy)
+            for dx in range(-search_radius, search_radius + 1):
+                # Left edge
+                nx = x + dx
+                ny = y - search_radius
+                if self.are_adjacent_free(nx, ny, radius, threshold, world=False):
+                    sx, sy = self.grid_to_world(nx, ny)
+                    return (sx, sy)
+                # Right edge
+                nx = x + dx
+                ny = y + search_radius
+                if self.are_adjacent_free(nx, ny, radius, threshold, world=False):
+                    sx, sy = self.grid_to_world(nx, ny)
+                    return (sx, sy)
+            if search_radius > 25:
+                return None
 
     def world_to_grid(self, x, y):
         # Convert world coordinates to grid indices

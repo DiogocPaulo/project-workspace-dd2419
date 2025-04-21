@@ -36,11 +36,8 @@ class ObjectDetectorNode(Node):
             reliability=ReliabilityPolicy.BEST_EFFORT
         )
 
-        self.create_subscription(PointCloud2, '/camera/camera/depth/color/points', 
-                               self.cloud_callback, qos_profile)
-        self.create_subscription(WorkspaceVertices, "/workspace", 
-                               self.workspace_callback, 10)
-        # self.create_subscription(OccupancyGrid, "/obstacles_map", self.obstacles_map_callback, 10)
+        self.create_subscription(PointCloud2, '/camera/camera/depth/color/points', self.cloud_callback, qos_profile)
+        self.create_subscription(WorkspaceVertices, "/workspace",  self.workspace_callback, 10)
         
         # Publisher for raw detected objects
         self.raw_object_publisher = self.create_publisher(ObjectList, "/raw_detected_objects", 10)
@@ -53,7 +50,6 @@ class ObjectDetectorNode(Node):
         # Variables
         self.workspace_vertices = []
         self.workspace_map = None
-        self.obstacles_map = None
         self.raw_object_list = []
         self.message_counter = 0
 
@@ -69,20 +65,6 @@ class ObjectDetectorNode(Node):
         # Initialize map based on workspace perimeter
         self.workspace_map = Map(msg.grid_resolution)
         self.workspace_map.initialise_grid(self.workspace_vertices)
-
-    def obstacles_map_callback(self, msg: OccupancyGrid):
-        width = msg.info.width
-        height = msg.info.height
-        grid = np.array(msg.data, dtype=np.int8).reshape((height, width))
-
-        # Create map or update map grid
-        if self.obstacles_map is None:
-            resolution = msg.info.resolution
-            origin_x = msg.info.origin.position.x
-            origin_y = msg.info.origin.position.y
-            self.obstacles_map = Map(resolution, origin_x, origin_y, width, height, grid)
-        else:
-            self.obstacles_map.update_grid(grid)
 
     def cloud_callback(self, msg: PointCloud2):
         # Increment the message counter
@@ -240,7 +222,7 @@ class ObjectDetectorNode(Node):
 
                 # Check if within workspace
                 if self.workspace_map is not None:
-                    is_in = self.workspace_map.is_free(x_transformed, y_transformed, 50)
+                    is_in = self.workspace_map.is_free(x_transformed, y_transformed, 75)
                 else:
                     is_in = False
 

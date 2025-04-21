@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 
+import math
+import numpy as np
+import os
+
 import rclpy
 from rclpy.node import Node
+
 from project_interfaces.msg import Object, ObjectList
 from nav_msgs.msg import OccupancyGrid
 from geometry_msgs.msg import TransformStamped, Quaternion
+
 import tf2_ros
-import numpy as np
-import os
+
 from mapping.map import Map
 
 class ObjectFilterNode(Node):
@@ -15,21 +20,12 @@ class ObjectFilterNode(Node):
     def __init__(self):
         super().__init__('object_filter')
 
-        # Subscriber to raw detected objects
-        self.create_subscription(ObjectList, "/raw_detected_objects", 
-                              self.raw_objects_callback, 10)
-        
-        # Publisher for filtered objects
+        self.create_subscription(ObjectList, "/raw_detected_objects", self.raw_objects_callback, 10)
+        self.create_subscription(OccupancyGrid, "/obstacles_map", self.obstacles_map_callback, 10)
         self.object_list_publisher = self.create_publisher(ObjectList, "/detected_objects", 10)
 
-        self.create_subscription(OccupancyGrid, "/obstacles_map", self.obstacles_map_callback, 10)
-        
-
-        # TF broadcaster for visualization
         self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
         
-        # Timers
-        self.create_timer(5.0, self.broadcast_object_list) 
 
         # Variables
         self.raw_objects = []
@@ -44,7 +40,8 @@ class ObjectFilterNode(Node):
         self.map_file = os.path.join(self.maps_dir, "map.csv")
         
         # Load existing map on startup
-        self.load_map()
+        self.read_map_file()
+        self.create_timer(5.0, self.update_object_list)
 
     def obstacles_map_callback(self, msg: OccupancyGrid):
         width = msg.info.width
@@ -194,31 +191,40 @@ class ObjectFilterNode(Node):
         object_list_msg.header.stamp = self.get_clock().now().to_msg()
         object_list_msg.length = len(self.object_list)
         object_list_msg.objects = self.object_list
-        self.filtered_object_publisher.publish(object_list_msg)
+        self.object_list_publisher.publish(object_list_msg)
 
     def broadcast_object_list(self):
-        self.check_duplicates()
-
         for i, object_msg in enumerate(self.object_list):
-            transform = TransformStamped()
-            transform.header.frame_id = "odom"
-            transform.header.stamp = self.get_clock().now().to_msg()
-            transform.child_frame_id = f"{object_msg.object_type}_{i}"
-            
-            # Set translation from end_point coordinates
-            transform.transform.translation.x = object_msg.x
-            transform.transform.translation.y = object_msg.y
-            transform.transform.translation.z = 0.0
-            
-            # Set the rotation (quaternion from yaw angle)
-            q = Quaternion()
-            q.z = np.sin(object_msg.angle / 2.0)  # Convert yaw angle to quaternion
-            q.w = np.cos(object_msg.angle / 2.0)
-            transform.transform.rotation = q
+            # Publish object as transform
+            angle = object_msg.angle * float(math.pi / 180)
+            quaternion = Quaternion()
+            quaternion.x = 0.0
+            quaternion.y = 0.0
+            quaternion.z = np.sin(angle * 0.5)
+            quaternion.w = np.cos(angle * 0.5)
 
-            self.tf_broadcaster.sendTransform(transform)
+            transform_msg = TransformStamped()
+            transform_msg.header.stamp = self.get_clock().now().to_msg()
+            transform_msg.header.frame_id = "odom"
+            transform_msg.child_frame_id = f"{object_msg.object_type}_{i}"
+            transform_msg
+            transform_msg.transform.translation.x = object_msg.x
+            transform_msg.transform.translation.y = object_msg.y
+            transform_msg.transform.translation.z = 0.0
 
-    def load_map(self):
+            transform_msg.transform.rotation.x = quaternion.x
+            transform_msg.transform.rotation.y = quaternion.y
+            transform_msg.transform.rotation.z = quaternion.z
+            transform_msg.transform.rotation.w = quaternion.w
+
+            self.tf_broadcaster.sendTransform(transform_msg)
+
+    def update_object_list(self):
+        self.check_duplicates()
+        self.publish_object_list()
+        self.broadcast_object_list()
+
+    def read_map_file(self):
         if not os.path.exists(self.map_file):
             self.get_logger().warn(f"Map file not found: {self.map_file}")
             return
@@ -253,14 +259,15 @@ class ObjectFilterNode(Node):
                     objects.append(obj)
             
             # Merge with current objects through the standard processing pipeline
-            self.initial_object_list.extend(objects)
+            self.object_list.extend(objects)
+            # self.initial_object_list.extend(objects)
             self.publish_object_list()
             self.get_logger().info(f"Loaded {len(objects)} objects from {self.map_file}")
             
         except Exception as e:
             self.get_logger().error(f"Error loading map: {str(e)}")
 
-    def save_map(self):
+    def write_map_file(self):
         try:
             with open(self.map_file, 'w') as f:
                 for obj in self.object_list:
@@ -292,7 +299,7 @@ def main():
         rclpy.spin(node)
     except KeyboardInterrupt:
         node.get_logger().info("Keyboard interrupt, shutting down...")
-        node.save_map()  # Save on shutdown
+        node.write_map_file()  # Save on shutdown
     finally:
         node.destroy_node()
         rclpy.shutdown()
