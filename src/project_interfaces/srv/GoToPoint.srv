@@ -4,6 +4,7 @@ float64 yaw
 float64 velocity
 bool reverse
 bool slow_approach
+bool approaching_object
 ---
 bool success
 string message
