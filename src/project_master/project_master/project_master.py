@@ -29,9 +29,9 @@ class ProjectMaster(Node):
 
         self.clock = self.get_clock()
 
-        self.arm_publisher = self.create_publisher(ArmTaskMessage, "/Arm_Task", 10)
+        # self.arm_publisher = self.create_publisher(ArmTaskMessage, "/Arm_Task", 10)
 
-        self.client = self.create_client(PickObject, 'PickObject')
+        # self.client = self.create_client(PickObject, 'PickObject')
 
         # self.client_test = self.create_client(PickObject, 'PickObject_test')
         # while not self.client_test.wait_for_service(timeout_sec=1.0):
@@ -40,13 +40,13 @@ class ProjectMaster(Node):
         self.tfBuffer = tf2_ros.Buffer()
         self.listener = tf2_ros.TransformListener(self.tfBuffer,self)
 
-        self.client_camera = self.create_client(GetDetectedList, 'get_detected_list')
-        while not self.client.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info('Service not available, waiting...')
+        # self.client_camera = self.create_client(GetDetectedList, 'get_detected_list')
+        # while not self.client.wait_for_service(timeout_sec=1.0):
+        #     self.get_logger().info('Service not available, waiting...')
 
-        self.client_joint = self.create_client(JointMove, 'MoveArm')
-        while not self.client.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info('Service not available, waiting...')
+        # self.client_joint = self.create_client(JointMove, 'MoveArm')
+        # while not self.client.wait_for_service(timeout_sec=1.0):
+        #     self.get_logger().info('Service not available, waiting...')
 
         
         # self.reached_destination_service = self.create_service(Trigger, "/reached_destination", self.reached_destination_callback)
@@ -67,10 +67,10 @@ class ProjectMaster(Node):
 
         self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
 
-        self.pos_subscriber = self.create_subscription(
-            JointState, '/servo_pos_publisher', self.pos_callback, 10)
+        # self.pos_subscriber = self.create_subscription(
+        #     JointState, '/servo_pos_publisher', self.pos_callback, 10)
 
-        self.joint_publisher = self.create_publisher(Int16MultiArray, "/multi_servo_cmd_sub", 10)
+        # self.joint_publisher = self.create_publisher(Int16MultiArray, "/multi_servo_cmd_sub", 10)
 
         self.base = 12000
         self.v1 = 12000
@@ -79,6 +79,11 @@ class ProjectMaster(Node):
         self.off_base = 0.14
 
         # self.send_arm_request(0.2,0.0,0.0,"PICKUP")
+
+
+        self.sim_client = self.create_client(PickObject,'PickObjectSim')
+        while not self.sim_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Service not available, waiting...')
             
 
     # def send_end_point(self, x, y, yaw):
@@ -305,6 +310,22 @@ class ProjectMaster(Node):
 
         self.tf_broadcaster.sendTransform(t)
         #self.get_logger().info(f"Published transform for {name} at ({point.x}, {point.y})")
+
+    def make_sim_request(self,x,y,z,task):
+        self.get_logger().info(f"SIMULATING")
+        arm_msg = PickObject.Request()
+        arm_msg.header = Header()
+        arm_msg.header.stamp = self.get_clock().now().to_msg()
+        arm_msg.header.frame_id = "base_link"
+        arm_msg.point = Point()
+        arm_msg.point.x = x
+        arm_msg.point.y = y
+        arm_msg.point.z = z
+        arm_msg.description = task
+
+        future = self.sim_client.call_async(arm_msg)
+        rclpy.spin_until_future_complete(self, future)
+
         
 
 
@@ -317,15 +338,17 @@ def main():
     
     # node.process_map_file("/home/robot/project-workspace-dd2419/maps/Map_test.txt")
     # node.publish_transforms()
-    node.send_arm_request(0.4,-0.3,0.0,"LOOK")
-    node.AquireTarget("objects")
-    (x,y,z) = node.estimate_endpoint()
-    node.get_logger().info(f"X = {x},Y = {y}, Z = {z}")
+    # node.send_arm_request(0.4,-0.3,0.0,"LOOK")
+    # node.AquireTarget("objects")
+    # (x,y,z) = node.estimate_endpoint()
+    # node.get_logger().info(f"X = {x},Y = {y}, Z = {z}")
     #node.send_arm_request(x,y,z,"RETURN")
-    node.send_arm_request(x,y,0.0,"PICKUP")
+    # node.send_arm_request(x,y,0.0,"PICKUP")
     # node.send_arm_request(0.5,-0.2,0.06,"LOOK")
     # node.send_arm_request(0.5,-0.2,0.06,"LOOK")
     # node.send_arm_request(0.15,-0.15,0.0,"DROPOFF")
+
+    node.make_sim_request(0.25,0.0,-0.15,"PICKUP")
 
 
 

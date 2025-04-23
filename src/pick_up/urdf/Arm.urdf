@@ -22,9 +22,8 @@
         xyz="0 0 0"
         rpy="0 0 0" />
       <geometry>
-        <!-- <mesh
-          filename="package://armpi_fpv/meshes/base_link.STL" /> -->
-        <cylinder radius="0.01" length="0.05" />
+        <mesh filename="package://pick_up/meshes/base_link.STL" />
+        <!-- <cylinder radius="0.01" length="0.05" /> -->
       </geometry>
       <material
         name="">
@@ -37,9 +36,8 @@
         xyz="0 0 0"
         rpy="0 0 0" />
       <geometry>
-        <!-- <mesh
-          filename="package://armpi_fpv/meshes/base_link.STL" /> -->
-        <cylinder radius="0.01" length="0.05" />
+        <mesh filename="package://pick_up/meshes/base_link.STL" />
+        <!-- <cylinder radius="0.01" length="0.05" /> -->
       </geometry>
     </collision>
   </link>
@@ -66,7 +64,8 @@
       <geometry>
         <!-- <mesh
           filename="package://armpi_fpv/meshes/link1.STL" /> -->
-        <cylinder radius="0.01" length="0.05" />
+        <mesh filename="package://pick_up/meshes/link1.STL" />
+        <!-- <cylinder radius="0.01" length="0.05" /> -->
       </geometry>
       <material
         name="">
@@ -79,9 +78,8 @@
         xyz="0 0 0"
         rpy="0 0 0" />
       <geometry>
-        <!-- <mesh
-          filename="package://armpi_fpv/meshes/link1.STL" /> -->
-        <cylinder radius="0.01" length="0.05" />
+        <mesh filename="package://pick_up/meshes/link1.STL" />
+        <!-- <cylinder radius="0.01" length="0.05" /> -->
       </geometry>
     </collision>
   </link>
@@ -126,7 +124,7 @@
       <geometry>
         <!-- <mesh
           filename="package://armpi_fpv/meshes/link2.STL" /> -->
-        <cylinder radius="0.01" length="0.05" />
+          <mesh filename="package://pick_up/meshes/link2.STL" />
       </geometry>
       <material
         name="">
@@ -141,7 +139,7 @@
       <geometry>
         <!-- <mesh
           filename="package://armpi_fpv/meshes/link2.STL" /> -->
-        <cylinder radius="0.01" length="0.05" />
+        <mesh filename="package://pick_up/meshes/link2.STL" />
       </geometry>
     </collision>
   </link>
@@ -186,7 +184,7 @@
       <geometry>
         <!-- <mesh
           filename="package://armpi_fpv/meshes/link3.STL" /> -->
-        <cylinder radius="0.01" length="0.05" />
+        <mesh filename="package://pick_up/meshes/link3.STL" />
       </geometry>
       <material
         name="">
@@ -201,7 +199,7 @@
       <geometry>
         <!-- <mesh
           filename="package://armpi_fpv/meshes/link3.STL" /> -->
-        <cylinder radius="0.01" length="0.05" />
+        <mesh filename="package://pick_up/meshes/link3.STL" />
       </geometry>
     </collision>
   </link>
@@ -246,7 +244,7 @@
       <geometry>
         <!-- <mesh
           filename="package://armpi_fpv/meshes/link4.STL" /> -->
-        <cylinder radius="0.01" length="0.05" />
+        <mesh filename="package://pick_up/meshes/link4.STL" />
       </geometry>
       <material
         name="">
@@ -261,7 +259,7 @@
       <geometry>
         <!-- <mesh
           filename="package://armpi_fpv/meshes/link4.STL" /> -->
-        <cylinder radius="0.01" length="0.05" />
+        <mesh filename="package://pick_up/meshes/link4.STL" />
       </geometry>
     </collision>
   </link>
@@ -306,7 +304,7 @@
       <geometry>
         <!-- <mesh
           filename="package://armpi_fpv/meshes/camera_link.STL" /> -->
-        <cylinder radius="0.01" length="0.05" />
+        <mesh filename="package://pick_up/meshes/camera_link.STL" />
       </geometry>
       <material
         name="">
@@ -321,7 +319,7 @@
       <geometry>
         <!-- <mesh
           filename="package://armpi_fpv/meshes/camera_link.STL" /> -->
-        <cylinder radius="0.01" length="0.05" />
+        <mesh filename="package://pick_up/meshes/camera_link.STL" />
       </geometry>
     </collision>
   </link>
@@ -362,7 +360,7 @@
       <geometry>
         <!-- <mesh
           filename="package://armpi_fpv/meshes/link5.STL" /> -->
-        <cylinder radius="0.01" length="0.05" />
+        <mesh filename="package://pick_up/meshes/link5.STL" />
       </geometry>
       <material
         name="">
@@ -377,7 +375,7 @@
       <geometry>
         <!-- <mesh
           filename="package://armpi_fpv/meshes/link5.STL" /> -->
-        <cylinder radius="0.01" length="0.05" />
+        <mesh filename="package://pick_up/meshes/link5.STL" />
       </geometry>
     </collision>
   </link>
@@ -429,7 +427,7 @@
       <geometry>
         <!-- <mesh
           filename="package://armpi_fpv/meshes/gripper_base.STL" /> -->
-        <cylinder radius="0.01" length="0.05" />
+        <mesh filename="package://pick_up/meshes/gripper_base.STL" />
       </geometry>
       <material
         name="">
@@ -444,7 +442,7 @@
       <geometry>
         <!-- <mesh
           filename="package://armpi_fpv/meshes/gripper_base.STL" /> -->
-        <cylinder radius="0.01" length="0.05" />
+        <mesh filename="package://pick_up/meshes/gripper_base.STL" />
       </geometry>
     </collision>
   </link>
@@ -484,7 +482,7 @@
       <geometry>
         <!-- <mesh
           filename="package://armpi_fpv/meshes/r_link.STL" /> -->
-        <cylinder radius="0.01" length="0.05" />
+        <mesh filename="package://pick_up/meshes/r_link.STL" />
       </geometry>
       <material
         name="">
@@ -499,7 +497,7 @@
       <geometry>
         <!-- <mesh
           filename="package://armpi_fpv/meshes/r_link.STL" /> -->
-        <cylinder radius="0.01" length="0.05" />
+        <mesh filename="package://pick_up/meshes/r_link.STL" />
       </geometry>
     </collision>
   </link>
@@ -544,7 +542,7 @@
       <geometry>
         <!-- <mesh
           filename="package://armpi_fpv/meshes/r_in_link.STL" /> -->
-        <cylinder radius="0.01" length="0.05" />
+        <mesh filename="package://pick_up/meshes/r_in_link.STL" />
       </geometry>
       <material
         name="">
@@ -559,7 +557,7 @@
       <geometry>
         <!-- <mesh
           filename="package://armpi_fpv/meshes/r_in_link.STL" /> -->
-        <cylinder radius="0.01" length="0.05" />
+        <mesh filename="package://pick_up/meshes/r_in_link.STL" />
       </geometry>
     </collision>
   </link>
@@ -603,7 +601,7 @@
       <geometry>
         <!-- <mesh
           filename="package://armpi_fpv/meshes/r_out_link.STL" /> -->
-        <cylinder radius="0.01" length="0.05" />
+        <mesh filename="package://pick_up/meshes/r_out_link.STL" />
       </geometry>
       <material
         name="">
@@ -618,7 +616,7 @@
       <geometry>
         <!-- <mesh
           filename="package://armpi_fpv/meshes/r_out_link.STL" /> -->
-        <cylinder radius="0.01" length="0.05" />
+        <mesh filename="package://pick_up/meshes/r_out_link.STL" />
       </geometry>
     </collision>
   </link>
@@ -662,7 +660,7 @@
       <geometry>
         <!-- <mesh
           filename="package://armpi_fpv/meshes/l_link.STL" /> -->
-        <cylinder radius="0.01" length="0.05" />
+        <mesh filename="package://pick_up/meshes/l_link.STL" />
       </geometry>
       <material
         name="">
@@ -677,7 +675,7 @@
       <geometry>
         <!-- <mesh
           filename="package://armpi_fpv/meshes/l_link.STL" /> -->
-        <cylinder radius="0.01" length="0.05" />
+        <mesh filename="package://pick_up/meshes/l_link.STL" />
       </geometry>
     </collision>
   </link>
@@ -726,7 +724,7 @@
       <geometry>
         <!-- <mesh
           filename="package://armpi_fpv/meshes/l_in_link.STL" /> -->
-        <cylinder radius="0.01" length="0.05" />
+        <mesh filename="package://pick_up/meshes/l_in_link.STL" />
       </geometry>
       <material
         name="">
@@ -741,7 +739,7 @@
       <geometry>
         <!-- <mesh
           filename="package://armpi_fpv/meshes/l_in_link.STL" /> -->
-        <cylinder radius="0.01" length="0.05" />
+        <mesh filename="package://pick_up/meshes/l_in_link.STL" />
       </geometry>
     </collision>
   </link>
@@ -785,7 +783,7 @@
       <geometry>
         <!-- <mesh
           filename="package://armpi_fpv/meshes/l_out_link.STL" /> -->
-        <cylinder radius="0.01" length="0.05" />
+        <mesh filename="package://pick_up/meshes/l_out_link.STL" />
       </geometry>
       <material
         name="">
@@ -800,7 +798,7 @@
       <geometry>
         <!-- <mesh
           filename="package://armpi_fpv/meshes/l_out_link.STL" /> -->
-        <cylinder radius="0.01" length="0.05" />
+        <mesh filename="package://pick_up/meshes/l_out_link.STL" />
       </geometry>
     </collision>
   </link>

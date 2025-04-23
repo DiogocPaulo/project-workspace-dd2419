@@ -39,7 +39,8 @@ class MultiServoPublisher(Node):
         super().__init__("multi_servo_publisher")
         # self.timer = self.create_timer(5.0, self.publish_pose)
         self.publisher = self.create_publisher(Int16MultiArray, "/multi_servo_cmd_sub", 10)
-        # self.publisher_sim = self.create_publisher(JointMove, '/joint_states', 10)
+        self.publisher_sim = self.create_publisher(JointState, '/joint_states', 10)
+        self.service_sim = self.create_service(PickObject,'PickObjectSim',self.sim_callback)
         self.i = 0
 
 
@@ -63,15 +64,15 @@ class MultiServoPublisher(Node):
         #     DetectedDataArray, '/yolov8/detections_data', self.detected_callback, 10)
 
 
-        # self.publisher_marker = self.create_publisher(Marker, '/visualization_marker', 10)
+        self.publisher_marker = self.create_publisher(Marker, '/visualization_marker', 10)
 
         # self.timer = self.create_timer(1.0, self.publish_object_marker)
 
 
         self.l1 = 0.101
         self.l2 = 0.095
-        self.l3 = 0.168
-        self.off_base = 0.14
+        self.l3 = 0.16
+        self.off_base = 0.10
 
         self.base = 0.0
         self.v1 = 0.0
@@ -326,6 +327,41 @@ class MultiServoPublisher(Node):
         return 0
 
 
+
+
+
+
+
+
+
+
+
+    def sim_callback(self, request,response):
+        self.get_logger().info(f'Received simulation request')
+
+        position = request.point
+        
+        joint_names = ['joint1', 'joint2', 'joint3', 'joint4', 'joint5','r_joint']
+
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=2)) #Give arm time to do its thing
+        base_arm,v1_arm,v2_arm,v3_arm = self.FindKinematics2(position.x,position.y,position.z+0.03)
+
+        if base_arm == -1:
+            self.get_logger().info(f'COULD NOT FIND KINEMATIC SOLUTION FOR POSITION: {position}')
+            return
+
+        self.get_logger().info(f"APPLYING SERVO ANGLES: BASE={base_arm} SERVO5={v1_arm} SERVO4={v2_arm} SERVO3={v3_arm}")
+        self.get_logger().info(f"PICKUP INITIATED")
+
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=1))
+        
+        self.publish_JointStates(joint_names,[base_arm,v1_arm,v2_arm,v3_arm,0.0,0.0])
+
+        self.publish_object_marker(request.point)
+
+        response.result = 0
+        return response
+
         
 
     def CalcKinematics(self,x,y,z,desired_grip_angle): #Servos 5 & 4
@@ -397,8 +433,9 @@ class MultiServoPublisher(Node):
         offset = 500
 
         self.get_logger().info(f"OFFSET = {offset}")
+        base = 0
 
-        for angle in range(0 + offset,12000 - offset):
+        for angle in range(0 + offset,9000 - offset):
             angle = math.radians(angle/100)
 
             base,v1,v2,v3 = self.CalcKinematics(x,y,z,angle)
@@ -413,10 +450,10 @@ class MultiServoPublisher(Node):
             if(v3_arm < (3000 + offset) or v3_arm > (21000 - offset)): continue
 
             self.get_logger().info("Configuration has been found!")
-            return base_arm,v1,v2,v3
+            return -base,-v1,-v2,-v3
 
         self.get_logger().info("No configuration found!")
-        return base_arm,-1,-1,-1
+        return base,-1,-1,-1
 
 
     
@@ -439,7 +476,7 @@ class MultiServoPublisher(Node):
         return math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
 
 
-    def publish_object_marker(self):
+    def publish_object_marker(self,point):
         # Create the marker
         marker = Marker()
         marker.header.frame_id = "base_link"  # This is the robot's base frame
@@ -448,9 +485,9 @@ class MultiServoPublisher(Node):
         marker.id = 0
         marker.type = Marker.SPHERE  # You can also use CUBE, ARROW, etc.
         marker.action = Marker.ADD
-        marker.pose.position.x = self.position.x  # Position of the object (relative to the base)
-        marker.pose.position.y = self.position.y
-        marker.pose.position.z = self.position.z+0.065
+        marker.pose.position.x = point.y  # Position of the object (relative to the base)
+        marker.pose.position.y = point.x
+        marker.pose.position.z = point.z+ self.off_base
         marker.scale.x = 0.05  # Scale of the sphere (radius)
         marker.scale.y = 0.05
         marker.scale.z = 0.05
