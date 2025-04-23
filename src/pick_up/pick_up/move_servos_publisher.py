@@ -135,10 +135,10 @@ class MultiServoPublisher(Node):
             )
         # Transform ---------------------------------------
 
-        # self.clock.sleep_for(rclpy.duration.Duration(seconds=1)) #Give arm time to do its thing
-        # position = do_transform_point(request,t)
-        # position = position
-        base_arm,v1_arm,v2_arm,v3_arm = self.FindKinematics(request.point.x,request.point.y,request.point.z)
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=1)) #Give arm time to do its thing
+        position = do_transform_point(request,t)
+        position = position.point
+        base_arm,v1_arm,v2_arm,v3_arm = self.FindKinematics(position.point.x,position.point.y,position.point.z)
 
 
         if v1_arm == -1:
@@ -152,25 +152,25 @@ class MultiServoPublisher(Node):
 
         self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
         
-        pose = [14000,12000,v3_arm,v2_arm,v1_arm,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
+        pose = [3000,12000,v3_arm,v2_arm,v1_arm,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
         msg.data = pose
         self.publisher.publish(msg)
 
         self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
         
-        # pose = [14000,12000,v3_arm,v2_arm,v1_arm,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
-        # msg.data = pose
-        # self.publisher.publish(msg)
+        pose = [14000,12000,v3_arm,v2_arm,v1_arm,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
+        msg.data = pose
+        self.publisher.publish(msg)
 
-        # self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
 
-        # pose = [14000,12000,12000,12000,12000,12000,move_time,move_time,move_time,move_time,move_time,move_time]
-        # msg.data = pose
-        # self.publisher.publish(msg)
+        pose = [14000,12000,12000,12000,12000,12000,move_time,move_time,move_time,move_time,move_time,move_time]
+        msg.data = pose
+        self.publisher.publish(msg)
 
         self.get_logger().info(f"PICKUP COMPLETE")
 
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
 
         return 0
 
@@ -395,20 +395,19 @@ class MultiServoPublisher(Node):
 
             v3 = (math.pi/2 - base_angle) + (math.pi - v1 - v2) + (math.pi/2 - desired_grip_angle) - math.pi
 
-            self.get_logger().info(f"UN - ANGLES: V1={v1} SERVO4={v2} SERVO3={v3}")
+            self.get_logger().info(f"ANGLES: V1={v1} SERVO4={v2} SERVO3={desired_grip_angle}")
 
-            return base_rotation_angle,(math.pi/2) - v1 + base_angle,math.pi - v2, -v3
+            return base_rotation_angle,(math.pi/2) - v1 - base_angle,math.pi - v2, -v3
         except ValueError as e:
-            self.get_logger().info(f"OOPS")
             return base_rotation_angle,-1,-1,-1
 
     def FindKinematics(self,x,y,z):
 
-        offset = 200
+        offset = 150
 
         self.get_logger().info(f"OFFSET = {offset}")
 
-        for angle in range(9000 - offset,0 + offset,-1):
+        for angle in range(0 + offset,9000 - offset):
             angle = math.radians(angle/100)
 
             base,v1,v2,v3 = self.CalcKinematics(x,y,z,angle)
@@ -425,19 +424,9 @@ class MultiServoPublisher(Node):
             self.get_logger().info("Configuration has been found!")
             return base_arm,v1_arm,v2_arm,v3_arm
 
-        # base,v1,v2,v3 = self.CalcKinematics(x,y,z,math.pi/4)
-        # base_arm = 12000 + int(math.degrees(base)*100)
-        # v1_arm = 12000 - int(math.degrees(v1)*100)
-        # v2_arm = 12000 + int(math.degrees(v2)*100)
-        # v3_arm = 12000 - int(math.degrees(v3)*100)
-
-        # self.get_logger().info(f"ANGLES: V1={v1_arm} SERVO4={v2_arm} SERVO3={v3_arm}")
-
-
-
 
         self.get_logger().info("No configuration found!")
-        return -1,-1,-1,-1
+        return base_arm,-1,-1,-1
 
     def FindKinematics2(self,x,y,z):
 
