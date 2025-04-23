@@ -31,7 +31,7 @@ class ProjectMaster(Node):
 
         # self.arm_publisher = self.create_publisher(ArmTaskMessage, "/Arm_Task", 10)
 
-        # self.client = self.create_client(PickObject, 'PickObject')
+        self.client = self.create_client(PickObject, 'PickObject')
 
         # self.client_test = self.create_client(PickObject, 'PickObject_test')
         # while not self.client_test.wait_for_service(timeout_sec=1.0):
@@ -40,13 +40,13 @@ class ProjectMaster(Node):
         self.tfBuffer = tf2_ros.Buffer()
         self.listener = tf2_ros.TransformListener(self.tfBuffer,self)
 
-        # self.client_camera = self.create_client(GetDetectedList, 'get_detected_list')
-        # while not self.client.wait_for_service(timeout_sec=1.0):
-        #     self.get_logger().info('Service not available, waiting...')
+        self.client_camera = self.create_client(GetDetectedList, 'get_detected_list')
+        while not self.client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Service not available, waiting...')
 
-        # self.client_joint = self.create_client(JointMove, 'MoveArm')
-        # while not self.client.wait_for_service(timeout_sec=1.0):
-        #     self.get_logger().info('Service not available, waiting...')
+        self.client_joint = self.create_client(JointMove, 'MoveArm')
+        while not self.client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Service not available, waiting...')
 
         
         # self.reached_destination_service = self.create_service(Trigger, "/reached_destination", self.reached_destination_callback)
@@ -67,10 +67,10 @@ class ProjectMaster(Node):
 
         self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
 
-        # self.pos_subscriber = self.create_subscription(
-        #     JointState, '/servo_pos_publisher', self.pos_callback, 10)
+        self.pos_subscriber = self.create_subscription(
+            JointState, '/servo_pos_publisher', self.pos_callback, 10)
 
-        # self.joint_publisher = self.create_publisher(Int16MultiArray, "/multi_servo_cmd_sub", 10)
+        self.joint_publisher = self.create_publisher(Int16MultiArray, "/multi_servo_cmd_sub", 10)
 
         self.base = 12000
         self.v1 = 12000
@@ -174,7 +174,7 @@ class ProjectMaster(Node):
             msg = Int16MultiArray()
             msg.layout = MultiArrayLayout(dim=[MultiArrayDimension(label="", size=12, stride=12)], data_offset=0)
             move_time = 100
-            pose = [3000,12000,int(v3),int(self.v2),int(self.v1),int(base),move_time,move_time,move_time,move_time,move_time,move_time]
+            pose = [11000,12000,int(v3),int(self.v2),int(self.v1),int(base),move_time,move_time,move_time,move_time,move_time,move_time]
             msg.data = pose
             self.joint_publisher.publish(msg)
 
@@ -223,7 +223,9 @@ class ProjectMaster(Node):
 
         distance_y = l1 + self.off_base #math.sin(alpha)*l1 + math.sin(beta)*l2
 
-        distance = l2 + math.tan((math.pi/2)-charlie)*distance_y + 0.07  #math.cos(alpha)*l1 + math.cos(beta)*l2
+        distance = l2 + math.tan((math.pi/2)-charlie)*distance_y + 0.085  #math.cos(alpha)*l1 + math.cos(beta)*l2
+
+        if distance < 0.25: distance -= 0.03
 
         distance_z = 0 - self.off_base
 
@@ -241,7 +243,7 @@ class ProjectMaster(Node):
 
         self.publish_transform("object",point.point)
 
-        return (position.point.x,position.point.y,position.point.z)
+        return (point.point.x,point.point.y,point.point.z)
 
 
 
@@ -348,7 +350,33 @@ def main():
     # node.send_arm_request(0.5,-0.2,0.06,"LOOK")
     # node.send_arm_request(0.15,-0.15,0.0,"DROPOFF")
 
-    node.make_sim_request(0.34,0.0,0.0,"PICKUP")
+    node.send_arm_request(0.4,-0.22,0.0,"LOOK")
+    node.AquireTarget("objects")
+    (x,y,z) = node.estimate_endpoint()
+    node.get_logger().info(f"X = {x},Y = {y}, Z = {z}")
+    node.make_sim_request(x,y,-0.15,"PICKUP")
+    node.send_arm_request(x,y,-0.15,"PICKUP")
+
+    node.send_arm_request(0.1,-0.5,0.0,"LOOK")
+    node.AquireTarget("box")
+    (x,y,z) = node.estimate_endpoint()
+    node.get_logger().info(f"X = {x},Y = {y}, Z = {z}")
+    node.make_sim_request(x,y,-0.15,"DROPOFF")
+    node.send_arm_request(x,y,0.0,"DROPOFF")
+
+    node.send_arm_request(0.4,0.0,0.0,"LOOK")
+    node.AquireTarget("objects")
+    (x,y,z) = node.estimate_endpoint()
+    node.get_logger().info(f"X = {x},Y = {y}, Z = {z}")
+    node.make_sim_request(x,y,-0.15,"PICKUP")
+    node.send_arm_request(x,y,-0.15,"PICKUP")
+
+    node.send_arm_request(0.1,-0.5,0.0,"LOOK")
+    node.AquireTarget("box")
+    (x,y,z) = node.estimate_endpoint()
+    node.get_logger().info(f"X = {x},Y = {y}, Z = {z}")
+    node.make_sim_request(x,y,-0.15,"DROPOFF")
+    node.send_arm_request(x,y,0.0,"DROPOFF")
 
 
 
