@@ -72,7 +72,7 @@ class MultiServoPublisher(Node):
         self.l1 = 0.101
         self.l2 = 0.095
         self.l3 = 0.16
-        self.off_base = 0.10
+        self.off_base = 0.068
 
         self.base = 0.0
         self.v1 = 0.0
@@ -417,9 +417,9 @@ class MultiServoPublisher(Node):
             v3_arm = 12000 - int(math.degrees(v3)*100)
 
             if(base_arm < (0 + offset) or base_arm > (24000 - offset)): continue
-            if(v1_arm < (6000 + offset) or v1_arm > (18000 - offset)): continue
-            if(v2_arm < (3000 + offset) or v2_arm > (18000 - offset)): continue
-            if(v3_arm < (3000 + offset) or v3_arm > (21000 - offset)): continue
+            if(v1_arm < (3000 + offset) or v1_arm > (14000 - offset)): continue
+            if(v2_arm < (1000 + offset) or v2_arm > (21000 - offset)): continue
+            if(v3_arm < (3000 + offset) or v3_arm > (14000 - offset)): continue
 
             self.get_logger().info("Configuration has been found!")
             return base_arm,v1_arm,v2_arm,v3_arm
@@ -438,16 +438,16 @@ class MultiServoPublisher(Node):
         for angle in range(0 + offset,9000 - offset):
             angle = math.radians(angle/100)
 
-            base,v1,v2,v3 = self.CalcKinematics(x,y,z,angle)
+            base,v1,v2,v3 = self.CalcKinematics(x,y,z-0.032,angle)
             base_arm = 12000 - int(math.degrees(base)*100)
             v1_arm = 12000 - int(math.degrees(v1)*100)
             v2_arm = 12000 + int(math.degrees(v2)*100)
             v3_arm = 12000 - int(math.degrees(v3)*100)
 
             if(base_arm < (0 + offset) or base_arm > (24000 - offset)): continue
-            if(v1_arm < (6000 + offset) or v1_arm > (18000 - offset)): continue
-            if(v2_arm < (3000 + offset) or v2_arm > (21000 - offset)): continue
-            if(v3_arm < (3000 + offset) or v3_arm > (21000 - offset)): continue
+            if(v1_arm < (3000 + offset) or v1_arm > (14000 - offset)): continue
+            if(v2_arm < (1000 + offset) or v2_arm > (21000 - offset)): continue
+            if(v3_arm < (3000 + offset) or v3_arm > (14000 - offset)): continue
 
             self.get_logger().info("Configuration has been found!")
             return -base,-v1,-v2,-v3

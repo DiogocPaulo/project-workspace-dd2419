@@ -348,7 +348,7 @@ def main():
     # node.send_arm_request(0.5,-0.2,0.06,"LOOK")
     # node.send_arm_request(0.15,-0.15,0.0,"DROPOFF")
 
-    node.make_sim_request(0.25,0.0,-0.15,"PICKUP")
+    node.make_sim_request(0.34,0.0,0.0,"PICKUP")
 
 
 
