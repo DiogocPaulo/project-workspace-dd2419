@@ -257,10 +257,6 @@ class MultiServoPublisher(Node):
         zero_time = Time()
         zero_time.sec = 0
         zero_time.nanosec = 0
-
-        # pose = [14000,12000,12000,12000,12000,12000,move_time,move_time,move_time,move_time,move_time,move_time]
-        # msg.data = pose
-        # self.publisher.publish(msg)
     
         # Transform ---------------------------------------
         tf_future = self.tfBuffer.wait_for_transform_async(
@@ -283,30 +279,18 @@ class MultiServoPublisher(Node):
             )
         # Transform ---------------------------------------
 
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=2)) #Give arm time to do its thing
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=0.5)) #Give arm time to do its thing
         position = do_transform_point(request,t)
         position = position.point
         base_arm,v1_arm,v2_arm,v3_arm = self.FindKinematics(position.x,position.y,position.z)
-
-
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
-
-        # Calc look-specific angles:
-        distance = self.distance_calc(0,0,position.x,position.y)
-        v3_arm = 12000 - int(math.degrees(math.asin((self.l1+self.off_base-position.z)/(distance - self.l2)))*100)
-
-        self.get_logger().info(f"APPLYING SERVO ANGLES: BASE={base_arm} SERVO5={12000} SERVO4={12000} SERVO3={v3_arm}")
-        self.get_logger().info(f"DROPOFF INITIATED")
         
-        pose = [11000,12000,v3_arm,21000,12000,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
+        pose = [11000,12000,7500,21000,12000,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
         self.base = base_arm
         self.v3 = v3_arm
         msg.data = pose
         self.publisher.publish(msg)
 
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
-
-        
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=(movetime/1000)))
     
         return 0
     

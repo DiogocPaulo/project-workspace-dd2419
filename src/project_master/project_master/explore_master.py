@@ -79,6 +79,10 @@ class ServiceClient(py_trees.behaviour.Behaviour):
                 return py_trees.common.Status.FAILURE
         else:
             return py_trees.common.Status.RUNNING
+
+
+
+            
         
 class ArmClient(py_trees.behaviour.Behaviour):
     def __init__(self, name, x, y, z, task, **kwargs):

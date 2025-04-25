@@ -12,187 +12,380 @@ from project_interfaces.srv import PickObject
 
 from nav_msgs.msg import Odometry
 
+
+#New imports
+from builtin_interfaces.msg import Duration
+import time
+
 # a node has executed completely after returning a SUCCESS or FAILURE
 
 # setup - one time constructor
 # initialized - run when node was first ticked or execution completed
 # update - called every time the node is ticked
 
-class EndPointSelector(py_trees.behaviour.Behaviour):
+class Look(py_trees.behaviour.Behaviour):
     """
     A behaviour that determines the next end point and navigates to it.
     """
-    def __init__(self, name, end_points):
+    def __init__(self, name, x, y, t, **kwargs):
         super().__init__(name)
-        self.end_points = end_points
-        self.index = 0
-        self.navigate_behaviour = None
+        self.x = x
+        self.y = y
+        self.type = t
+        self.node = None
+        self.pickup_client = None
+        self.camera_client = None
+        self.request_args = kwargs
+        self.clock = None
+        self.stage = 0
 
-    def setup(self):
-        x, y, _ = self.end_points[self.index]
-        self.navigate_behaviour = Navigate(f"Navigate_to_{self.index}", x, y)
-        self.navigate_behaviour.setup()
-        return True
-
-    def update(self):
-        status = self.navigate_behaviour.update()
-
-        if status == py_trees.common.Status.SUCCESS:
-            self.navigate_behaviour.terminate()
-            self.index = (self.index + 1) % len(self.end_points)
-
-            x, y, _ = self.end_points[self.index]
-            self.navigate_behaviour = Navigate(f"Navigate_to_{self.index}", x, y)
-            self.navigate_behaviour.setup()
-
-            return py_trees.common.Status.RUNNING
-        
-        return status
-
-    def terminate(self):
-        if self.navigate_behaviour:
-            self.navigate_behaviour.terminate()
-
-
-class Navigate(py_trees.behaviour.Behaviour):
-    """
-    A behaviour that sends an end point to the autonomous pather.
-    """
-    def __init__(self, name, x, y, tolerance=0.2):
-        super().__init__(name)
-        self.current_point = (None, None)
-        self.end_point = (x, y)
-        self.tolerance = tolerance
-        self.node = None  # ROS 2 node will be initialized later
-
-    def setup(self):
-        qos_profile = QoSProfile(
-            depth=1,
-            history=HistoryPolicy.KEEP_LAST,
-            reliability=ReliabilityPolicy.BEST_EFFORT
-        )
-
-        self.node = rclpy.create_node("navigate_behaviour")
-        self.node.create_subscription(Odometry, "/odom", self.odom_callback, qos_profile)
-        self.end_point_client = self.node.create_client(GoToPoint, "/pathing_end_point")
-        while not self.end_point_client.wait_for_service(timeout_sec=1.0):
-            self.logger.info("GoToPoint service not yet avaliable, waiting ...")
-        self.logger.info(f"{self.name}: Setup complete")
-        return True
-
-    def odom_callback(self, msg: Odometry):
-        self.current_point[0] = msg.pose.pose.position.x
-        self.current_point[1] = msg.pose.pose.position.y
-
-    def update(self):
-        if self.current_point == (None, None):
-            self.logger.info(f"{self.name}: Waiting for current point ...")
-            return py_trees.common.Status.RUNNING
-        
-        distance = np.hypot(
-            self.current_point[0] - self.end_point[0],
-            self.current_point[1] - self.end_point[1]
-        )
-
-        if distance <= self.tolerance:
-            self.logger.info(f"{self.name}: Reached end point of ({self.end_point[0], self.end_point[1]})")
-            return py_trees.common.Status.SUCCESS
-        else:
-            self.send_end_point(self.end_point[0], self.end_point[1])
-            self.logger.info(f"{self.name}: Distance to end point is {distance:.2f}")
-            return py_trees.common.Status.RUNNING
-
-    def send_end_point(self, x, y):
-        # Create new GoToPoint service for pathing node
-        request = GoToPoint.Request()
-        request.x = x
-        request.y = y
-        request.yaw = 0.0
-
-        # Handle request and response to pathing node async
-        future = self.end_point_client.call_async(request)
-        future.add_done_callback(self.pathing_response_callback)
-
-    def pathing_response_callback(self, future):
+    def setup(self, **kwargs):
         try:
-            response = future.result()
-            self.logger.info(f"Pathing response: {response.success}, {response.message}")
+            self.node = kwargs.get("node")
         except Exception as e:
-            self.logger.warn(f"Service call to pathing node failed: {e}")
-
-    def terminate(self):
-        if self.node is not None:
-            self.node.destroy_node()
-            self.node = None
-        self.logger.info(f"{self.name}: Terminated")
+            self.logger.error(f"{self.name} - Setup failed: {e}")
+            return False
 
 
-class PickUp(py_trees.behaviour.Behaviour):
-    """
-    A behaviour that sends a position for the arm to pick up at.
-    """
-    def __init__(self, name, x, y):
-        super().__init__(name)
-        self.object_position = (x,y)
-        self.node = None  # ROS 2 node will be initialized later
-
-    def setup(self):
-        qos_profile = QoSProfile(
-            depth=1,
-            history=HistoryPolicy.KEEP_LAST,
-            reliability=ReliabilityPolicy.BEST_EFFORT
-        )
-
-        self.node = rclpy.create_node("pickup_behaviour")
-        self.arm_client = self.create_client(PickObject, 'PickObject')
-        while not self.arm_client.wait_for_service(timeout_sec=1.0):
+        self.pickup_client = self.node.create_client(PickObject, 'PickObject')
+        while not self.pickup_client.wait_for_service(timeout_sec=1.0):
             self.logger.info("Arm Request service not yet avaliable, waiting ...")
 
-        # self.node.create_subscription(Odometry, "/odom", self.odom_callback, qos_profile)
+        self.camera_client = self.node.create_client(GetDetectedList, 'get_detected_list')
+        while not self.camera_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Service not available, waiting...')
 
-        # self.end_point_client = self.node.create_client(GoToPoint, "/pathing_end_point")
-        # while not self.end_point_client.wait_for_service(timeout_sec=1.0):
-        #     self.logger.info("GoToPoint service not yet avaliable, waiting ...")
-        self.logger.info(f"{self.name}: Setup complete")
+        self.clock = self.node.get_clock()
+
+        self.future = None
+
+
         return True
 
-    def send_arm_request(self, x, y, z, task):
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
-        self.get_logger().info("ARMTASK!")
-        arm_msg = PickObject.Request()
-        arm_msg.header = Header()
-        arm_msg.header.stamp = self.get_clock().now().to_msg()
-        arm_msg.header.frame_id = "base_link"
-        arm_msg.point = Point()
-        arm_msg.point.x = x
-        arm_msg.point.y = y
-        arm_msg.point.z = z
-        arm_msg.description = task
+    def initialise(self):
+        self.stage = 0
+        self.future = None
 
-        future = self.arm_client.call_async(arm_msg)
-        rclpy.spin_until_future_complete(self, future)
+    def update(self):
+        if self.stage == 0:
+            try:
+                request = PickObject.Request()
 
-        response = future.result() 
-        if response is not None:
-            if response.result == 0:
-                self.get_logger().info(f"REQUEST SUCCESFUL!")
-            elif response.result == 1:
-                self.get_logger().info(f"REQUEST FAILED!: COULD NOT FIND KINEMATIC SOLUTION")
-            else:
-                self.get_logger().info(f"REQUEST FAILED!: PICKUP DID NOT PICK UP OBJECT")
-        else:
-            self.get_logger().error("NO RESPONSE RECIEVED!")
+                request.header = Header()
+                request.header.stamp = self.node.get_clock().now().to_msg()
+                request.header.frame_id = "map"
+                request.point = GeometryPoint()
+                request.point.x = self.x
+                request.point.y = self.y
+                request.point.z = 0.0
+                request.description = "LOOK"
+
+                self.future = self.pickup_client.call_async(request)
+                self.stage = 1
+                self.node.get_logger().info(f"{self.name} - Sent request to Look")
+                return py_trees.common.Status.RUNNING
+            except Exception as e:
+                self.get_logger().error(f"{self.name} - Failed to send request: {e}")
+                return py_trees.common.Status.FAILURE
+
+            return py_trees.common.Status.RUNNING
+
+        elif self.stage == 1:
+            if self.future.done():
+                response = self.future.result()
+                if response.result == 0:
+                    self.stage = 2
+
+            return py_trees.common.Status.RUNNING
+                
+        elif self.stage == 2:
+            request = GetDetectedList.Request()
+
+            self.future = self.camera_client.call_async(request)
+            self.stage = 3
+
+            return py_trees.common.Status.RUNNING
+
+        elif self.stage == 3:
+            if self.future.done():
+                response = self.future.result()
+                
+                if self.type == "objects":
+                    if len(response.objects) > 0:
+                        return py_trees.common.Status.SUCCESS
+                    else:
+                        return py_trees.common.Status.FAILURE
+                elif self.type == "boxes":
+                    if len(response.boxes) > 0:
+                        return py_trees.common.Status.SUCCESS
+                    else:
+                        return py_trees.common.Status.FAILURE
+
+            return py_trees.common.Status.RUNNING
 
 
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
+
+class Adjust(py_trees.behaviour.Behaviour):
+    """
+    A behaviour that determines the next end point and navigates to it.
+    """
+    def __init__(self, name, t, **kwargs):
+        super().__init__(name)
+        self.type = t
+        self.node = None
+        self.camera_client = None
+        self.request_args = kwargs
+        self.clock = None
+        self.stage = 0
+        self.future = None
+
+        self.base = 12000
+        self.v1 = 12000
+        self.v2 = 12000
+        self.v3 = 12000
+        self.off_base = 0.14
+
+        self.eps = 5
+        self.step_size = 50
+
+    def setup(self, **kwargs):
+        try:
+            self.node = kwargs.get("node")
+        except Exception as e:
+            self.logger.error(f"{self.name} - Setup failed: {e}")
+            return False
 
 
-    
+        self.camera_client = self.node.create_client(GetDetectedList, 'get_detected_list')
+        while not self.camera_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Service not available, waiting...')
 
-    def terminate(self):
-        if self.node is not None:
-            self.node.destroy_node()
-            self.node = None
-        self.logger.info(f"{self.name}: Terminated")
+        self.pos_subscriber = self.node.create_subscription(
+            JointState, '/servo_pos_publisher', self.pos_callback, 10)
+
+        self.joint_publisher = self.node.create_publisher(Int16MultiArray, "/multi_servo_cmd_sub", 10)
+
+        self.clock = self.node.get_clock()
+
+
+        return True
+
+    def initialise(self):
+        self.stage = 0
+        self.future = None
+
+    def pos_callback(self,msg):
+        self.base = msg.position[5]
+        self.v1 = msg.position[4]
+        self.v2 = msg.position[3]
+        self.v3 = msg.position[2]
+
+    def update(self):
+        if self.stage == 0:
+            request = GetDetectedList.Request()
+
+            self.future = self.camera_client.call_async(request)
+            self.stage = 1
+
+            return py_trees.common.Status.RUNNING
+
+        elif self.stage == 1:
+            if self.future.done():
+                response = self.future.result()
+                
+                objects = response.objects
+                boxes = response.boxes
+
+                closest_obj = None
+                if self.type == 'objects':
+                    closest_obj = min(objects, key=lambda DetectedData: DetectedData.distance)
+                elif self.type == 'boxes':
+                    closest_obj = min(boxes, key=lambda DetectedData: DetectedData.distance)
+
+
+
+                #Check if within threshhold:
+                if closest_obj.distance <= eps:
+                    return py_trees.common.Status.SUCCESS
+
+                base = self.base
+                v3 = self.v3
+
+                if closest_obj.distance < 30:
+                    self.step_size = 10
+                #difference in x-axis
+                if(closest_obj.diff_x > 0):
+                    base += self.step_size
+                elif(closest_obj.diff_x < 0):
+                    base -= self.step_size
+
+                #difference in y-axis
+                if(closest_obj.diff_y > 0):
+                    v3 += self.step_size
+                elif(closest_obj.diff_y < 0):
+                    v3 -= self.step_size
+
+                if not (base < 23900 and base > 100):
+                    base = self.base
+
+                if  not (v3 < 20900 and v3 > 3100):
+                    v3 = self.v3
+
+                move_command = JointMove.Request()
+                move_command.base = int(base)
+                move_command.v1 = int(self.v1)
+                move_command.v2 = int(self.v2)
+                move_command.v3 = int(v3)
+                
+                msg = Int16MultiArray()
+                msg.layout = MultiArrayLayout(dim=[MultiArrayDimension(label="", size=12, stride=12)], data_offset=0)
+                move_time = 100
+                pose = [11000,12000,int(v3),int(self.v2),int(self.v1),int(base),move_time,move_time,move_time,move_time,move_time,move_time]
+                msg.data = pose
+                self.start_time = time.time()
+                self.joint_publisher.publish(msg)
+
+                self.stage = 2
+
+            return py_trees.common.Status.RUNNING
+
+        elif self.stage == 2:
+            if time.time() - self.start_time >= 0.1:
+                self.stage = 0
+
+            return py_trees.common.Status.RUNNING
+
+
+class Pick(py_trees.behaviour.Behaviour):
+    """
+    A behaviour that determines the next end point and navigates to it.
+    """
+    def __init__(self, name, t, **kwargs):
+        super().__init__(name)
+        self.type = t
+        self.node = None
+        self.request_args = kwargs
+        self.clock = None
+        self.stage = 0
+        self.future = None
+        self.x = None
+        self.y = None
+
+        self.base = 12000
+        self.v1 = 12000
+        self.v2 = 12000
+        self.v3 = 12000
+        self.off_base = 0.14
+
+
+    def setup(self, **kwargs):
+        try:
+            self.node = kwargs.get("node")
+        except Exception as e:
+            self.logger.error(f"{self.name} - Setup failed: {e}")
+            return False
+
+        self.clock = self.node.get_clock()
+
+        self.pickup_client = self.node.create_client(PickObject, 'PickObject')
+        while not self.pickup_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Service not available, waiting...')
+
+        self.pos_subscriber = self.node.create_subscription(
+            JointState, '/servo_pos_publisher', self.pos_callback, 10)
+
+
+        return True
+
+    def initialise(self):
+        self.stage = 0
+        self.future = None
+
+    def pos_callback(self,msg):
+        self.base = msg.position[5]
+        self.v1 = msg.position[4]
+        self.v2 = msg.position[3]
+        self.v3 = msg.position[2]
+
+    def update(self):
+
+        # First two stages is to pass some time to allow the correct joint readings to be read
+        if self.stage == 0
+            self.start_time = time.time()
+
+            self.stage = 1
+            return py_trees.common.Status.RUNNING
+
+
+        elif self.stage == 1:
+
+            if time.time() - self.start_time >= 0.5:
+                self.stage = 2
+
+            return py_trees.common.Status.RUNNING
+
+        # Stage 2 estimates the position of the target given where the arm is pointing
+        elif self.stage == 2:
+            l1 = 0.101
+            l2 = 0.095
+            base = math.radians((12000 - self.base) / 100)
+            alpha = math.radians((12000 - self.v1) / 100)
+            beta = math.radians((12000 + self.v2) / 100)
+            charlie = math.radians((12000 - (self.v3 - 50)) / 100)
+
+            distance_y = l1 + self.off_base #math.sin(alpha)*l1 + math.sin(beta)*l2
+
+            distance = l2 + math.tan((math.pi/2)-charlie)*distance_y + 0.085  #math.cos(alpha)*l1 + math.cos(beta)*l2
+
+            if distance < 0.25: distance -= 0.03
+
+            distance_z = 0 - self.off_base
+
+            distance_y = math.sin(-base)*distance
+            distance_x = math.cos(base)*distance
+
+            self.x = distance_x
+            self.y = distance_y
+
+            self.stage = 3
+
+            return py_trees.common.Status.RUNNING
+
+        # Pick upp target
+        elif self.stage == 3:
+            try:
+                request = PickObject.Request()
+
+                request.header = Header()
+                request.header.stamp = self.node.get_clock().now().to_msg()
+                request.header.frame_id = "arm_base"
+                request.point = GeometryPoint()
+                request.point.x = self.x
+                request.point.y = self.y
+                request.point.z = -0.15
+                request.description = "PICKUP"
+
+                self.future = self.pickup_client.call_async(request)
+                self.stage = 4
+                self.node.get_logger().info(f"{self.name} - Sent request to Pickup")
+                return py_trees.common.Status.RUNNING
+            except Exception as e:
+                self.get_logger().error(f"{self.name} - Failed to send request: {e}")
+                return py_trees.common.Status.FAILURE
+
+
+        elif self.stage == 4:
+            if self.future.done():
+                response = self.future.result()
+                if response.result == 0:
+                    return py_trees.common.Status.SUCCESS
+                else:
+                    return py_trees.common.Status.FAILURE
+
+            return py_trees.common.Status.RUNNING
+        
+
+
+
 
 
