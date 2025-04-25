@@ -23,7 +23,7 @@ lookahead_gain = 0.1        # Look-ahead distance gain
 lookahead_min = 0.3         # Minimum look-ahead distance
 distance_threshold = 0.2    # Stop distance threshold
 yaw_threshold = 0.2         # Stop yaw threshold
-target_velocity = 0.18      # Robot's target velocity
+target_velocity = 0.12      # Robot's target velocity
 
 def pure_pursuit_control(state, target_path):
     index, lookahead = target_path.search_target_index(state)
@@ -92,10 +92,10 @@ class Navigation(Node):
         if len(msg.poses) > 0:
             self.waiting_for_path = False
             self.target_path.update_path(msg)
-            self.get_logger().info(f"Recived new path with end point: ({msg.poses[-1].pose.position.x:.2f}, {msg.poses[-1].pose.position.y:.2f})")
+            #self.get_logger().info(f"Recived new path with end point: ({msg.poses[-1].pose.position.x:.2f}, {msg.poses[-1].pose.position.y:.2f})")
         else:
             self.waiting_for_path = True
-            self.get_logger().warn("Recived empty path")
+            #self.get_logger().warn("Recived empty path")
 
     def publish_duty_cycles(self, left_wheel, right_wheel):
         # Ensure left and right duty cycles are between -1 to 1
@@ -114,7 +114,7 @@ class Navigation(Node):
 
     def control_loop(self):
         if not self.target_path.x_points or self.waiting_for_path:
-            self.get_logger().info("Waiting for path")
+            # self.get_logger().info("Waiting for path")
             self.publish_duty_cycles(0.0, 0.0)
             return
 
@@ -123,7 +123,7 @@ class Navigation(Node):
         if self.previous_index >= (len(self.target_path.x_points) - 1):
             distance = self.state.distance_to_state(self.target_path.x_points[-1], self.target_path.y_points[-1])
             if distance <= distance_threshold and not self.waiting_for_path:
-                self.get_logger().info(f"Reached end of target path")
+                # self.get_logger().info(f"Reached end of target path")
                 self.waiting_for_path = True
 
                 # Clear existing target path
@@ -135,13 +135,13 @@ class Navigation(Node):
             angular_velocity = 0.15
             left_wheel = -angular_velocity
             right_wheel = angular_velocity
-            self.get_logger().info(f"Velocity: {angular_velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
+            # self.get_logger().info(f"Velocity: {angular_velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
         else:
             # angular_scale = 2 * (np.abs(alpha) / np.pi)
             command_velocity = self.state.velocity * np.exp(-2 * np.abs(alpha))
             left_wheel = command_velocity - (base/2) * omega
             right_wheel = command_velocity + (base/2) * omega
-            self.get_logger().info(f"Velocity: {command_velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
+            # self.get_logger().info(f"Velocity: {command_velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
 
         self.publish_duty_cycles(left_wheel, right_wheel)
 

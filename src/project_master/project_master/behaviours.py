@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-import numpy as np
 import py_trees
 import py_trees_ros
 
@@ -11,6 +10,26 @@ from project_interfaces.srv import GoToPoint, Trigger
 from project_interfaces.srv import PickObject
 
 from nav_msgs.msg import Odometry
+
+
+import rclpy
+from rclpy.node import Node
+import rclpy.time
+from std_msgs.msg import Header
+from geometry_msgs.msg import Point
+import tf2_ros
+from geometry_msgs.msg import TransformStamped
+import math
+from project_interfaces.msg import DetectedData, DetectedDataArray
+from project_interfaces.srv import GetDetectedList, JointMove
+from sensor_msgs.msg import JointState
+import math
+import numpy as np
+from std_msgs.msg import Int16MultiArray, MultiArrayLayout, MultiArrayDimension
+from builtin_interfaces.msg import Time
+from tf2_ros import TransformException
+from tf2_geometry_msgs import do_transform_point
+from geometry_msgs.msg import PointStamped, TransformStamped
 
 
 #New imports
@@ -74,7 +93,7 @@ class Look(py_trees.behaviour.Behaviour):
                 request.header = Header()
                 request.header.stamp = self.node.get_clock().now().to_msg()
                 request.header.frame_id = "map"
-                request.point = GeometryPoint()
+                request.point = Point()
                 request.point.x = self.x
                 request.point.y = self.y
                 request.point.z = 0.0
@@ -310,7 +329,7 @@ class Pick(py_trees.behaviour.Behaviour):
     def update(self):
 
         # First two stages is to pass some time to allow the correct joint readings to be read
-        if self.stage == 0
+        if self.stage == 0:
             self.start_time = time.time()
 
             self.stage = 1
@@ -359,7 +378,7 @@ class Pick(py_trees.behaviour.Behaviour):
                 request.header = Header()
                 request.header.stamp = self.node.get_clock().now().to_msg()
                 request.header.frame_id = "arm_base"
-                request.point = GeometryPoint()
+                request.point = Point()
                 request.point.x = self.x
                 request.point.y = self.y
                 request.point.z = -0.15

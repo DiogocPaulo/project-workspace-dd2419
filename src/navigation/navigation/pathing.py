@@ -96,15 +96,15 @@ class Pathing(Node):
         map_msg.data = self.inflated_grid.flatten().tolist()
 
         self.inflated_map_publisher.publish(map_msg)
-        self.get_logger().info("Published inflated occupancy map", once=True)
+        # self.get_logger().info("Published inflated occupancy map", once=True)
 
     def publish_astar_path(self):
         if self.end_point == (None, None):
-            self.get_logger().info("No end point received")
+            # self.get_logger().info("No end point received")
             return
 
         if self.map is None:
-            self.get_logger().info("Occupancy map not received")
+            # self.get_logger().info("Occupancy map not received")
             return
 
         start_x, start_y = self.map.world_to_grid(self.start_point[0], self.start_point[1])
@@ -122,11 +122,11 @@ class Pathing(Node):
                 break
             if inflation_radius > 0.3:
                 inflation_radius -= self.map.resolution
-                self.get_logger().info("No path found, trying smaller inflation radius")
+                # self.get_logger().info("No path found, trying smaller inflation radius")
                 continue
             else:
                 # If the path is none
-                self.get_logger().warn("No path found")
+                # self.get_logger().warn("No path found")
                 self.pathing_failed = True
 
         path_msg = Path()
@@ -144,10 +144,10 @@ class Pathing(Node):
                 path_msg.poses.append(pose)
         else:
             path_msg.poses = []
-            self.get_logger().warn("Publishing empty path")
+            # self.get_logger().warn("Publishing empty path")
 
         self.path_publisher.publish(path_msg)
-        self.get_logger().info("Published A star custom path")
+        # self.get_logger().info("Published A star custom path")
 
 
     def publish_curved_path(self):
@@ -188,7 +188,7 @@ class Pathing(Node):
             path_msg.poses.append(pose)
 
         self.path_publisher.publish(path_msg)
-        self.get_logger().info("Published curved custom path", once=True)
+        # self.get_logger().info("Published curved custom path", once=True)
         
 
     def publish_straight_path(self):
@@ -202,7 +202,7 @@ class Pathing(Node):
         # Intermidiate points
         path_resolution = 20
         if end_x == 0 and end_y == 0:
-            self.get_logger().info("No end point selected")
+            # self.get_logger().info("No end point selected")
             return
 
         for i in range(path_resolution):
@@ -216,7 +216,7 @@ class Pathing(Node):
             path_msg.poses.append(pose)
 
         self.path_publisher.publish(path_msg)
-        self.get_logger().info("Published straight custom path", once=True)
+        # self.get_logger().info("Published straight custom path", once=True)
 
 def main():
     rclpy.init()

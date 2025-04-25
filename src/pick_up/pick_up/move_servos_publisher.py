@@ -284,13 +284,13 @@ class MultiServoPublisher(Node):
         position = position.point
         base_arm,v1_arm,v2_arm,v3_arm = self.FindKinematics(position.x,position.y,position.z)
         
-        pose = [11000,12000,7500,21000,12000,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
+        pose = [11000,12000,5500,21000,12000,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
         self.base = base_arm
         self.v3 = v3_arm
         msg.data = pose
         self.publisher.publish(msg)
 
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=(movetime/1000)))
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
     
         return 0
     
