@@ -50,17 +50,23 @@ struct Scan {
 
     // Add new points, updating occupancy counters
     void addPoints(const std::vector<Eigen::Vector2d>& new_points) {
-        for (const auto& point : new_points) {
+        // Check available slots (max 1000 points)
+        size_t current_count = points.size();
+        size_t max_points = 1000;
+        size_t available_slots = current_count < max_points ? max_points - current_count : 0;
+
+        // Early exit if no slots available
+        if (available_slots == 0) {
+            return;
+        }
+
+        // Add up to available_slots points
+        size_t num_to_add = std::min(new_points.size(), available_slots);
+        for (size_t i = 0; i < num_to_add; ++i) {
+            const auto& point = new_points[i];
+            points.push_back(point); // Add unique point
             GridCell cell = pointToGridCell(point);
-            auto it = occupancy_grid.find(cell);
-            if (it == occupancy_grid.end()) {
-                // New cell: add point and set counter to 100
-                points.push_back(point);
-                occupancy_grid[cell] = 100;
-            } else {
-                // Existing cell: update counter to 100 (point already in vector)
-                it->second = 100;
-            }
+            occupancy_grid[cell] = 100; // Increment occupancy count
         }
     }
 

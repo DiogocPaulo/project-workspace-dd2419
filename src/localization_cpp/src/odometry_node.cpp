@@ -96,11 +96,11 @@ void OdometryNode::updateOdometry() {
     RCLCPP_INFO(this->get_logger(), "State: x=%.2f, y=%.2f, theta=%.2f, v=%.2f, w=%.2f", state(0), state(1), state(2), state(3), state(4));
 
     // Correct the state using IMU data (skipping correction == only using encoder data, i.e previous odometry node)
-    if (imu_data_received_ && (now_time - last_imu_time_).nanoseconds() / 1e9 < 0.1) { // (now_time - last_imu_time_).nanoseconds() / 1e9 < 0.1 <-- Synchronize with IMU data
+    if (imu_data_received_) { // (now_time - last_imu_time_).nanoseconds() / 1e9 < 0.1 <-- Synchronize with IMU data
         //RCLCPP_INFO(this->get_logger(), "Encoder vs IMU angular velocity: %.2f vs %.2f", angular_velocity, -angular_velocity_imu_.z);
 
         // Correct the state based on IMU data
-        ekf_.correct(-angular_velocity_imu_.z, elapsed_time); // <-- negative to match encoder data
+        //ekf_.correct(-angular_velocity_imu_.z, elapsed_time); // <-- negative to match encoder data
 
         // Reset IMU data received flag
         imu_data_received_ = false;
