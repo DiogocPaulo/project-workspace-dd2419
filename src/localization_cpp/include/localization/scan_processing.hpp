@@ -9,12 +9,14 @@
 #include <tf2/LinearMath/Matrix3x3.h>  // For tf2::Matrix3x3
 #include <rclcpp/time.hpp>
 
+#include <random>
+
 namespace Localization {
 
 // Default distance threshold for segment splitting (in meters)
 constexpr double DEFAULT_SEGMENT_THRESHOLD = 0.1;
 constexpr double MIN_RANGE = 0.4;
-constexpr double MAX_RANGE = 4.0;
+constexpr double MAX_RANGE = 7.0;
 
 // Correct the coordinate of a point based on velocity and time
 Eigen::Vector2d correctCoordinate(const Eigen::Vector2d& point,
@@ -133,6 +135,162 @@ inline Eigen::Vector2d transformPoint(const Eigen::Vector2d& point,
     double y = point.y();
     return Eigen::Vector2d(x * cos_yaw - y * sin_yaw + tx, 
                            x * sin_yaw + y * cos_yaw + ty);
+}
+
+Eigen::Matrix2d computeRotationAlignment(
+    const std::vector<Eigen::Vector2d>& points,
+    const std::vector<Eigen::Vector2d>& stored_points) {
+    // Parameters
+    const size_t min_points = 2;
+    const size_t max_iterations = 100;
+    const double inlier_threshold = 0.1; // Distance threshold for inliers (in meters, adjust based on scan noise)
+    const size_t min_inliers = 10;      // Minimum number of inliers to accept a rotation
+    const double min_inlier_ratio = 0.3; // Minimum fraction of points that must be inliers
+
+    // Return identity if insufficient points
+    if (points.size() < min_points || stored_points.size() < min_points) {
+        return Eigen::Matrix2d::Identity();
+    }
+
+    // Random number generator for sampling
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<size_t> dist_points(0, points.size() - 1);
+    std::uniform_int_distribution<size_t> dist_stored(0, stored_points.size() - 1);
+
+    Eigen::Matrix2d best_rotation = Eigen::Matrix2d::Identity();
+    size_t best_inlier_count = 0;
+
+    // RANSAC loop
+    for (size_t iter = 0; iter < max_iterations; ++iter) {
+        // Sample two points from each set
+        size_t idx1 = dist_points(gen);
+        size_t idx2 = dist_points(gen);
+        while (idx2 == idx1) idx2 = dist_points(gen); // Ensure different points
+        size_t idx1_stored = dist_stored(gen);
+        size_t idx2_stored = dist_stored(gen);
+        while (idx2_stored == idx1_stored) idx2_stored = dist_stored(gen);
+
+        // Compute vectors between points
+        Eigen::Vector2d vec_points = points[idx2] - points[idx1];
+        Eigen::Vector2d vec_stored = stored_points[idx2_stored] - stored_points[idx1_stored];
+
+        // Check for near-zero vectors (degenerate case)
+        if (vec_points.norm() < 1e-6 || vec_stored.norm() < 1e-6) {
+            continue;
+        }
+
+        // Compute rotation angle
+        double cos_theta = vec_points.normalized().dot(vec_stored.normalized());
+        double sin_theta = vec_points(0) * vec_stored(1) - vec_points(1) * vec_stored(0);
+        sin_theta /= (vec_points.norm() * vec_stored.norm());
+        double theta = std::atan2(sin_theta, cos_theta);
+
+        // Skip invalid angles
+        if (std::isnan(theta) || std::isinf(theta)) {
+            continue;
+        }
+
+        // Construct rotation matrix
+        Eigen::Matrix2d rotation;
+        rotation << std::cos(theta), -std::sin(theta),
+                    std::sin(theta),  std::cos(theta);
+
+        // Evaluate rotation: count inliers
+        size_t inlier_count = 0;
+        std::vector<Eigen::Vector2d> inliers_points, inliers_stored;
+        for (size_t i = 0; i < points.size(); ++i) {
+            // Transform point
+            Eigen::Vector2d transformed = rotation * points[i];
+
+            // Find nearest point in stored_points
+            double min_dist = std::numeric_limits<double>::max();
+            for (const auto& sp : stored_points) {
+                double dist = (transformed - sp).norm();
+                if (dist < min_dist) {
+                    min_dist = dist;
+                }
+            }
+
+            // Check if inlier
+            if (min_dist < inlier_threshold) {
+                inlier_count++;
+                inliers_points.push_back(points[i]);
+                inliers_stored.push_back(stored_points[i]); // Store corresponding point (approximate)
+            }
+        }
+
+        // Update best rotation if more inliers
+        if (inlier_count > best_inlier_count) {
+            best_inlier_count = inlier_count;
+            best_rotation = rotation;
+        }
+    }
+
+    // Check if a valid rotation was found
+    if (best_inlier_count < min_inliers || 
+        best_inlier_count < min_inlier_ratio * std::min(points.size(), stored_points.size())) {
+        return Eigen::Matrix2d::Identity();
+    }
+
+    // Optional: Refine rotation using all inliers (using PCA on inliers)
+    if (best_inlier_count > min_points) {
+        // Compute centroids of inlier points
+        Eigen::Vector2d centroid_points(0.0, 0.0);
+        Eigen::Vector2d centroid_stored(0.0, 0.0);
+        for (size_t i = 0; i < points.size(); ++i) {
+            Eigen::Vector2d transformed = best_rotation * points[i];
+            double min_dist = std::numeric_limits<double>::max();
+            size_t min_idx = 0;
+            for (size_t j = 0; j < stored_points.size(); ++j) {
+                double dist = (transformed - stored_points[j]).norm();
+                if (dist < min_dist) {
+                    min_dist = dist;
+                    min_idx = j;
+                }
+            }
+            if (min_dist < inlier_threshold) {
+                centroid_points += points[i];
+                centroid_stored += stored_points[min_idx];
+            }
+        }
+        centroid_points /= best_inlier_count;
+        centroid_stored /= best_inlier_count;
+
+        // Compute covariance matrix
+        Eigen::Matrix2d cov = Eigen::Matrix2d::Zero();
+        for (size_t i = 0; i < points.size(); ++i) {
+            Eigen::Vector2d transformed = best_rotation * points[i];
+            double min_dist = std::numeric_limits<double>::max();
+            size_t min_idx = 0;
+            for (size_t j = 0; j < stored_points.size(); ++j) {
+                double dist = (transformed - stored_points[j]).norm();
+                if (dist < min_dist) {
+                    min_dist = dist;
+                    min_idx = j;
+                }
+            }
+            if (min_dist < inlier_threshold) {
+                Eigen::Vector2d p = points[i] - centroid_points;
+                Eigen::Vector2d q = stored_points[min_idx] - centroid_stored;
+                cov += q * p.transpose();
+            }
+        }
+        cov /= best_inlier_count;
+
+        // SVD to compute refined rotation
+        Eigen::JacobiSVD<Eigen::Matrix2d> svd(cov, Eigen::ComputeFullU | Eigen::ComputeFullV);
+        Eigen::Matrix2d R = svd.matrixU() * svd.matrixV().transpose();
+        // Ensure proper rotation (determinant = 1)
+        if (R.determinant() < 0) {
+            R.col(1) *= -1;
+        }
+        if (!std::isnan(R(0, 0)) && !std::isinf(R(0, 0))) {
+            best_rotation = R;
+        }
+    }
+
+    return best_rotation;
 }
 
 } // namespace Localization
