@@ -35,10 +35,12 @@ Node::Node() : rclcpp::Node("localization_node") {
 }
 
 void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) {
+    /*
     if (std::abs(angular_velocity_) > 0.1) {
         RCLCPP_DEBUG(this->get_logger(), "Robot is rotating too fast, skipping scan processing.");
         return; // Skip processing if robot is not moving
     }
+    */
 
     // Ensure TF buffer has data
     if (!tf_buffer_->canTransform("map", msg->header.frame_id, tf2::TimePointZero, std::chrono::milliseconds(500))) {
