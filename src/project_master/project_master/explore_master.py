@@ -413,29 +413,21 @@ class ExploreMaster(Node):
             y = closest.y
             yaw = 0.0
 
-            service_check_sequence = py_trees.composites.Sequence(f"ServiceCheck{self.i}", memory=True)
+            # service_check_sequence = py_trees.composites.Sequence(f"ServiceCheck{self.i}", memory=True)
 
-            pathing_service = ServiceClient(
-                name=f"GoToPoint{self.i}",
-                service_type=GoToPoint,
-                service_name="/pathing_end_point",
-                x=x,
-                y=y,
-                yaw=yaw
-            )
-
-            pick_service = ArmClient(
-                name=f"PickupObject",
-                x=0.24,
-                y=y,
-                z=-0.15,
-                task='PICKUP'
-            )
+            # pathing_service = ServiceClient(
+            #     name=f"GoToPoint{self.i}",
+            #     service_type=GoToPoint,
+            #     service_name="/pathing_end_point",
+            #     x=rob_x,
+            #     y=rob_y,
+            #     yaw=yaw
+            # )
 
             look_service = Look(
                 name=f"LOOK",
                 x=0.1,
-                y=-0.1,
+                y=0.05,
                 t='objects'
             )
 
@@ -463,47 +455,46 @@ class ExploreMaster(Node):
                 child=end_point_check
             )
 
-            retry_on_endpoint_failure.add_children([pathing_service, retry_endpoint])
-            service_check_sequence.add_child(retry_on_endpoint_failure)
-            # service_check_sequence.add_child(pick_service)
+            # retry_on_endpoint_failure.add_children([pathing_service, retry_endpoint])
+            # service_check_sequence.add_child(retry_on_endpoint_failure)
 
-            fallback = py_trees.behaviours.Success(name=f"SkipToNext{self.i}")
+            # fallback = py_trees.behaviours.Success(name=f"SkipToNext{self.i}")
 
-            point_selector.add_children([service_check_sequence, fallback])
-            Collection_sequence.add_child(point_selector)
-            # Collection_sequence.add_child(look_service)
-            # Collection_sequence.add_child(adjust_service)
-            # Collection_sequence.add_child(pick_service)
+            # point_selector.add_children([service_check_sequence, fallback])
+            # Collection_sequence.add_child(point_selector)
+            Collection_sequence.add_child(look_service)
+            Collection_sequence.add_child(adjust_service)
+            Collection_sequence.add_child(pick_service)
 
             objects_copy.pop(O_i)
 
-            # prev_rob_x = rob_x
-            # prev_rob_y = rob_y
+            prev_rob_x = rob_x
+            prev_rob_y = rob_y
 
             # self.i += 1
 
             # ################# Drop Off Phase ##################
 
-            # # Picks the closest box
-            # distance = 100000
-            # closest = None
-            # O_i = 0
-            # for i, O in enumerate(self.boxes):
-            #     distance_O = np.linalg.norm(np.array([O.x,O.y]) - np.array([prev_rob_x,prev_rob_y]))
-            #     if distance_O < distance:
-            #         closest = O
-            #         distance = distance_O
-            #         O_i = i
+            # Picks the closest box
+            distance = 100000
+            closest = None
+            O_i = 0
+            for i, O in enumerate(self.boxes):
+                distance_O = np.linalg.norm(np.array([O.x,O.y]) - np.array([prev_rob_x,prev_rob_y]))
+                if distance_O < distance:
+                    closest = O
+                    distance = distance_O
+                    O_i = i
 
-            # point_selector = py_trees.composites.Selector(f"EndPoint{self.i}", memory=True)
+            point_selector = py_trees.composites.Selector(f"EndPoint{self.i}", memory=True)
 
 
-            # rob_x,rob_y = self.create_rob_coordinates((closest.x,closest.y),(prev_rob_x,prev_rob_y),0.05)
-            # x = closest.x
-            # y = closest.y
-            # yaw = 0.0
+            rob_x,rob_y = self.create_rob_coordinates((closest.x,closest.y),(prev_rob_x,prev_rob_y),0.05)
+            x = closest.x
+            y = closest.y
+            yaw = 0.0
 
-            # service_check_sequence = py_trees.composites.Sequence(f"ServiceCheck{self.i}", memory=True)
+            service_check_sequence = py_trees.composites.Sequence(f"ServiceCheck{self.i}", memory=True)
 
             # pathing_service = ServiceClient(
             #     name=f"GoToPoint{self.i}",
@@ -514,13 +505,25 @@ class ExploreMaster(Node):
             #     yaw=yaw
             # )
 
-            # drop_service = ArmClient(
-            #     name=f"DropObject",
-            #     x=x,
-            #     y=y,
-            #     z=0.0,
-            #     task='DROPOFF'
-            # )
+            look_service = Look(
+                name=f"LOOK",
+                x=0.1,
+                y=-0.1,
+                t='boxes'
+            )
+
+            adjust_service = Adjust(
+                name=f"ADJUST", 
+                t='boxes'
+            )
+
+            drop_service = Drop(
+                name=f"DROP", 
+                t='boxes',
+                task = "DROPOFF"
+            )
+
+
 
             # retry_on_endpoint_failure = py_trees.composites.Sequence(f"RetryOnEndpointFailure{self.i}", memory=False)
             
@@ -535,17 +538,20 @@ class ExploreMaster(Node):
             #     child=end_point_check        
             # )
 
-            # # retry_on_endpoint_failure.add_children([pathing_service, retry_endpoint])
-            # # service_check_sequence.add_child(retry_on_endpoint_failure)
-            # # service_check_sequence.add_child(drop_service)
+            # retry_on_endpoint_failure.add_children([pathing_service, retry_endpoint])
+            # service_check_sequence.add_child(retry_on_endpoint_failure)
 
-            # # fallback = py_trees.behaviours.Success(name=f"SkipToNext{self.i}")
+            # fallback = py_trees.behaviours.Success(name=f"SkipToNext{self.i}")
 
-            # # point_selector.add_children([service_check_sequence, fallback])
-            # # Collection_sequence.add_child(point_selector)
+            # point_selector.add_children([service_check_sequence, fallback])
+            # Collection_sequence.add_child(point_selector)
 
-            # prev_rob_x = rob_x
-            # prev_rob_y = rob_y
+            prev_rob_x = rob_x
+            prev_rob_y = rob_y
+
+            Collection_sequence.add_child(look_service)
+            Collection_sequence.add_child(adjust_service)
+            Collection_sequence.add_child(drop_service)
 
             # self.i += 1
 
@@ -718,6 +724,9 @@ class Adjust(py_trees.behaviour.Behaviour):
 
         self.eps = 5
         self.step_size = 200
+
+        if self.type == "boxes":
+            self.eps = 15
 
     def setup(self, **kwargs):
         try:
@@ -914,7 +923,7 @@ class Pick(py_trees.behaviour.Behaviour):
 
             distance = l2 + math.tan((math.pi/2)-charlie)*distance_y + 0.085  #math.cos(alpha)*l1 + math.cos(beta)*l2
 
-            if distance < 0.25: distance -= 0.03
+            if distance < 0.25: distance -= 0.01
 
             distance_z = 0 - self.off_base
 
@@ -941,6 +950,139 @@ class Pick(py_trees.behaviour.Behaviour):
                 request.point.x = self.x
                 request.point.y = self.y
                 request.point.z = -0.15
+                request.description = self.task
+
+                self.future = self.pickup_client.call_async(request)
+                self.stage = 4
+                self.node.get_logger().info(f"{self.name} - Sent request to Pickup")
+                return py_trees.common.Status.RUNNING
+            except Exception as e:
+                self.node.get_logger().error(f"{self.name} - Failed to send request: {e}")
+                return py_trees.common.Status.FAILURE
+
+
+        elif self.stage == 4:
+            self.node.get_logger().info(f"Stage: 4")
+            if self.future.done():
+                response = self.future.result()
+                if response.result == 0:
+                    return py_trees.common.Status.SUCCESS
+                else:
+                    return py_trees.common.Status.FAILURE
+
+            return py_trees.common.Status.RUNNING
+        
+class Drop(py_trees.behaviour.Behaviour):
+    """
+    A behaviour that determines the next end point and navigates to it.
+    """
+    def __init__(self, name, t, task, **kwargs):
+        super().__init__(name)
+        self.type = t
+        self.node = None
+        self.request_args = kwargs
+        self.clock = None
+        self.stage = 0
+        self.future = None
+        self.x = None
+        self.y = None
+        self.task = task
+
+        self.base = 12000
+        self.v1 = 12000
+        self.v2 = 12000
+        self.v3 = 12000
+        self.off_base = 0.14
+
+
+    def setup(self, **kwargs):
+        try:
+            self.node = kwargs.get("node")
+        except Exception as e:
+            self.node.get_logger.error(f"{self.name} - Setup failed: {e}")
+            return False
+
+        self.clock = self.node.get_clock()
+
+        self.pickup_client = self.node.create_client(PickObject, 'PickObject')
+        while not self.pickup_client.wait_for_service(timeout_sec=1.0):
+            self.node.get_logger().info('Service not available, waiting...')
+
+        self.pos_subscriber = self.node.create_subscription(
+            JointState, '/servo_pos_publisher', self.pos_callback, 10)
+
+
+        return True
+
+    def initialise(self):
+        self.stage = 0
+        self.future = None
+
+    def pos_callback(self,msg):
+        self.base = msg.position[5]
+        self.v1 = msg.position[4]
+        self.v2 = msg.position[3]
+        self.v3 = msg.position[2]
+
+    def update(self):
+
+        # First two stages is to pass some time to allow the correct joint readings to be read
+        if self.stage == 0:
+            self.node.get_logger().info(f"Stage: 0")
+            self.start_time = time.time()
+
+            self.stage = 1
+            return py_trees.common.Status.RUNNING
+
+
+        elif self.stage == 1:
+            self.node.get_logger().info(f"Stage: 1")
+            if time.time() - self.start_time >= 0.5:
+                self.stage = 2
+
+            return py_trees.common.Status.RUNNING
+
+        # Stage 2 estimates the position of the target given where the arm is pointing
+        elif self.stage == 2:
+            self.node.get_logger().info(f"Stage: 2")
+            l1 = 0.101
+            l2 = 0.095
+            base = math.radians((12000 - self.base) / 100)
+            alpha = math.radians((12000 - self.v1) / 100)
+            beta = math.radians((12000 + self.v2) / 100)
+            charlie = math.radians((12000 - (self.v3 - 50)) / 100)
+
+            distance_y = l1 + self.off_base #math.sin(alpha)*l1 + math.sin(beta)*l2
+
+            distance = l2 + math.tan((math.pi/2)-charlie)*distance_y + 0.085  #math.cos(alpha)*l1 + math.cos(beta)*l2
+
+            if distance < 0.25: distance -= 0.03
+
+            distance_z = 0 - self.off_base
+
+            distance_y = math.sin(-base)*distance
+            distance_x = math.cos(base)*distance
+
+            self.x = distance_x
+            self.y = distance_y
+
+            self.stage = 3
+
+            return py_trees.common.Status.RUNNING
+
+        # Pick upp target
+        elif self.stage == 3:
+            self.node.get_logger().info(f"Stage: 3")
+            try:
+                request = PickObject.Request()
+
+                request.header = Header()
+                request.header.stamp = self.node.get_clock().now().to_msg()
+                request.header.frame_id = "arm_base"
+                request.point = GeometryPoint()
+                request.point.x = self.x
+                request.point.y = self.y
+                request.point.z = 0.0
                 request.description = self.task
 
                 self.future = self.pickup_client.call_async(request)

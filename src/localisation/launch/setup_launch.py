@@ -21,7 +21,7 @@ def generate_launch_description():
         IncludeLaunchDescription(
             launch_description_source=PythonLaunchDescriptionSource(phidgets_launch_file),
         ),
-        #IncludeLaunchDescription(
-           #launch_description_source=PythonLaunchDescriptionSource(camera_launch_file),
-        #),
+        IncludeLaunchDescription(
+           launch_description_source=PythonLaunchDescriptionSource(camera_launch_file),
+        ),
     ])
