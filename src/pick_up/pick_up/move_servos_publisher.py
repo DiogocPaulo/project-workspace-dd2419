@@ -104,7 +104,7 @@ class MultiServoPublisher(Node):
         self.get_logger().info(f'Received pickup request at {request.point}')
         msg = Int16MultiArray()
         msg.layout = MultiArrayLayout(dim=[MultiArrayDimension(label="", size=12, stride=12)], data_offset=0)
-        move_time = 3000 #arm speed (milliseconds)
+        move_time = 2000 #arm speed (milliseconds)
 
         zero_time = Time()
         zero_time.sec = 0
@@ -156,13 +156,13 @@ class MultiServoPublisher(Node):
         msg.data = pose
         self.publisher.publish(msg)
 
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=3))
         
         pose = [11000,12000,v3_arm,v2_arm,v1_arm,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
         msg.data = pose
         self.publisher.publish(msg)
 
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=3))
 
         pose = [11000,12000,12000,12000,12000,12000,move_time,move_time,move_time,move_time,move_time,move_time]
         msg.data = pose
@@ -381,7 +381,7 @@ class MultiServoPublisher(Node):
 
             v3 = (math.pi/2 - base_angle) + (math.pi - v1 - v2) + (math.pi/2 - desired_grip_angle) - math.pi
 
-            self.get_logger().info(f"ANGLES: V1={v1} SERVO4={v2} SERVO3={desired_grip_angle}")
+            # self.get_logger().info(f"ANGLES: V1={v1} SERVO4={v2} SERVO3={desired_grip_angle}")
 
             return base_rotation_angle,(math.pi/2) - v1 - base_angle,math.pi - v2, -v3
         except ValueError as e:

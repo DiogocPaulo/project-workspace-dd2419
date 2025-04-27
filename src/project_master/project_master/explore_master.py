@@ -404,7 +404,7 @@ class ExploreMaster(Node):
                     distance = distance_O
                     O_i = i
 
-            # point_selector = py_trees.composites.Selector(f"EndPoint{self.i}", memory=True)
+            point_selector = py_trees.composites.Selector(f"EndPoint{self.i}", memory=True)
 
 
 
@@ -413,16 +413,16 @@ class ExploreMaster(Node):
             y = closest.y
             yaw = 0.0
 
-            # service_check_sequence = py_trees.composites.Sequence(f"ServiceCheck{self.i}", memory=True)
+            service_check_sequence = py_trees.composites.Sequence(f"ServiceCheck{self.i}", memory=True)
 
-            # pathing_service = ServiceClient(
-            #     name=f"GoToPoint{self.i}",
-            #     service_type=GoToPoint,
-            #     service_name="/pathing_end_point",
-            #     x=0.5,
-            #     y=0.0,
-            #     yaw=yaw
-            # )
+            pathing_service = ServiceClient(
+                name=f"GoToPoint{self.i}",
+                service_type=GoToPoint,
+                service_name="/pathing_end_point",
+                x=x,
+                y=y,
+                yaw=yaw
+            )
 
             pick_service = ArmClient(
                 name=f"PickupObject",
@@ -444,28 +444,36 @@ class ExploreMaster(Node):
                 t='objects'
             )
 
-            # retry_on_endpoint_failure = py_trees.composites.Sequence(f"RetryOnEndpointFailure{self.i}", memory=False)
+            pick_service = Pick(
+                name=f"PICK", 
+                t='objects',
+                task = "PICKUP"
+            )
+
+            retry_on_endpoint_failure = py_trees.composites.Sequence(f"RetryOnEndpointFailure{self.i}", memory=False)
             
-            # end_point_check = ReachedEndPoint(
-            #     name=f"ReachedEndPoint{self.i}",
-            #     x=x,
-            #     y=y
-            # )
+            end_point_check = ReachedEndPoint(
+                name=f"ReachedEndPoint{self.i}",
+                x=x,
+                y=y
+            )
 
-            # retry_endpoint = py_trees.decorators.FailureIsRunning(
-            #     name=f"RetryEndpoint{self.i}",
-            #     child=end_point_check
-            # )
+            retry_endpoint = py_trees.decorators.FailureIsRunning(
+                name=f"RetryEndpoint{self.i}",
+                child=end_point_check
+            )
 
-            # retry_on_endpoint_failure.add_children([pathing_service, retry_endpoint])
-            # service_check_sequence.add_child(retry_on_endpoint_failure)
+            retry_on_endpoint_failure.add_children([pathing_service, retry_endpoint])
+            service_check_sequence.add_child(retry_on_endpoint_failure)
             # service_check_sequence.add_child(pick_service)
 
-            # fallback = py_trees.behaviours.Success(name=f"SkipToNext{self.i}")
+            fallback = py_trees.behaviours.Success(name=f"SkipToNext{self.i}")
 
-            # point_selector.add_children([service_check_sequence, fallback])
-            Collection_sequence.add_child(look_service)
-            Collection_sequence.add_child(adjust_service)
+            point_selector.add_children([service_check_sequence, fallback])
+            Collection_sequence.add_child(point_selector)
+            # Collection_sequence.add_child(look_service)
+            # Collection_sequence.add_child(adjust_service)
+            # Collection_sequence.add_child(pick_service)
 
             objects_copy.pop(O_i)
 
@@ -709,7 +717,7 @@ class Adjust(py_trees.behaviour.Behaviour):
         self.off_base = 0.14
 
         self.eps = 5
-        self.step_size = 150
+        self.step_size = 200
 
     def setup(self, **kwargs):
         try:
@@ -745,7 +753,7 @@ class Adjust(py_trees.behaviour.Behaviour):
 
     def update(self):
         if self.stage == 0:
-            self.node.get_logger().info(f"Stage: 0")
+            # self.node.get_logger().info(f"Stage: 0")
             request = GetDetectedList.Request()
 
             self.future = self.camera_client.call_async(request)
@@ -754,7 +762,7 @@ class Adjust(py_trees.behaviour.Behaviour):
             return py_trees.common.Status.RUNNING
 
         elif self.stage == 1:
-            self.node.get_logger().info(f"Stage: 1")
+            # self.node.get_logger().info(f"Stage: 1")
             if self.future.done():
                 response = self.future.result()
                 
@@ -777,7 +785,7 @@ class Adjust(py_trees.behaviour.Behaviour):
                 v3 = self.v3
 
                 if closest_obj.distance < 10:
-                    self.step_size = 50
+                    self.step_size = 100
                 #difference in x-axis
                 if(closest_obj.diff_x > 0):
                     base += self.step_size
@@ -804,7 +812,7 @@ class Adjust(py_trees.behaviour.Behaviour):
                 
                 msg = Int16MultiArray()
                 msg.layout = MultiArrayLayout(dim=[MultiArrayDimension(label="", size=12, stride=12)], data_offset=0)
-                move_time = 50
+                move_time = 100
                 pose = [11000,12000,int(v3),int(self.v2),int(self.v1),int(base),move_time,move_time,move_time,move_time,move_time,move_time]
                 msg.data = pose
                 self.start_time = time.time()
@@ -815,11 +823,146 @@ class Adjust(py_trees.behaviour.Behaviour):
             return py_trees.common.Status.RUNNING
 
         elif self.stage == 2:
-            self.node.get_logger().info(f"Stage: 2")
-            if time.time() - self.start_time >= 0.1:
+            # self.node.get_logger().info(f"Stage: 2")
+            if time.time() - self.start_time >= 0.12:
                 self.stage = 0
 
             return py_trees.common.Status.RUNNING
+        
+
+class Pick(py_trees.behaviour.Behaviour):
+    """
+    A behaviour that determines the next end point and navigates to it.
+    """
+    def __init__(self, name, t, task, **kwargs):
+        super().__init__(name)
+        self.type = t
+        self.node = None
+        self.request_args = kwargs
+        self.clock = None
+        self.stage = 0
+        self.future = None
+        self.x = None
+        self.y = None
+        self.task = task
+
+        self.base = 12000
+        self.v1 = 12000
+        self.v2 = 12000
+        self.v3 = 12000
+        self.off_base = 0.14
+
+
+    def setup(self, **kwargs):
+        try:
+            self.node = kwargs.get("node")
+        except Exception as e:
+            self.node.get_logger.error(f"{self.name} - Setup failed: {e}")
+            return False
+
+        self.clock = self.node.get_clock()
+
+        self.pickup_client = self.node.create_client(PickObject, 'PickObject')
+        while not self.pickup_client.wait_for_service(timeout_sec=1.0):
+            self.node.get_logger().info('Service not available, waiting...')
+
+        self.pos_subscriber = self.node.create_subscription(
+            JointState, '/servo_pos_publisher', self.pos_callback, 10)
+
+
+        return True
+
+    def initialise(self):
+        self.stage = 0
+        self.future = None
+
+    def pos_callback(self,msg):
+        self.base = msg.position[5]
+        self.v1 = msg.position[4]
+        self.v2 = msg.position[3]
+        self.v3 = msg.position[2]
+
+    def update(self):
+
+        # First two stages is to pass some time to allow the correct joint readings to be read
+        if self.stage == 0:
+            self.node.get_logger().info(f"Stage: 0")
+            self.start_time = time.time()
+
+            self.stage = 1
+            return py_trees.common.Status.RUNNING
+
+
+        elif self.stage == 1:
+            self.node.get_logger().info(f"Stage: 1")
+            if time.time() - self.start_time >= 0.5:
+                self.stage = 2
+
+            return py_trees.common.Status.RUNNING
+
+        # Stage 2 estimates the position of the target given where the arm is pointing
+        elif self.stage == 2:
+            self.node.get_logger().info(f"Stage: 2")
+            l1 = 0.101
+            l2 = 0.095
+            base = math.radians((12000 - self.base) / 100)
+            alpha = math.radians((12000 - self.v1) / 100)
+            beta = math.radians((12000 + self.v2) / 100)
+            charlie = math.radians((12000 - (self.v3 - 50)) / 100)
+
+            distance_y = l1 + self.off_base #math.sin(alpha)*l1 + math.sin(beta)*l2
+
+            distance = l2 + math.tan((math.pi/2)-charlie)*distance_y + 0.085  #math.cos(alpha)*l1 + math.cos(beta)*l2
+
+            if distance < 0.25: distance -= 0.03
+
+            distance_z = 0 - self.off_base
+
+            distance_y = math.sin(-base)*distance
+            distance_x = math.cos(base)*distance
+
+            self.x = distance_x
+            self.y = distance_y
+
+            self.stage = 3
+
+            return py_trees.common.Status.RUNNING
+
+        # Pick upp target
+        elif self.stage == 3:
+            self.node.get_logger().info(f"Stage: 3")
+            try:
+                request = PickObject.Request()
+
+                request.header = Header()
+                request.header.stamp = self.node.get_clock().now().to_msg()
+                request.header.frame_id = "arm_base"
+                request.point = GeometryPoint()
+                request.point.x = self.x
+                request.point.y = self.y
+                request.point.z = -0.15
+                request.description = self.task
+
+                self.future = self.pickup_client.call_async(request)
+                self.stage = 4
+                self.node.get_logger().info(f"{self.name} - Sent request to Pickup")
+                return py_trees.common.Status.RUNNING
+            except Exception as e:
+                self.node.get_logger().error(f"{self.name} - Failed to send request: {e}")
+                return py_trees.common.Status.FAILURE
+
+
+        elif self.stage == 4:
+            self.node.get_logger().info(f"Stage: 4")
+            if self.future.done():
+                response = self.future.result()
+                if response.result == 0:
+                    return py_trees.common.Status.SUCCESS
+                else:
+                    return py_trees.common.Status.FAILURE
+
+            return py_trees.common.Status.RUNNING
+        
 
 def main():
     rclpy.init()
