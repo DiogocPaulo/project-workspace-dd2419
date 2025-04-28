@@ -1,4 +1,4 @@
-# Point.msg
+# NavPoint.msg
 
 # Point coordinates
 float32 x

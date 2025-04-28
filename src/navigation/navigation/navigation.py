@@ -8,24 +8,26 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, HistoryPolicy, ReliabilityPolicy
 
 from robp_interfaces.msg import Encoders
-from nav_msgs.msg import Path
-from nav_msgs.msg import Odometry
+from nav_msgs.msg import OccupancyGrid, Odometry
 from geometry_msgs.msg import PoseStamped
 from robp_interfaces.msg import DutyCycles
 from project_interfaces.srv import GoToPoint, Trigger
+from project_interfaces.msg import NavPoint, NavPath
 
+from mapping.map import Map
 from navigation.robot_state import RobotState
 from navigation.target_path import TargetPath
 
 # Robot parameters
 base = 0.3                  # Wheelbase of the vehicle
 lookahead_gain = 0.1        # Look-ahead distance gain
-lookahead_min = 0.3         # Minimum look-ahead distance
-distance_threshold = 0.2    # Stop distance threshold
-yaw_threshold = 0.2         # Stop yaw threshold
-target_velocity = 0.15      # Robot's target velocity
+lookahead_min = 0.2         # Minimum look-ahead distance
+distance_threshold = 0.05   # Stop distance threshold
+yaw_threshold = 0.08        # Stop yaw threshold
+min_velocity = 0.10         # Minimum velocity
+wheel_duty_min = 0.09       # Minimum wheel duty cycles
 
-def pure_pursuit_control(state, target_path):
+def pure_pursuit_control(state, target_path, velocity, reverse=False, slow_approach=False):
     index, lookahead = target_path.search_target_index(state)
     
     if index is None:
@@ -39,28 +41,35 @@ def pure_pursuit_control(state, target_path):
         target_y = target_path.y_points[-1]
         index = len(target_path.x_points) - 1
 
-    alpha = math.atan2(target_y - state.y, target_x - state.x) - state.yaw
-    alpha = math.atan2(math.sin(alpha), math.cos(alpha))
-    kappa = 2.0 * math.sin(alpha) / lookahead
+    if slow_approach:
+        distance_error = state.distance_to_state(target_path.x_points[-1], target_path.y_points[-1])
+        if distance_error <= 1.0:
+            velocity = max(min_velocity, velocity * (distance_error/1.0))
 
-    omega = state.velocity * kappa
+    if reverse:
+        heading_error = math.atan2(target_y - state.y, target_x - state.x) - (state.yaw + math.pi)
+        velocity = -abs(velocity)
+    else:
+        heading_error = math.atan2(target_y - state.y, target_x - state.x) - state.yaw
 
-    return omega, alpha, index
+    alpha = math.atan2(math.sin(heading_error), math.cos(heading_error))
 
-def calculate_angular_velocity(state, state_yaw, target_yaw):
-    state_yaw = (state_yaw + 180) % 360 - 180
-    target_yaw = (target_yaw + 180) % 360 - 180
+    speed_factor = np.exp(-2 * np.power(alpha, 2))
+    linear_velocity = velocity * speed_factor
 
-    error = target_yaw - state_yaw
-    if error > 180:
-        error -= 360
-    elif error < -180:
-        error += 360
+    kappa = 3.0 * np.arctan(alpha) / lookahead
+    angular_velocity = (abs(velocity) * 0.5) * kappa
 
-    alpha = math.atan2(math.sin(error), math.cos(error))
-    kappa = 2.0 * math.sin(alpha)
-    omega = state.velocity * kappa
-    return omega, alpha
+    return linear_velocity, angular_velocity
+
+def angular_control(state, target_yaw, velocity):
+    heading_error = target_yaw - state.yaw
+    alpha = math.atan2(math.sin(heading_error), math.cos(heading_error))
+
+    kappa = 3.0 * np.arctan(alpha)
+    angular_velocity = (abs(velocity) * 0.5) * kappa
+
+    return angular_velocity
 
 class Navigation(Node):
 
@@ -74,29 +83,54 @@ class Navigation(Node):
         )
 
         self.create_subscription(Odometry, "/odom", self.odom_callback, qos_profile)
-        self.create_subscription(Path, "/custom_path", self.path_callback, qos_profile)
+        self.create_subscription(NavPath, "/custom_path", self.path_callback, qos_profile)
+        self.create_subscription(OccupancyGrid, "/inflated_map", self.inflated_map_callback, qos_profile)
         self.motor_publisher = self.create_publisher(DutyCycles, "/motor/duty_cycles", 10)
 
         # Navigation parameters
-        self.state = RobotState(target_velocity)
+        self.state = RobotState()
         self.target_path = TargetPath(lookahead_gain, lookahead_min)
+        self.target_yaw = 0.0
+        self.target_velocity = 0.0
+        self.slow_approach = False
         self.previous_index = 0
         self.waiting_for_path = True
+        self.reverse_travel = False
+        self.inflated_map = None
 
         self.create_timer(0.05, self.control_loop)
 
     def odom_callback(self, msg: Odometry):
         self.state.update_state(msg)
 
-    def path_callback(self, msg: Path):
-        if len(msg.poses) > 0:
+    def path_callback(self, msg: NavPath):
+        if len(msg.path) > 0:
             self.waiting_for_path = False
+            self.target_yaw = msg.yaw
+            self.target_velocity = msg.velocity
+            self.reverse_travel = msg.reverse
+            self.slow_approach = msg.slow_approach
             self.target_path.update_path(msg)
-            #self.get_logger().info(f"Recived new path with end point: ({msg.poses[-1].pose.position.x:.2f}, {msg.poses[-1].pose.position.y:.2f})")
+            self.get_logger().info(f"Recived new path with end point: ({msg.path[-1].x:.2f}, {msg.path[-1].y:.2f})")
         else:
             self.waiting_for_path = True
             #self.get_logger().warn("Recived empty path")
 
+
+    def inflated_map_callback(self, msg: OccupancyGrid):
+        width = msg.info.width
+        height = msg.info.height
+        grid = np.array(msg.data, dtype=np.int8).reshape((height, width))
+
+        # Create map or update map grid
+        if self.inflated_map is None:
+            resolution = msg.info.resolution
+            origin_x = msg.info.origin.position.x
+            origin_y = msg.info.origin.position.y
+            self.inflated_map = Map(resolution, origin_x, origin_y, width, height, grid)
+        else:
+            self.inflated_map.update_grid(grid)
+        
     def publish_duty_cycles(self, left_wheel, right_wheel):
         # Ensure left and right duty cycles are between -1 to 1
         max_value = max(abs(left_wheel), abs(right_wheel))
@@ -118,30 +152,48 @@ class Navigation(Node):
             self.publish_duty_cycles(0.0, 0.0)
             return
 
-        omega, alpha, self.previous_index = pure_pursuit_control(self.state, self.target_path)
+        distance_error = self.state.distance_to_state(
+            self.target_path.x_points[-1],
+            self.target_path.y_points[-1],
+        )
+        yaw_error = math.atan2(
+            math.sin(self.target_yaw - self.state.yaw),
+            math.cos(self.target_yaw - self.state.yaw),
+        )
 
-        if self.previous_index >= (len(self.target_path.x_points) - 1):
-            distance = self.state.distance_to_state(self.target_path.x_points[-1], self.target_path.y_points[-1])
-            if distance <= distance_threshold and not self.waiting_for_path:
-                # self.get_logger().info(f"Reached end of target path")
-                self.waiting_for_path = True
+        if distance_error > distance_threshold:
+            linear_velocity, angular_velocity = pure_pursuit_control(
+                self.state,
+                self.target_path,
+                self.target_velocity,
+                reverse=self.reverse_travel,
+                slow_approach=self.slow_approach,
+            )
 
-                # Clear existing target path
-                self.target_path.x_points = []
-                self.target_path.y_points = []
-                return
+            left_wheel = linear_velocity - (base/2) * angular_velocity
+            right_wheel = linear_velocity + (base/2) * angular_velocity
+        elif yaw_error > yaw_threshold:
+            angular_velocity = angular_control(
+                self.state,
+                self.target_yaw,
+                self.target_velocity,
+            )
 
-        if abs(alpha) > (math.pi / 2):
-            angular_velocity = 0.15
-            left_wheel = -angular_velocity
-            right_wheel = angular_velocity
-            # self.get_logger().info(f"Velocity: {angular_velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
+            left_wheel = 0.0 - (base/2) * angular_velocity
+            right_wheel = 0.0 + (base/2) * angular_velocity
         else:
-            # angular_scale = 2 * (np.abs(alpha) / np.pi)
-            command_velocity = self.state.velocity * np.exp(-2 * np.abs(alpha))
-            left_wheel = command_velocity - (base/2) * omega
-            right_wheel = command_velocity + (base/2) * omega
-            # self.get_logger().info(f"Velocity: {command_velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
+            self.get_logger().info(f"Reached end of target path")
+            self.waiting_for_path = True
+
+            # Clear existing target path
+            self.target_path.x_points = []
+            self.target_path.y_points = []
+            return
+
+        # Clamp left and right wheel duty cycles
+        left_wheel = np.copysign(np.maximum(np.abs(left_wheel), wheel_duty_min), left_wheel)
+        right_wheel = np.copysign(np.maximum(np.abs(right_wheel), wheel_duty_min), right_wheel)
+        self.get_logger().info(f"Velocity: {self.state.velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
 
         self.publish_duty_cycles(left_wheel, right_wheel)
 
@@ -152,8 +204,10 @@ def main():
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass
-
-    rclpy.shutdown()
+    finally:
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 if __name__ == "__main__":
     main()

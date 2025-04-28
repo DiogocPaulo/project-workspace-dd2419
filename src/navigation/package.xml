@@ -3,7 +3,7 @@
 <package format="3">
   <name>navigation</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>robot navigation</description>
   <maintainer email="thaeron@kth.se">dev</maintainer>
   <license>MIT</license>
 

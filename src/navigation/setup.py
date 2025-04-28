@@ -19,7 +19,7 @@ setup(
     zip_safe=True,
     maintainer='dev',
     maintainer_email='thaeron@kth.se',
-    description='TODO: Package description',
+    description='robot navigation',
     license='MIT',
     tests_require=['pytest'],
     entry_points={

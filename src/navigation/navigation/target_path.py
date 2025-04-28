@@ -1,6 +1,6 @@
 import numpy as np
 from navigation.robot_state import RobotState
-from nav_msgs.msg import Path
+from project_interfaces.msg import NavPath
 
 class TargetPath:
     """
@@ -14,9 +14,9 @@ class TargetPath:
         self.lookahead_gain = lookahead_gain
         self.lookahead_min = lookahead_min
 
-    def update_path(self, path_msg: Path):
-        self.x_points = [pose.pose.position.x for pose in path_msg.poses]
-        self.y_points = [pose.pose.position.y for pose in path_msg.poses]
+    def update_path(self, path_msg: NavPath):
+        self.x_points = [point.x for point in path_msg.path]
+        self.y_points = [point.y for point in path_msg.path]
         
         self.old_nearest_point_index = None
 
@@ -45,7 +45,7 @@ class TargetPath:
             self.old_nearest_point_index = index
 
         # Compute the lookahead distance
-        lookahead = self.lookahead_gain * state.velocity + self.lookahead_min
+        lookahead = self.lookahead_gain * abs(state.velocity) + self.lookahead_min
 
         # Find index of target point within lookahead distance
         while lookahead > state.distance_to_state(self.x_points[index], self.y_points[index]):

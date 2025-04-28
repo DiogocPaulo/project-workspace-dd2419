@@ -5,8 +5,8 @@ import numpy as np
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, HistoryPolicy, ReliabilityPolicy
-from sensor_msgs.msg import Image
 from sensor_msgs.msg import PointCloud2, PointField
+from nav_msgs.msg import OccupancyGrid
 import sensor_msgs_py.point_cloud2 as pc2
 import ctypes
 import struct
@@ -18,30 +18,21 @@ import tf2_geometry_msgs
 from tf2_geometry_msgs import do_transform_point
 from geometry_msgs.msg import PointStamped, TransformStamped
 import os
-from scipy.spatial import cKDTree
 from sklearn.cluster import DBSCAN
-from geometry_msgs.msg import Point, Pose, Quaternion, Vector3
+from geometry_msgs.msg import Pose, Quaternion, Vector3
 from sklearn.decomposition import PCA
-from itertools import permutations
 from sensor_msgs_py.point_cloud2 import create_cloud
 import time
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-from project_interfaces.msg import Object, ObjectList
+from project_interfaces.msg import Object, ObjectList, Vertex, WorkspaceVertices
+from mapping.map import Map
+
+import threading
+from threading import Event
 
 class ExamineImage(Node):
 
     def __init__(self):
         super().__init__('examine_image')
-
-        self.mat = None
-
-        self.get_logger().info(f"Init detection")
-
-        self.tfBuffer = tf2_ros.Buffer()
-        self.listener = tf2_ros.TransformListener(self.tfBuffer, self)
-
-        self.object_list_broadcaster = tf2_ros.TransformBroadcaster(self)
 
         qos_profile = QoSProfile(
             depth=1,
@@ -49,45 +40,41 @@ class ExamineImage(Node):
             reliability=ReliabilityPolicy.BEST_EFFORT
         )
 
-        self.sub2 = self.create_subscription(
-            PointCloud2,
-            '/camera/camera/depth/color/points',
-            self.cloud_callback,
-            qos_profile
-        )
-
-        self.pub = self.create_publisher(PointCloud2, '/depth_points_filtered', 100)
-
-        # Create the 'maps' folder if it doesn't exist
-        folder_path = os.path.join(os.getcwd(), 'maps')
-        if not os.path.exists(folder_path):
-            os.makedirs(folder_path)
-
-        # Define the path to the map file
-        self.file_path = os.path.join(folder_path, 'Map.txt')
-
-        # Initialize an empty list to store detected objects
-        self.object_list = []
+        self.create_subscription(PointCloud2, '/camera/camera/depth/color/points', self.cloud_callback, qos_profile)
+        self.create_subscription(WorkspaceVertices, "/workspace", self.workspace_callback, 10)
+        self.create_subscription(OccupancyGrid, "/obstacles_map", self.obstacles_map_callback, 10)
 
         # Publishers for detected objects as a list
         self.object_list_publisher = self.create_publisher(ObjectList, "/detected_objects", 10)
-
         # Publisher for clusters
         self.cluster_publisher = self.create_publisher(PointCloud2, '/clusters', 10)
 
-        self.broadcaster = self.create_timer(5.0, self.broadcast_object_list)
+        self.tf_buffer = tf2_ros.Buffer()
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self, spin_thread=True)
+        self.object_list_broadcaster = tf2_ros.TransformBroadcaster(self) #
 
-        # Timer to periodically write to map.txt
-        self.write_timer = self.create_timer(5.0, self.write_to_file)  # Write every 5 seconds
+        # Create the 'maps' folder if it doesn't exist
+        folder_path = os.path.join(os.getcwd(), "maps") #
+        if not os.path.exists(folder_path):#
+            os.makedirs(folder_path)#
 
-        # Add a counter to track the number of messages received
+        # Constants
+        self.file_path = os.path.join(folder_path, "map.csv") #
+
+        # Variables
+        self.workspace_vertices = []
+        self.workspace_map = None
+        self.obstacles_map = None
+        self.object_list = []
+        self.initial_object_list = [] #
         self.message_counter = 0
 
-        self.read = 0
+        self.broadcaster = self.create_timer(5.0, self.broadcast_object_list) #
 
-        self.read_map_file()
+        self.get_logger().info(f"Init detection")
+        self.read_map_file() #
 
-    def read_map_file(self):
+    def read_map_file(self): #ALL
         if not os.path.exists(self.file_path):
             self.get_logger().warn(f"Map file {self.file_path} does not exist.")
             return
@@ -100,13 +87,21 @@ class ExamineImage(Node):
             if len(parts) < 4:
                 continue
 
-            object_type = parts[0]
-            x_cm = float(parts[1])
-            y_cm = float(parts[2])
-            angle = float(parts[3])
+            if parts[0] == "1":
+                object_type = Object.CUBE
+            elif parts[0] == "2":
+                object_type = Object.SPHERE
+            elif parts[0] == "3":
+                object_type = Object.PLUSHIE
+            elif parts[0] == "B":
+                object_type = Object.BOX
+            else:
+                object_type = parts[0]
+                self.get_logger().warn(f"Unidentified object type from map file: {object_type}")
 
-            x = x_cm / 100.0
-            y = y_cm / 100.0
+            x = float(parts[1])/100
+            y = float(parts[2])/100
+            angle = float(parts[3])
 
             # Create new object message
             object_msg = Object()
@@ -116,20 +111,39 @@ class ExamineImage(Node):
             object_msg.object_type = object_type
 
             self.object_list.append(object_msg)
-
-            self.read = 1
-
-            #self.get_logger().info(f"Published new object list now includes: {object_type} at ({x:.2f}, {y:.2f})")
-
-            #self.get_logger().info(f"Published TF for object: {object_type} at ({x:.2f}, {y:.2f})")
+            self.get_logger().info(f"Adding object from file: {object_type} at ({x:.2f}, {y:.2f})")
 
         object_list_msg = ObjectList()
-        object_list_msg.header.frame_id = "map"
+        object_list_msg.header.frame_id = "odom"
         object_list_msg.header.stamp = self.get_clock().now().to_msg()
         object_list_msg.length = len(self.object_list)
         object_list_msg.objects = self.object_list
         self.object_list_publisher.publish(object_list_msg)
-        
+
+    def workspace_callback(self, msg: WorkspaceVertices):
+        if self.workspace_vertices:
+            return
+        for vertex_msg in msg.vertices:
+            x = vertex_msg.x
+            y = vertex_msg.y
+            self.workspace_vertices.append((x, y))
+        # Initialise map based on workspace perimeter
+        self.workspace_map = Map(msg.grid_resolution)
+        self.workspace_map.initialise_grid(self.workspace_vertices)
+
+    def obstacles_map_callback(self, msg: OccupancyGrid):
+        width = msg.info.width
+        height = msg.info.height
+        grid = np.array(msg.data, dtype=np.int8).reshape((height, width))
+
+        # Create map or update map grid
+        if self.obstacles_map is None:
+            resolution = msg.info.resolution
+            origin_x = msg.info.origin.position.x
+            origin_y = msg.info.origin.position.y
+            self.obstacles_map = Map(resolution, origin_x, origin_y, width, height, grid)
+        else:
+            self.obstacles_map.update_grid(grid)
 
     def cloud_callback(self, msg: PointCloud2):
         # Increment the message counter
@@ -183,7 +197,6 @@ class ExamineImage(Node):
         lower_green1, upper_green1 = np.array([81, 100, 44]), np.array([84, 255, 105])
         lower_green2, upper_green2 = np.array([73, 210, 90]), np.array([74, 240, 120])
         lower_blue, upper_blue = np.array([99, 254, 75]), np.array([99, 255, 80])
-        lower_brown, upper_brown = np.array([15, 68, 137]), np.array([17, 76, 134])
 
         # Iterate over each cluster
         for cluster_label in unique_labels:
@@ -204,13 +217,11 @@ class ExamineImage(Node):
             green_mask = (hsv_colors[:, 0] >= lower_green1[0]) & (hsv_colors[:, 0] <= upper_green1[0]) | \
                          ((hsv_colors[:, 0] >= lower_green2[0]) & (hsv_colors[:, 0] <= upper_green2[0]))
             blue_mask = (hsv_colors[:, 0] >= lower_blue[0]) & (hsv_colors[:, 0] <= upper_blue[0])
-            brown_mask = (hsv_colors[:, 0] >= lower_brown[0]) & (hsv_colors[:, 0] <= upper_brown[0])
 
             # Apply masks for the current cluster
             red_points = cluster_points[red_mask]
             green_points = cluster_points[green_mask]
             blue_points = cluster_points[blue_mask]
-            brown_points = cluster_points[brown_mask]
 
             # Calculate the total number of points in the cluster
             total_points = len(cluster_points)
@@ -219,91 +230,59 @@ class ExamineImage(Node):
             red_ratio = len(red_points) / total_points
             green_ratio = len(green_points) / total_points
             blue_ratio = len(blue_points) / total_points
-            brown_ratio = len(brown_points) / total_points
 
-            #self.get_logger().info(f"Brown {red_ratio} {blue_ratio} {green_ratio} {brown_ratio}")
+            #self.get_logger().info(f"Color ratios: {red_ratio} {blue_ratio} {green_ratio}")
 
-            pure_red = pure_green = pure_blue = pure_brown = False
+            pure_red = pure_green = pure_blue = False
 
             # Check if the cluster is predominantly red, green, or blue
             if red_ratio > 0.001 and green_ratio == 0.0 and blue_ratio == 0.0:
                 pure_red = True
-            elif green_ratio > 0.001 and red_ratio == 0.0 and blue_ratio == 0.0 and brown_ratio == 0.0:
+            elif green_ratio > 0.001 and red_ratio == 0.0 and blue_ratio == 0.0:
                 pure_green = True
-            elif blue_ratio > 0.001 and red_ratio == 0.0 and green_ratio == 0.0 and brown_ratio < 0.01:
+            elif blue_ratio > 0.001 and red_ratio == 0.0 and green_ratio == 0.0:
                 pure_blue = True
-            elif brown_ratio > 0.1 and red_ratio == 0.0 and green_ratio == 0.0 and blue_ratio == 0.0:
-                pure_brown = True
 
             # Classify based on floor contact points for the current cluster
             object_type = self.classify_based_on_floor_contact(cluster_points)
 
             x, y, z = np.mean(cluster_points, axis=0)
 
-            if pure_brown:
-                if object_type == "cube":
-                    #self.get_logger().info(f'🟫 Cluster {cluster_label} is a cube!')
-                    self.publish_object(x, z + 0.02, 0.0, Object.CUBE, msg.header.stamp)
-
             if pure_red or pure_green or pure_blue:
                 if object_type == "sphere":
-                    if pure_red:
-                        emoji = "🔴"  # Red circle emoji
-                    elif pure_green:
-                        emoji = "🟢"  # Green circle emoji
-                    elif pure_blue:
-                        emoji = "🔵"  # Blue circle emoji
-                    #self.get_logger().info(f'{emoji} Cluster {cluster_label} is a sphere!')
                     self.publish_object(x, z + 0.02, 0.0, Object.SPHERE, msg.header.stamp)
                 elif object_type == "cube":
-                    if pure_red:
-                        emoji = "🟥"  # Red square emoji
-                    elif pure_green:
-                        emoji = "🟩"  # Green square emoji
-                    elif pure_blue:
-                        emoji = "🟦"  # Blue square emoji
-                    #self.get_logger().info(f'{emoji} Cluster {cluster_label} is a cube!')
                     self.publish_object(x, z + 0.02, 0.0, Object.CUBE, msg.header.stamp)
-                #elif object_type == "unknown":
-                    #self.get_logger().info(f'Object not identified :(!')
-
             elif self.is_box(cluster_points):  # If detected object is a box
-                #self.get_logger().info(f'📦 Cluster {cluster_label} is a box!')
-
                 # Compute the orientation angle of the box
                 angle = self.estimate_box_orientation(cluster_points)
-
-                # Store box with angle information[detection-5] [INFO] [1742488983.869258672] [robot_detection]:
+                # Store box with angle information
                 if angle == 0.0:
                     self.publish_object(x, z + 0.08, angle, Object.BOX, msg.header.stamp)
                 elif angle == 90.0:
                     self.publish_object(x, z + 0.12, angle, Object.BOX, msg.header.stamp)
                 else:
                     self.publish_object(x, z + 0.08, angle, Object.BOX, msg.header.stamp)
-
             elif self.is_plushie(cluster_points):
-                #self.get_logger().info(f'🧸 Cluster {cluster_label} is a plushie!')
                 self.publish_object(x + 0.01, z, 0.0, Object.PLUSHIE, msg.header.stamp)
-
             else:
-                if pure_brown:
-                    continue
-                #else:
-                    #self.get_logger().info(f'Cluster {cluster_label} is NOT a recognized object.')
+                self.get_logger().warn(f'Cluster {cluster_label} is NOT a recognized object.')
 
-            # ------------ TIMER FOR EFFICIENCY CHECK (move where desired) ------------
             end_time = time.time()
-            # self.get_logger().info(f"Processing time: {end_time - start_time:.4f} seconds")
-            # ------------------------------------------------------------------------
 
-    def write_to_file(self):
+    def write_map_file(self):
+        self.get_logger().info("Writing map file")
         with open(self.file_path, 'w') as file:
-            if self.read == 1:
-                file.write('\n')
-                self.read = 0
-            else:
-                for object_msg in self.object_list:
-                    file.write(f"{object_msg.object_type} {object_msg.x:.2f} {object_msg.y:.2f} {object_msg.angle:.1f}\n")
+            for object_msg in self.object_list:
+                if object_msg.object_type == Object.CUBE:
+                    object_type_label = "1"
+                elif object_msg.object_type == Object.SPHERE:
+                    object_type_label = "2"
+                elif object_msg.object_type == Object.PLUSHIE:
+                    object_type_label = "3"
+                elif object_msg.object_type == Object.BOX:
+                    object_type_label = "B"
+                file.write(f"{object_type_label}, {(object_msg.x * 100):.2f}, {(object_msg.y * 100):.2f}, {object_msg.angle:.1f}\n")
 
     def estimate_box_orientation(self, cluster_points):
         # Find the point with the lowest Z-coordinate
@@ -494,26 +473,20 @@ class ExamineImage(Node):
         # Publish the clusters
         self.cluster_publisher.publish(cluster_msg)
 
-    def is_within_workspace(self, x, y):
-        """Checks if a point (x, y) is within a simple rectangular boundary."""
-        x_min, x_max = -2.0, 2.0  # Set your boundary values for x
-        y_min, y_max = -1.1, 0.96  # Set your boundary values for y
-
-        return x_min <= x <= x_max and y_min <= y <= y_max
-
-
     def publish_object(self, x, y, angle, object_type, stamp):
         # Create a PointStamped message for the input coordinates
         point_in = PointStamped()
         point_in.header.frame_id = 'camera_depth_optical_frame'  # Input frame
         point_in.header.stamp = stamp  # Timestamp of the original point cloud
-        point_in.point = Point(x=x, y=0.09, z=y)  # Set the point coordinates
+        point_in.point.x = x
+        point_in.point.y = 0.09
+        point_in.point.z = y
 
         try:
-            transform = self.tfBuffer.lookup_transform(
-                'map',  # Target frame
+            transform = self.tf_buffer.lookup_transform(
+                "odom",  # Target frame
                 point_in.header.frame_id,  # Source frame
-                rclpy.time.Time(),  # Time of the transform
+                point_in.header.stamp,
                 rclpy.duration.Duration(seconds=1.0)  # Timeout
             )
 
@@ -525,49 +498,170 @@ class ExamineImage(Node):
             y_transformed = point_out.point.y
             z_transformed = point_out.point.z
 
-            # Check if the new object is a duplicate based on proximity
-            is_duplicate = False
-            is_in = self.is_within_workspace(x_transformed, y_transformed)
+            if self.workspace_map is not None:
+                is_in = self.workspace_map.is_free(x_transformed, y_transformed, 50)
+            else:
+                is_in = False
+
             #self.get_logger().info(f"Published new object list now includes: {is_out} at ({x_transformed:.2f}, {y_transformed:.2f})")
 
-            for obj in self.object_list:
-                distance = np.sqrt((x_transformed - obj.x)**2 + (y_transformed - obj.y)**2)
-                if obj.object_type == "box":
-                    if distance < 0.15:  # If the object is within 1 cm of an existing object
+            if is_in:
+                initial_object_msg = Object()
+                initial_object_msg.x = x_transformed
+                initial_object_msg.y = y_transformed
+                initial_object_msg.angle = angle
+                initial_object_msg.object_type = object_type
+                self.initial_object_list.append(initial_object_msg)
+
+                initial_list_msg = ObjectList()
+                initial_list_msg.header.frame_id = "odom"
+                initial_list_msg.header.stamp = stamp
+                initial_list_msg.length = len(self.initial_object_list)
+                initial_list_msg.objects = self.initial_object_list
+                self.object_list_publisher.publish(initial_list_msg)
+
+                # Check if the new object is a duplicate based on proximity
+                is_duplicate = False
+                for i, obj in enumerate(self.initial_object_list[:-1]):
+                    distance = np.sqrt((x_transformed - obj.x)**2 + (y_transformed - obj.y)**2)
+                    if object_type == "box" or obj.object_type == "box":
+                        if distance < 0.20:    #f the object is within 1 cm of an existing object
+                            is_duplicate = True
+                            break
+                    elif distance < 0.06:   # If the object is within 1 cm of an existing object
                         is_duplicate = True
                         break
-                elif distance < 0.04:  # If the object is within 1 cm of an existing object
-                    is_duplicate = True
-                    break
 
-            # If not a duplicate, add the new object to the list
-            if not is_duplicate and is_in:
-                # Create new object message
-                object_msg = Object()
-                object_msg.x = x_transformed
-                object_msg.y = y_transformed
-                object_msg.angle = angle
-                object_msg.object_type = object_type
+                if self.obstacles_map is not None:
+                    free_from_obstacles = self.obstacles_map.are_adjacent_free(x_transformed, y_transformed, 1, 75)
+                else:
+                    free_from_obstacles = True
 
-                self.object_list.append(object_msg)
+                #self.get_logger().info(f"initial:{self.initial_object_list}")
 
-                object_list_msg = ObjectList()
-                object_list_msg.header.frame_id = "map"
-                object_list_msg.header.stamp = stamp
-                object_list_msg.length = len(self.object_list)
-                object_list_msg.objects = self.object_list
-                self.object_list_publisher.publish(object_list_msg)
+                # If not a duplicate, add the new object to the list
+                if not is_duplicate and free_from_obstacles:
+                    # Create new object message
+                    object_msg = Object()
+                    object_msg.x = x_transformed
+                    object_msg.y = y_transformed
+                    object_msg.angle = angle
+                    object_msg.object_type = object_type
 
-                self.get_logger().info(f"Published new object list now includes: {object_type} at ({x_transformed:.2f}, {y_transformed:.2f})")
+                    self.object_list.append(object_msg)
+
+                    object_list_msg = ObjectList()
+                    object_list_msg.header.frame_id = "odom"
+                    object_list_msg.header.stamp = stamp
+                    object_list_msg.length = len(self.object_list)
+                    object_list_msg.objects = self.object_list
+                    self.object_list_publisher.publish(object_list_msg)
+
+                    #self.get_logger().info(f"Published new object list now includes: {object_type} at ({x_transformed:.2f}, {y_transformed:.2f})")
+
+                 # Confidence-based correction
+                CONFIDENCE_RADIUS = 0.06 # 5cm
+                MIN_CONSISTENT = 2        # Need at least 2 consistent observations
+                #self.get_logger().info(f"obstacles:{self.object_list}")
+                
+                # Find all objects in this area
+                nearby = []
+                for obj in self.initial_object_list:
+                    dist = np.sqrt((x_transformed - obj.x)**2 + (y_transformed - obj.y)**2)
+                    if object_type == "box" or obj.object_type == "box":
+                        if dist <= 0.20:
+                            nearby.append(obj)
+                    elif dist <= CONFIDENCE_RADIUS: # If the object is within 1 cm of an existing object
+                        nearby.append(obj)
+                
+                # Count object types in this area
+                type_counts = {}
+                for obj in nearby:
+                    type_counts[obj.object_type] = type_counts.get(obj.object_type, 0) + 1
+                
+                # Find most common type if we have enough consistent observations
+                if len(nearby) >= MIN_CONSISTENT:
+                    most_common, count = max(type_counts.items(), key=lambda x: x[1])
+                    if count >= MIN_CONSISTENT:
+                        for i, obj in enumerate(self.object_list):
+                            # Check if this object is in the nearby area
+                            for nearby_obj in nearby:
+                                dist = np.sqrt((obj.x - nearby_obj.x)**2 + (obj.y - nearby_obj.y)**2)
+                                if obj.object_type == "box":
+                                    if dist <= 0.20:
+                                        self.object_list[i].object_type = "box"
+                                        break
+                                elif dist <= CONFIDENCE_RADIUS:
+                                    # Update the type in the main object list
+                                    self.object_list[i].object_type = most_common
+                                    break
+
+                        # Re-publish the corrected object list
+                        object_list_msg = ObjectList()
+                        object_list_msg.header.frame_id = "odom"
+                        object_list_msg.header.stamp = stamp
+                        object_list_msg.length = len(self.object_list)
+                        object_list_msg.objects = self.object_list
+                        self.object_list_publisher.publish(object_list_msg)
+                        
+                        self.get_logger().info(f"final:{self.object_list}")
+                        self.get_logger().info(f"Corrected object at ({x_transformed:.2f}, {y_transformed:.2f}) to {most_common}")
+            
 
         except TransformException as e:
             self.get_logger().error(f"Failed coordinate transform for newly {object_type} detected object: {e}")
 
+    def publish_object_list(self):
+        object_list_msg = ObjectList()
+        object_list_msg.header.frame_id = "odom"
+        object_list_msg.header.stamp = self.get_clock().now().to_msg()
+        object_list_msg.length = len(self.object_list)
+        object_list_msg.objects = self.object_list
+        self.object_list_publisher.publish(object_list_msg)
+
+    def check_duplicates(self):
+        duplicates_removed = 0
+        n = len(self.object_list)
+        to_remove = set()  # Stores indices of objects to remove
+
+        for i in range(n):
+            if i in to_remove:
+                continue  # Skip if already marked for removal
+            
+            obj1 = self.object_list[i]
+            
+            for j in range(i + 1, n):
+                if j in to_remove:
+                    continue  # Skip if already marked
+                
+                obj2 = self.object_list[j]
+                dx = obj1.x - obj2.x
+                dy = obj1.y - obj2.y
+                dist = np.sqrt(dx**2 + dy**2)
+
+                # Determine threshold based on types
+                if obj1.object_type == "box" or obj2.object_type == "box":
+                    threshold = 0.18  # Boxes need 18cm
+                elif obj1.object_type == obj2.object_type: 
+                    threshold = 0.15
+                else:
+                    threshold = 0.06 # Others need 5cm
+
+                # If too close, mark the second object for removal
+                if dist < threshold:
+                    to_remove.add(j)
+                    duplicates_removed += 1
+
+        # Rebuild the list, excluding duplicates
+        self.object_list = [obj for idx, obj in enumerate(self.object_list) if idx not in to_remove]
+        return
 
     def broadcast_object_list(self):
+        self.check_duplicates()
+
         for i, object_msg in enumerate(self.object_list):
             transform = TransformStamped()
-            transform.header.frame_id = 'map'  # Change to your desired parent frame
+            transform.header.frame_id = "odom"  # Change to your desired parent frame
             transform.header.stamp = self.get_clock().now().to_msg()
             transform.child_frame_id = f"{object_msg.object_type}_{i}"
             
@@ -582,23 +676,21 @@ class ExamineImage(Node):
             q.w = np.cos(object_msg.angle / 2.0)
             transform.transform.rotation = q
 
-            
             self.object_list_broadcaster.sendTransform(transform)
-        
 
-def main(args=None):
-    rclpy.init(args=args)
-
-    examine_image = ExamineImage()
-
+def main():
+    rclpy.init()
+    node = ExamineImage()
     try:
-        rclpy.spin(examine_image)
+        rclpy.spin(node)
     except KeyboardInterrupt:
-        pass
-
-    examine_image.destroy_node()
-    rclpy.shutdown()
-
+        node.get_logger().info("Keyboard interrupt, shutting down...")
+        node.write_map_file()
+    finally:
+        del node.tf_listener
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 if __name__ == '__main__':
     main()
