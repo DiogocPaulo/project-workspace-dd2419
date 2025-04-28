@@ -1107,7 +1107,7 @@ class Drop(py_trees.behaviour.Behaviour):
 
 def main():
     rclpy.init()
-    node = ExploreMaster()
+    node = CollectionMasterMaster()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:

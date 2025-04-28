@@ -46,18 +46,17 @@ def generate_launch_description():
             arguments=["serial", "--dev", "/dev/ttyUSB1", "-v6"] # Changed to 1
         ),
         Node(
+            package="navigation", #aka folder
+            executable="pathing", #aka py file
+            name="robot_pathing",
+            emulate_tty=True,
+            ros_arguments=["--log-level", "info"]
+        ),
+        Node(
             package="navigation",
             executable="navigation",
             name="robot_navigation",
-        ),
-        Node(
-            package="navigation",
-            executable="mapping",
-            name="robot_mapping",
-        ),
-        Node(
-            package="navigation",
-            executable="pathing",
-            name="robot_pathing",
+            emulate_tty=True,
+            ros_arguments=["--log-level", "info"]
         ),
     ])
