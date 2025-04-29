@@ -160,17 +160,16 @@ class Pathing(Node):
             self.pathing_failed = False
             self.calculate_astar_path()
 
-        if not self.pathing_failed:
-            response.success = True
-            response.message = f"Pathing end point set: ({self.end_point[0]:.2f}, {self.end_point[1]:.2f})"
-        else:
-            if self.inflated_map.is_free(self.start_point[0], self.start_point[1], 50):
-                response.success = False
-                response.message = f"Failed to find path to end point: ({self.end_point[0]:.2f}, {self.end_point[1]:.2f})"
-            else:
-                response.success = True
-                response.message = f"Currently within inflation radius waiting on navigation: ({self.start_point[0]:.2f}, {self.start_point[1]:.2f}) = {self.inflated_map.get_occupancy(self.start_point[0], self.start_point[1])}"
+        if self.pathing_failed and self.backing:
+            response.success = False
+            response.message = f"Failed to find path to safe point: ({self.safe_point[0]:.2f}, {self.safe_point[1]:.2f})"
 
+        if self.pathing_failed:
+            response.success = False
+            response.message = f"Failed to find path to end point: ({self.end_point[0]:.2f}, {self.end_point[1]:.2f})"
+
+        response.success = True
+        response.message = f"Pathing end point set: ({self.end_point[0]:.2f}, {self.end_point[1]:.2f})"
         return response
 
     def publish_inflated_map(self):
@@ -281,7 +280,6 @@ class Pathing(Node):
             self.get_logger().warn("Inflated occupancy grid not created")
             return
 
-
         if not self.approaching_object and not self.backing and not self.inflated_map.is_free(self.start_point[0], self.start_point[1], 75):
             self.get_logger().info("Entering reverse travel mode")
             self.backing = True
@@ -295,13 +293,14 @@ class Pathing(Node):
             end_x, end_y = self.inflated_map.world_to_grid(self.end_point[0], self.end_point[1])
         else:
             self.get_logger().warn("Creating path from inside inflation radius")
-            end_x, end_y = self.inflated_map.world_to_grid(self.safe_point[0], self.safe_point[0])
+            end_x, end_y = self.inflated_map.world_to_grid(self.safe_point[0], self.safe_point[1])
 
         if not self.approaching_object and not self.inflated_map.is_free(self.end_point[0], self.end_point[1], 75):
             self.get_logger().info("End point in inflation radius or occupied cell")
             path = None
         else:
             path = path_planner.plan_path((start_y, start_x), (end_y, end_x))
+
         if path is None:
             self.pathing_failed = True
             self.path_grid = None
