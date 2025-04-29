@@ -35,7 +35,7 @@ Node::Node() : rclcpp::Node("localization_node") {
 }
 
 void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) {
-    if (std::abs(angular_velocity_) > 0.1) {
+    if (std::abs(angular_velocity_) > 0.5) {
         RCLCPP_DEBUG(this->get_logger(), "Robot is rotating too fast, skipping scan processing.");
         return; // Skip processing if robot is not moving
     }
@@ -59,13 +59,24 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
         auto stored_scan = scan_storage_.getClosestScan(current_pose_);
 
         if (stored_scan) {
+            /*
+            
+            */
+            // Align Principal Components before ICP
+            Eigen::Matrix2d pre_rotation = computeRotationAlignment(points, stored_scan->points);
+            std::vector<Eigen::Vector2d> pre_aligned_points(points.size());
+            for (size_t i = 0; i < points.size(); ++i) {
+                pre_aligned_points[i] = pre_rotation * points[i];
+            }
+
+
             // Perform ICP to find transformation and get aligned points
             std::vector<Eigen::Vector2d> aligned_points;
             Eigen::Matrix3d icp_transform;
             icp_.setTarget(stored_scan->points);
 
             auto start_time = std::chrono::high_resolution_clock::now();
-            icp_.computeICP(points, icp_transform, aligned_points);
+            icp_.computeICP(pre_aligned_points, icp_transform, aligned_points);
             auto end_time = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
             RCLCPP_INFO(this->get_logger(), "ICP computation took %ld ms", duration);
@@ -80,19 +91,26 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
                 return;
             }
 
+            // Convert pre_rotation to theta (angle) for quaternion
+            double pre_rotation_theta = std::atan2(pre_rotation(1, 0), pre_rotation(0, 0));
 
-            // Convert ICP rotation to quaternion
-            tf2::Quaternion icp_rotation;
-            icp_rotation.setRPY(0.0, 0.0, icp_rotation_theta);
+            // Convert rotations to quaternions
+            tf2::Quaternion pre_rotation_quat, icp_rotation_quat;
+            pre_rotation_quat.setRPY(0.0, 0.0, pre_rotation_theta);
+            icp_rotation_quat.setRPY(0.0, 0.0, icp_rotation_theta);
 
             // Update the current transform
+            // Combine translations
             translation_[0] += icp_translation_x;
             translation_[1] += icp_translation_y;
-            rotation_ = icp_rotation * rotation_;
+
+            // Combine rotations: current_rotation = icp_rotation * pre_rotation * current_rotation
+            //rotation_ = icp_rotation_quat * rotation_;
+            rotation_ = icp_rotation_quat * pre_rotation_quat * rotation_;
 
             // Store the current scan in the LidarScanStorage
-            if ((current_pose_.position - stored_scan->pose.position).norm() > 0.1) {
-                stored_scan->agePoints(10); // Age points in the storage
+            if ((current_pose_.position - stored_scan->pose.position).norm() > 0.1 || std::abs(angular_velocity_) > 0.2) {
+                //stored_scan->agePoints(10); // Age points in the storage
                 scan_storage_.addScan(aligned_points, current_pose_);
             }
 

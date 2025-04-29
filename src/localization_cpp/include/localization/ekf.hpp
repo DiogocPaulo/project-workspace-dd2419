@@ -16,22 +16,47 @@ public:
 
     // Constructor
     EKF() {
-        // Initialize state vector [x, y, theta, v, w]
+        // State vector [x, y, theta, v, w] (m, m, rad, m/s, rad/s)
+        // Initialize at origin with zero velocity
         state_ = Eigen::VectorXd(5);
         state_.setZero();
-
-        // Initialize covariance matrices
-        P_ = Eigen::MatrixXd::Identity(5, 5) * 0.01;    // Initial uncertainty
-        Q_ = Eigen::MatrixXd(5, 5);                     // Process noise
-        Q_ << 0.01, 0.0,  0.0,  0.0,   0.0,     // x
-              0.0,  0.01, 0.0,  0.0,   0.0,     // y
-              0.0,  0.0,  0.01, 0.0,   0.0,     // theta
-              0.0,  0.0,  0.0,  0.05,  0.0,     // v (higher during accel)
-              0.0,  0.0,  0.0,  0.0,   0.05;    // w (higher during turns)
-        R_ = Eigen::MatrixXd(2, 2);                     // Measurement noise (IMU)
-        R_ << 0.1,  0.0,                        // v (IMU less trusted)
-              0.0,  0.1;                        // w (IMU less trusted)
-        U_ = Eigen::MatrixXd::Identity(2, 2) * 0.01;    // Control noise (encoders)
+    
+        // State covariance (P_): Uncertainty in [x, y, theta, v, w]
+        // - Small values (e.g., 0.01) = high initial confidence
+        // - Increase for uncertain initial state (e.g., 0.1 for theta if IMU noisy)
+        // - Tip: Set P_(2,2) low (e.g., 0.001) if IMU gives reliable initial theta
+        P_ = Eigen::MatrixXd::Identity(5, 5) * 0.01;
+    
+        // Process noise covariance (Q_): Motion model uncertainty
+        // - Higher values = less trust in encoders (e.g., slip during turns)
+        // - x, y: Increase (e.g., 0.05) for noisy position
+        // - theta, w: Increase (e.g., 0.1) for orientation/angular velocity drift
+        // - v: Increase (e.g., 0.1) for noisy linear velocity
+        // - Tip: To trust IMU more, raise Q_(2,2), Q_(4,4) to rely less on encoders
+        Q_ = Eigen::MatrixXd(5, 5);
+        Q_ << 0.01, 0.0,  0.0,  0.0,   0.0,   // x (m^2)
+              0.0,  0.01, 0.0,  0.0,   0.0,   // y (m^2)
+              0.0,  0.0,  0.1,  0.0,   0.0,   // theta (rad^2)
+              0.0,  0.0,  0.0,  0.05,  0.0,   // v (m/s^2)
+              0.0,  0.0,  0.0,  0.0,   0.1;   // w (rad/s^2)
+    
+        // Measurement noise covariance (R_): IMU uncertainty [v, w]
+        // - Smaller values = more trust in IMU
+        // - v: Set high (e.g., 0.1) for noisy accelerometers
+        // - w: Set low (e.g., 0.0001) for reliable gyro (check datasheet, e.g., 0.01 rad/s -> 0.0001)
+        // - Tip: To improve angular metrics, lower R_(1,1) to trust IMU angular velocity
+        R_ = Eigen::MatrixXd(2, 2);
+        R_ << 0.1,    0.0,      // v (m/s^2)
+              0.0,    0.01;  // w (rad/s^2, high IMU trust)
+    
+        // Control noise covariance (U_): Encoder uncertainty [v, w]
+        // - Higher values = less trust in encoders
+        // - v: Increase (e.g., 0.05) for noisy linear velocity
+        // - w: Increase (e.g., 0.1) for unreliable angular velocity (e.g., slip)
+        // - Tip: To trust IMU more, raise U_(1,1) to reduce encoder reliance
+        U_ = Eigen::MatrixXd(2, 2);
+        U_ << 0.01, 0.0,   // v (m/s^2)
+              0.0,  0.2;   // w (rad/s^2)
     }
 
     // Predict step based on encoder data
