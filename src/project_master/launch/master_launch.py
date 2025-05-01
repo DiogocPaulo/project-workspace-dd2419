@@ -22,6 +22,12 @@ def generate_launch_description():
         ),
         Node(
             package='pick_up',
+            executable='ArmCameraNode',
+            name='ArmNode',
+            output='screen',
+        ),
+        Node(
+            package='pick_up',
             executable='talker',
             name='move_servos_publisher',
             # output='screen',
@@ -32,12 +38,6 @@ def generate_launch_description():
             name='servo_pos_subscriber',
             # output='screen',
         ),
-        # Node(
-        #     package='pick_up',
-        #     executable='ArmCameraNode',
-        #     name='ArmNode',
-        #     output='screen',
-        # ),
         Node(
             package='micro_ros_agent',
             executable='micro_ros_agent',
