@@ -699,7 +699,7 @@ class Look(py_trees.behaviour.Behaviour):
 
         self.pickup_client = self.node.create_client(PickObject, 'PickObject')
         while not self.pickup_client.wait_for_service(timeout_sec=1.0):
-            self.logger.info("Arm Request service not yet avaliable, waiting ...")
+            self.node.logger.info("Arm Request service not yet avaliable, waiting ...")
 
         self.camera_client = self.node.create_client(GetDetectedList, 'get_detected_list')
         while not self.camera_client.wait_for_service(timeout_sec=1.0):
@@ -810,7 +810,7 @@ class Adjust(py_trees.behaviour.Behaviour):
 
         self.camera_client = self.node.create_client(GetDetectedList, 'get_detected_list')
         while not self.camera_client.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info('Service not available, waiting...')
+            self.node.get_logger().info('Service not available, waiting...')
 
         self.pos_subscriber = self.node.create_subscription(
             JointState, '/servo_pos_publisher', self.pos_callback, 10)
@@ -907,6 +907,183 @@ class Adjust(py_trees.behaviour.Behaviour):
             # self.node.get_logger().info(f"Stage: 2")
             if time.time() - self.start_time >= 0.12:
                 self.stage = 0
+
+            return py_trees.common.Status.RUNNING
+
+class Sweep(py_trees.behaviour.Behaviour):
+    """
+    A behaviour that determines the next end point and navigates to it.
+    """
+    def __init__(self, name, t, **kwargs):
+        super().__init__(name)
+        self.type = t
+        self.node = None
+        self.camera_client = None
+        self.request_args = kwargs
+        self.clock = None
+        self.stage = 0
+        self.future = None
+        self.wait = 2000
+
+        self.counter = 0
+
+
+        self.positions = [
+            (3000, 5500, 1500, 2.0),  # base, neck, move_time, wait
+            (3000, 3000, 1000, 1.5),
+            (12000, 5500, 1500, 2.0),
+            (12000, 3000, 1000, 1.5),
+            (21000, 5500, 1500, 2.0),
+            (21000, 3000, 1000, 1.5),
+        ]
+
+    def setup(self, **kwargs):
+        try:
+            self.node = kwargs.get("node")
+        except Exception as e:
+            self.logger.error(f"{self.name} - Setup failed: {e}")
+            return False
+
+
+        self.camera_client = self.node.create_client(GetDetectedList, 'get_detected_list')
+        while not self.camera_client.wait_for_service(timeout_sec=1.0):
+            self.node.get_logger().info('Service not available, waiting...')
+
+        self.joint_publisher = self.node.create_publisher(Int16MultiArray, "/multi_servo_cmd_sub", 10)
+
+        self.clock = self.node.get_clock()
+
+
+        return True
+
+    def initialise(self):
+        self.stage = 0
+        self.future = None
+
+    def update(self):
+        if self.stage == 0:
+            # self.node.get_logger().info(f"Stage: 0")
+
+            if self.counter < len(self.positions):
+                base, neck, move_time, self.wait = self.positions[self.counter]
+                pose = [11000,12000,neck,21000,12000,base,move_time,move_time,move_time,move_time,move_time,move_time]
+                msg.data = pose
+                self.arm_pub.publish(msg)
+            
+            msg = Int16MultiArray()
+            msg.layout = MultiArrayLayout(dim=[MultiArrayDimension(label="", size=12, stride=12)], data_offset=0)
+            pose = [11000,12000,neck,21000,12000,base,move_time,move_time,move_time,move_time,move_time,move_time]
+            msg.data = pose
+
+
+            self.stage = 1
+
+            self.start_time = time.time()
+
+            return py_trees.common.Status.RUNNING
+
+        elif self.stage == 1:
+            # self.node.get_logger().info(f"Stage: 2")
+            if time.time() - self.start_time >= self.wait:
+                self.stage = 2
+
+            return py_trees.common.Status.RUNNING
+
+        elif self.stage == 2:
+            # self.node.get_logger().info(f"Stage: 0")
+            request = GetDetectedList.Request()
+
+            self.future = self.camera_client.call_async(request)
+
+            self.stage = 3
+
+            return py_trees.common.Status.RUNNING
+
+        elif self.stage == 3:
+            # self.node.get_logger().info(f"Stage: 1")
+            if self.future.done():
+                response = self.future.result()
+                
+                objects = response.objects
+                boxes = response.boxes
+
+                if len(objects) > 0:
+                    return py_trees.common.Status.SUCCESS
+
+                if self.counter >= len(self.positions):
+                    return py_trees.common.Status.FAILURE
+
+                self.counter += 1
+
+                self.stage = 0
+
+            return py_trees.common.Status.RUNNING
+
+
+class Check(py_trees.behaviour.Behaviour):
+    """
+    A behaviour that determines the next end point and navigates to it.
+    """
+    def __init__(self, name, t, **kwargs):
+        super().__init__(name)
+        self.type = t
+        self.node = None
+        self.camera_client = None
+        self.request_args = kwargs
+        self.clock = None
+        self.stage = 0
+        self.future = None
+        self.counter = 0
+        self.counter_max = 10
+
+
+    def setup(self, **kwargs):
+        try:
+            self.node = kwargs.get("node")
+        except Exception as e:
+            self.node.logger.error(f"{self.name} - Setup failed: {e}")
+            return False
+
+
+        self.camera_client = self.node.create_client(GetDetectedList, 'get_detected_list')
+        while not self.camera_client.wait_for_service(timeout_sec=1.0):
+            self.node.get_logger().info('Service not available, waiting...')
+
+
+        return True
+
+    def initialise(self):
+        self.stage = 0
+        self.future = None
+
+    def update(self):
+        if self.stage == 0:
+            # self.node.get_logger().info(f"Stage: 0")
+            request = GetDetectedList.Request()
+
+            self.future = self.camera_client.call_async(request)
+            self.stage = 1
+
+            return py_trees.common.Status.RUNNING
+
+        elif self.stage == 1:
+            # self.node.get_logger().info(f"Stage: 1")
+            if self.future.done():
+                response = self.future.result()
+                
+                objects = response.objects
+                boxes = response.boxes
+
+                if len(objects)>0:
+                    return py_trees.common.Status.SUCCESS
+
+                self.counter += 1
+
+                if self.counter > self.counter_max:
+                    self.counter = 0
+                    return py_trees.common.Status.FAILURE
+                else:
+                    self.stage = 0
 
             return py_trees.common.Status.RUNNING
         

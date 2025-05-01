@@ -488,13 +488,13 @@ class MultiServoPublisher(Node):
         self.get_logger().info(f'Received move request request')
         msg = Int16MultiArray()
         msg.layout = MultiArrayLayout(dim=[MultiArrayDimension(label="", size=12, stride=12)], data_offset=0)
-        move_time = 2000 #arm speed (milliseconds)
+        move_time = 1500 #arm speed (milliseconds)
         move_time = 500
         pose = [14000,12000,request.v3,request.v2,request.v1,request.base,move_time,move_time,move_time,move_time,move_time,move_time]
         msg.data = pose
         self.publisher.publish(msg)
 
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=2000))
 
         
 
