@@ -53,9 +53,9 @@ class Pathing(Node):
 
         # Constants
         self.adaptive_h = {}
-        self.workspace_inflation_radius = 0.35
+        self.workspace_inflation_radius = 0.25
         self.objects_inflation_radius = 0.35
-        self.obstacles_inflation_radius = 0.40
+        self.obstacles_inflation_radius = 0.35
 
         # Variables
         self.start_point = (0.0, 0.0)
@@ -163,10 +163,12 @@ class Pathing(Node):
         if self.pathing_failed and self.backing:
             response.success = False
             response.message = f"Failed to find path to safe point: ({self.safe_point[0]:.2f}, {self.safe_point[1]:.2f})"
+            return response
 
         if self.pathing_failed:
             response.success = False
             response.message = f"Failed to find path to end point: ({self.end_point[0]:.2f}, {self.end_point[1]:.2f})"
+            return response
 
         response.success = True
         response.message = f"Pathing end point set: ({self.end_point[0]:.2f}, {self.end_point[1]:.2f})"

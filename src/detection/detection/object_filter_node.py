@@ -69,7 +69,7 @@ class ObjectFilterNode(Node):
                     if distance < 0.24:    #f the object is within 1 cm of an existing object
                         is_duplicate = True
                         break
-                elif distance < 0.06:   # If the object is within 1 cm of an existing object
+                elif distance < 0.15:   # If the object is within 1 cm of an existing object
                     is_duplicate = True
                     break
 
@@ -101,7 +101,7 @@ class ObjectFilterNode(Node):
                 self.get_logger().info(f"Published new object list now includes: {raw_obj.object_type} at ({raw_obj.x:.2f}, {raw_obj.y:.2f})")
 
                 # Confidence-based correction
-            CONFIDENCE_RADIUS = 0.06 # 5cm
+            CONFIDENCE_RADIUS = 0.15 # 5cm
             MIN_CONSISTENT = 2        # Need at least 2 consistent observations
             self.get_logger().info(f"obstacles:{self.object_list}")
             
@@ -174,7 +174,7 @@ class ObjectFilterNode(Node):
                 elif obj1.object_type == obj2.object_type: 
                     threshold = 0.15
                 else:
-                    threshold = 0.06 # Others need 5cm
+                    threshold = 0.15 # Others need 5cm
 
                 # If too close, mark the second object for removal
                 if dist < threshold:
