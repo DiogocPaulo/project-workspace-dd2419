@@ -18,9 +18,9 @@ import numpy as np
 
 class ArmCamera(Node):
     def __init__(self):
-        super().__init__("arm_camera_detector")
+        super().__init__("arm_camera")
 
-        self.model = YOLO("runs/detect/train2/weights/best.pt")
+        self.model = YOLO("runs/detect/train2/weights/best.pt", verbose=False)
 
         self.srv = self.create_service(GetDetectedList, 'get_detected_list', self.get_detected_callback)
 
@@ -48,7 +48,7 @@ class ArmCamera(Node):
     def image_callback(self, msg):
         cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
 
-        results = self.model(cv_image)
+        results = self.model(cv_image, verbose=False)
 
         
         class_names = ['Box','objects']
