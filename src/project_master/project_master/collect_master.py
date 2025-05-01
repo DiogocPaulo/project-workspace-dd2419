@@ -171,503 +171,7 @@ class ReachedEndPoint(py_trees.behaviour.Behaviour):
         else:
             self.node.get_logger().info(f"{self.name}: Reached waypoint of ({self.end_point[0], self.end_point[1]}) at {self.current_yaw}")
             return py_trees.common.Status.SUCCESS
-    
-def generate_waypoints_with_map(map: Map, x_resolution, y_resolution):
 
-    x_min = 0.0
-    x_max = map.cells_to_distance(map.grid_width)
-    y_min = 0.0
-    y_max = map.cells_to_distance(map.grid_height)-0.35
-
-    waypoints = []
-    reverse = False
-
-    x = x_min
-    while x < x_max:
-        y = y_min if not reverse else y_max
-        first = None
-        last = None
-        while (not reverse and y < y_max) or (reverse and y > y_min):
-            if map.is_free(x, y, 1):
-                if first is None:
-                    first = (x, y, 0.0)
-                last = (x, y, 0.0)
-            y += y_resolution if not reverse else -y_resolution
-        if first is not None:
-            waypoints.append(first)
-        if last is not None and first != last:
-            waypoints.append(last)
-        x += x_resolution
-        reverse = not reverse
-    
-    return waypoints
-
-def offset_outer_vertices(workspace_vertices, offset):
-    vertices = [np.array(vertex) for vertex in workspace_vertices]
-    num_vertices = len(vertices)
-
-    offset_vertices = []
-
-    def compute_offset_normal(p, q):
-        edge_vector = q - p
-        norm_edge = np.linalg.norm(edge_vector)
-        if norm_edge == 0:
-            return np.array([0, 0])
-        perp_vector = np.array([-edge_vector[1], edge_vector[0]])
-        normal_vector = perp_vector / np.linalg.norm(perp_vector)
-        cross_product = np.cross(edge_vector, perp_vector)
-        if cross_product < 0:
-            normal_vector = -normal_vector
-        return normal_vector
-
-    for i in range(num_vertices + 1):
-        prev = vertices[(i - 1) % num_vertices]
-        current = vertices[(i) % num_vertices]
-        nxt = vertices[(i + 1) % num_vertices]
-
-        normal1 = compute_offset_normal(prev, current)
-        normal2 = compute_offset_normal(current, nxt)
-
-        p1 = current + normal1 * offset
-        d1 = current - prev  # direction of the incoming edge
-        p2 = current + normal2 * offset
-        d2 = nxt - current   # direction of the outgoing edge
-
-        denom = np.cross(d1, d2)
-        if np.abs(denom) < 1e-6:
-            offset_vertex = current + normal1 * offset
-        else:
-            t = np.cross((p2 - p1), d2) / denom
-            offset_vertex = p1 + t * d1
-
-        offset_vertices.append((offset_vertex[0], offset_vertex[1]))
-
-    return offset_vertices
-
-def offset_inner_vertices(vertices, offset):
-    offset_vertices = []
-    polygon = Polygon(vertices)
-    offset_polygon = polygon.buffer(-offset)
-    if offset_polygon.geom_type == 'Polygon':
-        offset_vertices = list(offset_polygon.exterior.coords)
-    if offset_polygon.geom_type == 'MultiPolygon':
-        largest_polygon = max(offset_polygon.geoms, key=lambda p: p.area)
-        offset_vertices = list(largest_polygon.exterior.coords)
-    return offset_vertices
-
-
-
-def generate_waypoints(map: Map, workspace_vertices, outer_offset, inner_offset):
-    outer_vertices = offset_outer_vertices(workspace_vertices, outer_offset)
-    inner_vertices = offset_inner_vertices(workspace_vertices, inner_offset)
-    offset_vertices = outer_vertices + inner_vertices[::-1]
-    waypoints = []
-    for i in range(len(offset_vertices) - 1):
-        current_x, current_y = offset_vertices[i]
-        next_x, next_y = offset_vertices[i + 1]
-        distance = np.hypot(next_x - current_x, next_y - current_y)
-        resolution = max(1, math.ceil(distance * 1.2))
-        for j in range(resolution):
-            x = current_x + (next_x - current_x) * (j + 1) / resolution
-            y = current_y + (next_y - current_y) * (j + 1) / resolution
-            if map.is_free(x, y, 1):
-                waypoints.append((x, y, 0.0))
-
-    num_waypoints = len(waypoints) 
-    for i in range(num_waypoints):
-        current_x, current_y, _ = waypoints[i]
-        next_x, next_y, _ = waypoints[(i + 1) % num_waypoints]
-        heading = np.arctan2(next_y - current_y, next_x - current_x)
-        rounded_x, rounded_y = map.round_world(current_x, current_y)
-        waypoints[i] = (rounded_x, rounded_y, heading)
-
-    return waypoints
-
-class ExploreMaster(Node):
-
-    def __init__(self):
-        super().__init__("explore_master")
-
-        workspace_file = "workspaces/large_workspace.tsv"
-        self.workspace_vertices = self.read_workspace(workspace_file, skip_header=True)
-        self.workspace_publisher = self.create_publisher(WorkspaceVertices, "/workspace", 10)
-        self.waypoints_path_publisher = self.create_publisher(Path, "/waypoints_path", 10)
-        self.end_points_broadcaster = TransformBroadcaster(self)
-
-        self.target_velocity = 0.16
-        self.resolution = 0.05
-        self.map = Map(self.resolution)
-        self.map.initialise_grid(self.workspace_vertices)
-        self.map.inflate_grid(0.35)
-        self.show_waypoints = False
-        self.end_points = generate_waypoints(self.map, self.workspace_vertices, 0.35, 1.05)
-
-        self.objects, self.boxes = self.process_map_file("maps/Map_test.txt")
-
-        root = self.create_exploration_tree()
-        self.tree = py_trees_ros.trees.BehaviourTree(root=root)
-        tree_string = py_trees.display.ascii_tree(root)
-        self.get_logger().info(f"Behavior Tree Structure:\n{tree_string}")
-        self.tree.setup(timeout=15, node=self)
-
-        self.create_timer(0.1, self.tick_tree) # Tick tree every 100 ms
-        self.create_timer(2, self.publish_workspace)
-        self.create_timer(1, self.publish_objects)
-        if self.show_waypoints:
-            self.create_timer(2, self.publish_waypoints_path)
-            self.create_timer(2, self.broadcast_waypoints)
-
-    def publish_workspace(self):
-        workspace_msg = WorkspaceVertices()
-        workspace_msg.header.stamp = self.get_clock().now().to_msg()
-        workspace_msg.header.frame_id = "odom"
-
-        for vertex in self.workspace_vertices:
-            vertex_msg = Vertex()
-            vertex_msg.x = vertex[0]
-            vertex_msg.y = vertex[1]
-            workspace_msg.vertices.append(vertex_msg)
-
-        workspace_msg.grid_resolution = self.resolution
-
-        self.workspace_publisher.publish(workspace_msg)
-        self.get_logger().info("Published workspace vertices", once=True)
-
-    def publish_waypoints_path(self):
-        if not self.end_points:
-            return
-        path_msg = Path()
-        path_msg.header.stamp = self.get_clock().now().to_msg()
-        path_msg.header.frame_id = "odom"
-
-        for i in range(len(self.end_points)):
-            pose_msg = PoseStamped()
-            pose_msg.header = path_msg.header
-            pose_msg.pose.position.x = self.end_points[i][0]
-            pose_msg.pose.position.y = self.end_points[i][1]
-            pose_msg.pose.position.z = 0.0
-            pose_msg.pose.orientation.w = 1.0
-            path_msg.poses.append(pose_msg)
-
-        self.waypoints_path_publisher.publish(path_msg)
-        self.get_logger().info("Published waypoints path", once=True)
-
-
-    def broadcast_waypoints(self):
-        for i, point in enumerate(self.end_points):
-            quaternion = Quaternion()
-            quaternion.x = 0.0
-            quaternion.y = 0.0
-            quaternion.z = np.sin(point[2] * 0.5)
-            quaternion.w = np.cos(point[2] * 0.5)
-
-            transform = TransformStamped()
-            transform.header.frame_id = "odom"  # Change to your desired parent frame
-            transform.header.stamp = self.get_clock().now().to_msg()
-            transform.child_frame_id = f'EndPoint{i}'
-            
-            # Set translation from end_point coordinates
-            transform.transform.translation.x = point[0]
-            transform.transform.translation.y = point[1]
-            transform.transform.translation.z = 0.0
-            
-            transform.transform.rotation.x = quaternion.x
-            transform.transform.rotation.y = quaternion.y
-            transform.transform.rotation.z = quaternion.z
-            transform.transform.rotation.w = quaternion.w
-            
-            self.end_points_broadcaster.sendTransform(transform)
-
-
-
-
-    class Object:
-        def __init__(self,type,x,y):
-            self.x = x
-            self.y = y
-            self.type = type
-
-    def process_map_file(self, file_path):
-        objects = []
-        boxes = []
-        with open(file_path, "r") as file:
-            for line in file:
-                parts = line.strip().split(" ")
-                O = self.Object(parts[0],float(parts[1])/100,float(parts[2])/100)
-                if O.type == "B" or O.type == "b":
-                    boxes.append(O)
-                else:
-                    objects.append(O)
-
-        return objects,boxes
-
-    def publish_objects(self):
-        object_number = 0
-        box_number = 0
-        for object in self.objects:
-            self.publish_transform("Object-"+str(object_number),object.x,object.y,0)
-            object_number+=1
-        for box in self.boxes:
-            self.publish_transform("Box-"+str(box_number),box.x,box.y,0)
-            box_number+=1
-
-
-    def publish_transform(self, name, x, y, theta):
-        t = TransformStamped()
-        t.header.stamp = self.get_clock().now().to_msg()
-        t.header.frame_id = "map"
-        t.child_frame_id = name
-
-        t.transform.translation.x = x
-        t.transform.translation.y = y
-        t.transform.translation.z = 0.0
-
-        # Convert yaw to quaternion
-        qz = math.sin(theta / 2.0)
-        qw = math.cos(theta / 2.0)
-        t.transform.rotation.x = 0.0
-        t.transform.rotation.y = 0.0
-        t.transform.rotation.z = qz
-        t.transform.rotation.w = qw
-
-        self.end_points_broadcaster.sendTransform(t)
-        # self.get_logger().info(f"Published transform for {name} at ({x}, {y})")
-
-    def create_rob_coordinates(self, point1, point2, offset):
-        direction = np.array(point2) - np.array(point1)
-        
-        unit_direction = direction / np.linalg.norm(direction)
-        
-        new_endpoint = np.array(point1) + unit_direction * offset
-
-        rob_x = point2[0] - new_endpoint[0]
-        rob_y = point2[1] - new_endpoint[1]
-        
-        return rob_x, rob_y
-
-    def create_exploration_tree(self):
-        root = py_trees.composites.Selector("ExplorationRoot", memory=True)
-        exploration_sequence = py_trees.composites.Sequence("Exploration", memory=True)
-
-        prev_rob_x = 0
-        prev_rob_y = 0
-
-        objects_copy = self.objects.copy()
-
-        i = 0
-
-        while len(objects_copy)>0:
-            ################# Pick Up Phase ##################
-
-            # Picks the closest object
-            distance = 100000
-            closest = None
-            O_i = 0
-            for iter, O in enumerate(objects_copy):
-                distance_O = np.linalg.norm(np.array([O.x,O.y]) - np.array([prev_rob_x,prev_rob_y]))
-                if distance_O < distance:
-                    closest = O
-                    distance = distance_O
-                    O_i = iter
-
-            rob_x,rob_y = self.create_rob_coordinates((prev_rob_x,prev_rob_y),(closest.x,closest.y),0.2)
-            x = closest.x
-            y = closest.y
-            yaw = 0.0
-
-            point_selector = py_trees.composites.Selector(f"EndPoint{i}", memory=True)
-
-            service_check_sequence = py_trees.composites.Sequence(f"ServiceCheck{i}", memory=True)
-
-            pathing_service = ServiceClient(
-                name=f"GoToPoint{i}",
-                service_type=GoToPoint,
-                service_name="/pathing_end_point",
-                x=rob_x,
-                y=rob_y,
-                yaw=yaw,
-                velocity=self.target_velocity,
-                reverse=False,
-                slow_approach=False,
-                approaching_object=False,
-            )
-
-            retry_on_endpoint_failure = py_trees.composites.Sequence(f"RetryOnEndpointFailure{i}", memory=False)
-            
-            end_point_check = ReachedEndPoint(
-                name=f"ReachedEndPoint{i}",
-                x=rob_x,
-                y=rob_y,
-                yaw=yaw,
-            )
-
-            retry_endpoint = py_trees.decorators.FailureIsRunning(
-                name=f"RetryEndpoint{i}",
-                child=end_point_check,
-            )
-
-            retry_on_endpoint_failure.add_children([pathing_service, retry_endpoint])
-            service_check_sequence.add_child(retry_on_endpoint_failure)
-
-            fallback = py_trees.behaviours.Success(name=f"SkipToNext{i}")
-
-            point_selector.add_children([service_check_sequence, fallback])
-            exploration_sequence.add_child(point_selector)
-            # Collection_sequence.add_child(look_service)
-            # Collection_sequence.add_child(adjust_service)
-            # Collection_sequence.add_child(pick_service)
-
-            objects_copy.pop(O_i)
-
-            prev_rob_x = rob_x
-            prev_rob_y = rob_y
-
-            i = i + 1
-
-            # ################# Drop Off Phase ##################
-
-            # Picks the closest box
-            distance = 100000
-            closest = None
-            O_i = 0
-            for iter, O in enumerate(self.boxes):
-                distance_O = np.linalg.norm(np.array([O.x,O.y]) - np.array([prev_rob_x,prev_rob_y]))
-                if distance_O < distance:
-                    closest = O
-                    distance = distance_O
-                    O_i = iter
-
-
-            rob_x,rob_y = self.create_rob_coordinates((prev_rob_x,prev_rob_y),(closest.x,closest.y),0.2)
-            x = closest.x
-            y = closest.y
-            yaw = 0.0
-
-            point_selector = py_trees.composites.Selector(f"EndPoint{i}", memory=True)
-
-            service_check_sequence = py_trees.composites.Sequence(f"ServiceCheck{i}", memory=True)
-
-            pathing_service = ServiceClient(
-                name=f"GoToPoint{i}",
-                service_type=GoToPoint,
-                service_name="/pathing_end_point",
-                x=rob_x,
-                y=rob_y,
-                yaw=yaw,
-                velocity=self.target_velocity,
-                reverse=False,
-                slow_approach=False,
-                approaching_object=False,
-            )
-
-            retry_on_endpoint_failure = py_trees.composites.Sequence(f"RetryOnEndpointFailure{i}", memory=False)
-            
-            end_point_check = ReachedEndPoint(
-                name=f"ReachedEndPoint{i}",
-                x=rob_x,
-                y=rob_y,
-                yaw=yaw,
-            )
-
-            retry_endpoint = py_trees.decorators.FailureIsRunning(
-                name=f"RetryEndpoint{i}",
-                child=end_point_check,
-            )
-
-            retry_on_endpoint_failure.add_children([pathing_service, retry_endpoint])
-            service_check_sequence.add_child(retry_on_endpoint_failure)
-
-            fallback = py_trees.behaviours.Success(name=f"SkipToNext{i}")
-
-            point_selector.add_children([service_check_sequence, fallback])
-            exploration_sequence.add_child(point_selector)
-
-            prev_rob_x = rob_x
-            prev_rob_y = rob_y
-
-            # Collection_sequence.add_child(look_service)
-            # Collection_sequence.add_child(adjust_service)
-            # Collection_sequence.add_child(drop_service)
-
-            i = i + 1 
-
-
-        # for i, (x, y, yaw) in enumerate(self.end_points):
-        #     point_selector = py_trees.composites.Selector(f"EndPoint{i}", memory=True)
-
-        #     service_check_sequence = py_trees.composites.Sequence(f"ServiceCheck{i}", memory=True)
-
-        #     pathing_service = ServiceClient(
-        #         name=f"GoToPoint{i}",
-        #         service_type=GoToPoint,
-        #         service_name="/pathing_end_point",
-        #         x=x,
-        #         y=y,
-        #         yaw=yaw,
-        #         velocity=self.target_velocity,
-        #         reverse=False,
-        #         slow_approach=False,
-        #         approaching_object=False,
-        #     )
-
-        #     retry_on_endpoint_failure = py_trees.composites.Sequence(f"RetryOnEndpointFailure{i}", memory=False)
-            
-        #     end_point_check = ReachedEndPoint(
-        #         name=f"ReachedEndPoint{i}",
-        #         x=x,
-        #         y=y,
-        #         yaw=yaw,
-        #     )
-
-        #     retry_endpoint = py_trees.decorators.FailureIsRunning(
-        #         name=f"RetryEndpoint{i}",
-        #         child=end_point_check,
-        #     )
-
-            # retry_on_endpoint_failure.add_children([pathing_service, retry_endpoint])
-            # service_check_sequence.add_child(retry_on_endpoint_failure)
-
-            # fallback = py_trees.behaviours.Success(name=f"SkipToNext{i}")
-
-            # point_selector.add_children([service_check_sequence, fallback])
-            # exploration_sequence.add_child(point_selector)
-
-        repeater = py_trees.decorators.Repeat(
-            name="RepeatExploration", 
-            child=exploration_sequence,
-            num_success=2
-        )
-        
-        root.add_child(repeater)
-        return root
-
-    def tick_tree(self):
-        try:
-            self.tree.tick()
-        except Exception as e:
-            self.get_logger().error(f"Exception during tree tick: {e}")
-
-    def read_workspace(self, filename, skip_header=False):
-        workspace_vertices = []
-        try:
-            with open(filename, "r") as file:
-                if skip_header:
-                    next(file)
-                for line in file:
-                    line = line.strip()
-                    if line:
-                        parts = line.split("\t")
-                        if len(parts) == 2:
-                            x, y = parts
-                            workspace_vertices.append((float(x)/100, float(y)/100))
-                            self.get_logger().info(f"Added vertex: ({float(x)/100}, {float(y)/100})")
-                        else:
-                            self.get_logger().warn("Skipping invalid line: {line}")
-            return workspace_vertices
-        except FileNotFoundError:
-            self.get_logger().warn(f"File {filename} not found")
-            return []
-        
 class Look(py_trees.behaviour.Behaviour):
     """
     A behaviour that determines the next end point and navigates to it.
@@ -767,7 +271,6 @@ class Look(py_trees.behaviour.Behaviour):
                         return py_trees.common.Status.FAILURE
 
             return py_trees.common.Status.RUNNING
-        
 
 class Adjust(py_trees.behaviour.Behaviour):
     """
@@ -1014,7 +517,6 @@ class Sweep(py_trees.behaviour.Behaviour):
 
             return py_trees.common.Status.RUNNING
 
-
 class Check(py_trees.behaviour.Behaviour):
     """
     A behaviour that determines the next end point and navigates to it.
@@ -1081,7 +583,6 @@ class Check(py_trees.behaviour.Behaviour):
                     self.stage = 0
 
             return py_trees.common.Status.RUNNING
-        
 
 class Pick(py_trees.behaviour.Behaviour):
     """
@@ -1215,7 +716,7 @@ class Pick(py_trees.behaviour.Behaviour):
                     return py_trees.common.Status.FAILURE
 
             return py_trees.common.Status.RUNNING
-        
+
 class Drop(py_trees.behaviour.Behaviour):
     """
     A behaviour that determines the next end point and navigates to it.
@@ -1349,9 +850,79 @@ class Drop(py_trees.behaviour.Behaviour):
 
             return py_trees.common.Status.RUNNING
 
+
+class CollectMaster(Node):
+    def __init__(self):
+        super().__init__("explore_master")
+
+        workspace_file = "workspaces/large_workspace.tsv"
+        self.workspace_vertices = self.read_workspace(workspace_file, skip_header=True)
+        self.workspace_publisher = self.create_publisher(WorkspaceVertices, "/workspace", 10)
+
+        self.target_velocity = 0.16
+        self.resolution = 0.05
+
+        root = self.create_collection_tree()
+        self.tree = py_trees_ros.trees.BehaviourTree(root=root)
+        tree_string = py_trees.display.ascii_tree(root)
+        self.get_logger().info(f"Behavior Tree Structure:\n{tree_string}")
+        self.tree.setup(timeout=15, node=self)
+
+        self.create_timer(0.1, self.tick_tree) # Tick tree every 100 ms
+        self.create_timer(2, self.publish_workspace)
+
+    def publish_workspace(self):
+        workspace_msg = WorkspaceVertices()
+        workspace_msg.header.stamp = self.get_clock().now().to_msg()
+        workspace_msg.header.frame_id = "odom"
+
+        for vertex in self.workspace_vertices:
+            vertex_msg = Vertex()
+            vertex_msg.x = vertex[0]
+            vertex_msg.y = vertex[1]
+            workspace_msg.vertices.append(vertex_msg)
+
+        workspace_msg.grid_resolution = self.resolution
+
+        self.workspace_publisher.publish(workspace_msg)
+        self.get_logger().info("Published workspace vertices", once=True)
+
+    def create_collection_tree(self):
+        root = py_trees.composites.Selector("CollectionRoot", memory=True)
+        collection_sequence = py_trees.composites.Sequence("Collection", memory=True)
+
+        return root
+
+    def tick_tree(self):
+        try:
+            self.tree.tick()
+        except Exception as e:
+            self.get_logger().error(f"Exception during tree tick: {e}")
+
+    def read_workspace(self, filename, skip_header=False):
+        workspace_vertices = []
+        try:
+            with open(filename, "r") as file:
+                if skip_header:
+                    next(file)
+                for line in file:
+                    line = line.strip()
+                    if line:
+                        parts = line.split("\t")
+                        if len(parts) == 2:
+                            x, y = parts
+                            workspace_vertices.append((float(x)/100, float(y)/100))
+                            self.get_logger().info(f"Added vertex: ({float(x)/100}, {float(y)/100})")
+                        else:
+                            self.get_logger().warn("Skipping invalid line: {line}")
+            return workspace_vertices
+        except FileNotFoundError:
+            self.get_logger().warn(f"File {filename} not found")
+            return []
+
 def main():
     rclpy.init()
-    node = ExploreMaster()
+    node = CollectMaster()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
@@ -1363,3 +934,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
