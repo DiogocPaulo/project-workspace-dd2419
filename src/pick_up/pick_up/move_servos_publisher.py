@@ -290,7 +290,7 @@ class MultiServoPublisher(Node):
         msg.data = pose
         self.publisher.publish(msg)
 
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=2))
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
     
         return 0
     

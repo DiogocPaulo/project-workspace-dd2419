@@ -506,13 +506,56 @@ class ExploreMaster(Node):
                 child=end_point_check,
             )
 
+            look = Look(
+                name=f"LOOK",
+                x=0.2,
+                y=0.0,
+                t = "objects"
+            )
+
+            sweep = Sweep(
+                name=f"SWEEP",
+                t = "objects"
+            )
+
+            adjust = Adjust(
+                name = f"ADJUST",
+                t = "objects"
+            )
+
+            pick = Pick(
+                name = f"PICK",
+                t = "objects",
+                task = "PICKUP"
+            )
+
+            check = Check(
+                name = f"CHECK",
+                t = "objects"
+            )
+
             retry_on_endpoint_failure.add_children([pathing_service, retry_endpoint])
             service_check_sequence.add_child(retry_on_endpoint_failure)
 
             fallback = py_trees.behaviours.Success(name=f"SkipToNext{i}")
 
             point_selector.add_children([service_check_sequence, fallback])
-            exploration_sequence.add_child(point_selector)
+            # exploration_sequence.add_child(point_selector)
+
+
+            pickup_routine = py_trees.composites.Sequence(f"PICKUP ROUTINE", memory=True)
+            look_fallback = py_trees.composites.Selector(f"LOOK FALLBACK", memory=True)
+            look_fallback.add_child(look)   
+            look_fallback.add_child(sweep)
+            pickup_routine.add_children([look_fallback,adjust,pick,check])
+            retry_pickup = py_trees.decorators.Retry(name="RetryPickup", child=pickup_routine, num_failures=2)
+
+            exploration_sequence.add_child(retry_pickup)
+
+
+
+
+
             # Collection_sequence.add_child(look_service)
             # Collection_sequence.add_child(adjust_service)
             # Collection_sequence.add_child(pick_service)
@@ -580,7 +623,7 @@ class ExploreMaster(Node):
             fallback = py_trees.behaviours.Success(name=f"SkipToNext{i}")
 
             point_selector.add_children([service_check_sequence, fallback])
-            exploration_sequence.add_child(point_selector)
+            # exploration_sequence.add_child(point_selector)
 
             prev_rob_x = rob_x
             prev_rob_y = rob_y
@@ -694,7 +737,7 @@ class Look(py_trees.behaviour.Behaviour):
 
         self.pickup_client = self.node.create_client(PickObject, 'PickObject')
         while not self.pickup_client.wait_for_service(timeout_sec=1.0):
-            self.node.logger.info("Arm Request service not yet avaliable, waiting ...")
+            self.node.get_logger().info("Arm Request service not yet avaliable, waiting ...")
 
         self.camera_client = self.node.create_client(GetDetectedList, 'get_detected_list')
         while not self.camera_client.wait_for_service(timeout_sec=1.0):
@@ -757,8 +800,10 @@ class Look(py_trees.behaviour.Behaviour):
                 
                 if self.type == "objects":
                     if len(response.objects) > 0:
+                        self.node.get_logger().info("OBJECT SEEN!")
                         return py_trees.common.Status.SUCCESS
                     else:
+                        self.node.get_logger().info("NO OBJECT SEEN!")
                         return py_trees.common.Status.FAILURE
                 elif self.type == "boxes":
                     if len(response.boxes) > 0:
@@ -925,11 +970,12 @@ class Sweep(py_trees.behaviour.Behaviour):
 
         self.positions = [
             (3000, 5500, 1500, 2.0),  # base, neck, move_time, wait
-            (3000, 3000, 1000, 1.5),
+            #(3000, 3000, 1000, 1.5),
+            (6000, 5500, 1500, 2.0),
             (12000, 5500, 1500, 2.0),
-            (12000, 3000, 1000, 1.5),
-            (21000, 5500, 1500, 2.0),
-            (21000, 3000, 1000, 1.5),
+            #(12000, 3000, 1000, 1.5),
+            (18000, 5500, 1500, 2.0),
+            #(21000, 3000, 1000, 1.5),
         ]
 
     def setup(self, **kwargs):
@@ -951,24 +997,24 @@ class Sweep(py_trees.behaviour.Behaviour):
 
         return True
 
-    def initialise(self):
+    def initialise(self):   
         self.stage = 0
         self.future = None
 
     def update(self):
         if self.stage == 0:
-            # self.node.get_logger().info(f"Stage: 0")
+            self.node.get_logger().info(f"Stage: 0")
+
+            msg = Int16MultiArray()
+            msg.layout = MultiArrayLayout(dim=[MultiArrayDimension(label="", size=12, stride=12)], data_offset=0)
+            
 
             if self.counter < len(self.positions):
                 base, neck, move_time, self.wait = self.positions[self.counter]
                 pose = [11000,12000,neck,21000,12000,base,move_time,move_time,move_time,move_time,move_time,move_time]
                 msg.data = pose
-                self.arm_pub.publish(msg)
+                self.joint_publisher.publish(msg)
             
-            msg = Int16MultiArray()
-            msg.layout = MultiArrayLayout(dim=[MultiArrayDimension(label="", size=12, stride=12)], data_offset=0)
-            pose = [11000,12000,neck,21000,12000,base,move_time,move_time,move_time,move_time,move_time,move_time]
-            msg.data = pose
 
 
             self.stage = 1
@@ -978,6 +1024,7 @@ class Sweep(py_trees.behaviour.Behaviour):
             return py_trees.common.Status.RUNNING
 
         elif self.stage == 1:
+            self.node.get_logger().info(f"Stage: 1")
             # self.node.get_logger().info(f"Stage: 2")
             if time.time() - self.start_time >= self.wait:
                 self.stage = 2
@@ -985,7 +1032,7 @@ class Sweep(py_trees.behaviour.Behaviour):
             return py_trees.common.Status.RUNNING
 
         elif self.stage == 2:
-            # self.node.get_logger().info(f"Stage: 0")
+            self.node.get_logger().info(f"Stage: 2")
             request = GetDetectedList.Request()
 
             self.future = self.camera_client.call_async(request)
@@ -995,7 +1042,7 @@ class Sweep(py_trees.behaviour.Behaviour):
             return py_trees.common.Status.RUNNING
 
         elif self.stage == 3:
-            # self.node.get_logger().info(f"Stage: 1")
+            self.node.get_logger().info(f"Stage: 3  ")
             if self.future.done():
                 response = self.future.result()
                 
