@@ -22,6 +22,10 @@ run-explore:
 	rm -rf maps/map.csv
 	ros2 launch project_master explore_launch.py | tee logs/explore.log
 
+run-collect:
+	cp maps/full_map.csv maps/map.csv
+	ros2 launch project_master collect_launch.py | tee logs/collect.log
+
 run-collection:
 	cp maps/full_map.csv maps/map.csv
 	ros2 launch project_master master_launch.py | tee logs/collection.log
