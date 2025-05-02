@@ -37,7 +37,6 @@ from geometry_msgs.msg import TransformStamped
 class MultiServoPublisher(Node):
     def __init__(self):
         super().__init__("multi_servo_publisher")
-        # self.timer = self.create_timer(5.0, self.publish_pose)
         self.publisher = self.create_publisher(Int16MultiArray, "/multi_servo_cmd_sub", 10)
         self.publisher_sim = self.create_publisher(JointState, '/joint_states', 10)
         self.service_sim = self.create_service(PickObject,'PickObjectSim',self.sim_callback)
@@ -52,21 +51,15 @@ class MultiServoPublisher(Node):
         self.service = self.create_service(PickObject, 'PickObject', self.task_callback)
 
         self.service_fine_tune = self.create_service(JointMove, 'MoveArm', self.joint_callback)
-        
-        #self.service_arm_frame = self.create_service(ArmControl, 'ArmControl', self.control_callback)
 
         self.detected_objects = []
         self.detected_boxes = []
         self.detected_threshhold = 0.05
         self.take_detected_flag = False
 
-        # self.detection_subscriber = self.create_subscription(
-        #     DetectedDataArray, '/yolov8/detections_data', self.detected_callback, 10)
-
 
         self.publisher_marker = self.create_publisher(Marker, '/visualization_marker', 10)
 
-        # self.timer = self.create_timer(1.0, self.publish_object_marker)
 
 
         self.l1 = 0.101
@@ -110,33 +103,7 @@ class MultiServoPublisher(Node):
         zero_time.sec = 0
         zero_time.nanosec = 0
 
-        # pose = [3000,12000,12000,12000,12000,12000,move_time,move_time,move_time,move_time,move_time,move_time]
-        # msg.data = pose
-        # self.publisher.publish(msg)
 
-        # # Transform ---------------------------------------
-        # tf_future = self.tfBuffer.wait_for_transform_async(
-        #     target_frame = 'arm_base',
-        #     source_frame = request.header.frame_id,
-        #     time = zero_time # Get latest transform instead of timestamped, since we want to pickup when the robot is standing still
-        # )
-
-        # rclpy.spin_until_future_complete(self,tf_future, timeout_sec=1)
-
-        # try:
-        #     t = self.tfBuffer.lookup_transform(
-        #         'arm_base',
-        #         request.header.frame_id,
-        #         zero_time
-        # )
-        # except TransformException as ex:
-        #     self.get_logger().info(
-        #         f'Could not transform map to arm_base: {ex}'
-        #     )
-        # # Transform ---------------------------------------
-
-        # self.clock.sleep_for(rclpy.duration.Duration(seconds=1)) #Give arm time to do its thing
-        # position = do_transform_point(request,t)
         position = request.point
         base_arm,v1_arm,v2_arm,v3_arm = self.FindKinematics(position.x,position.y,position.z)
 
@@ -184,33 +151,6 @@ class MultiServoPublisher(Node):
         zero_time.sec = 0
         zero_time.nanosec = 0
 
-        # pose = [14000,12000,12000,12000,12000,12000,move_time,move_time,move_time,move_time,move_time,move_time]
-        # msg.data = pose
-        # self.publisher.publish(msg)
-    
-        # # Transform ---------------------------------------
-        # tf_future = self.tfBuffer.wait_for_transform_async(
-        #     target_frame = 'arm_base',
-        #     source_frame = request.header.frame_id,
-        #     time = zero_time # Get latest transform instead of timestamped, since we want to pickup when the robot is standing still
-        # )
-
-        # rclpy.spin_until_future_complete(self,tf_future, timeout_sec=1)
-
-        # try:
-        #     t = self.tfBuffer.lookup_transform(
-        #         'arm_base',
-        #         request.header.frame_id,
-        #         zero_time
-        # )
-        # except TransformException as ex:
-        #     self.get_logger().info(
-        #         f'Could not transform map to arm_base: {ex}'
-        #     )
-        # # Transform ---------------------------------------
-
-        # self.clock.sleep_for(rclpy.duration.Duration(seconds=2)) #Give arm time to do its thing
-        # position = do_transform_point(request,t)
         position = request.point
         base_arm,v1_arm,v2_arm,v3_arm = self.FindKinematics(position.x,position.y,position.z)
 
