@@ -121,34 +121,29 @@ class CollectMaster(Node):
         )
 
         # Object Safe Point
-        reached_object_safe_point = behaviours.ReachedObjectSafePoint(
-            name="ReachedObjectSafePoint",
-            input_key="closest_object",
-            output_key="go_to_safe_point",
-        )
-
-        object_safe_point_client = behaviours.GoToPointClient(
-            name="ObjectSafePointClient",
+        object_safe_point_client = behaviours.GoToSafePointClient(
+            name="SafePointClient_Object",
             service_name="/pathing_end_point",
-            input_key="go_to_safe_point",
+            input_key="closest_object",
+            output_key="object_safe_waypoint",
         )
-        object_safe_point_sequence = py_trees.composites.Sequence("ObjectSafePointSequence", memory=True)
-        object_safe_point_sequence.add_child(object_safe_point_client)
-        object_safe_point_check = py_trees.decorators.SuccessIsRunning(
-            name="ObjectSafePointCheck",
-            child=object_safe_point_sequence,
+        object_reached_safe_point = behaviours.ReachedWaypoint(
+            name="ReachedSafePoint_Object",
+            input_key="object_safe_waypoint",
         )
-
-        object_safe_point_selector = py_trees.composites.Selector("ObjectSafePoint", memory=True)
-        object_safe_point_selector.add_children([
-            reached_object_safe_point,
-            object_safe_point_check,
+        object_safe_point_sequence = py_trees.composites.Sequence(
+            name="SafePointSequence_Object",
+            memory=False,
+        )
+        object_safe_point_sequence.add_children([
+            object_safe_point_client,
+            object_reached_safe_point,
         ])
 
         pickup_sequence = py_trees.composites.Sequence("PickupSequence", memory=True)
         pickup_sequence.add_children([
             find_closest_object,
-            object_safe_point_selector,
+            object_safe_point_sequence
         ])
 
         collection_sequence.add_children([
