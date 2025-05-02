@@ -82,7 +82,7 @@ def generate_waypoints(map: Map, workspace_vertices, outer_offset, inner_offset)
         current_x, current_y = offset_vertices[i]
         next_x, next_y = offset_vertices[i + 1]
         distance = np.hypot(next_x - current_x, next_y - current_y)
-        resolution = max(1, math.ceil(distance * 1.2))
+        resolution = max(1, math.ceil(distance * 1.0))
         for j in range(resolution):
             x = current_x + (next_x - current_x) * (j + 1) / resolution
             y = current_y + (next_y - current_y) * (j + 1) / resolution
@@ -104,7 +104,7 @@ class ExploreMaster(Node):
     def __init__(self):
         super().__init__("explore_master")
 
-        workspace_file = "workspaces/large_workspace.tsv"
+        workspace_file = "workspaces/angled_workspace.tsv"
         self.workspace_vertices = self.read_workspace(workspace_file, skip_header=True)
         self.workspace_publisher = self.create_publisher(WorkspaceVertices, "/workspace", 10)
         self.waypoints_path_publisher = self.create_publisher(Path, "/waypoints_path", 10)
@@ -114,9 +114,9 @@ class ExploreMaster(Node):
         self.resolution = 0.05
         self.map = Map(self.resolution)
         self.map.initialise_grid(self.workspace_vertices)
-        self.map.inflate_grid(0.35)
+        self.map.inflate_grid(0.25)
         self.show_waypoints = False
-        self.end_points = generate_waypoints(self.map, self.workspace_vertices, 0.35, 1.05)
+        self.end_points = generate_waypoints(self.map, self.workspace_vertices, 0.30, 1.15)
 
         root = self.create_exploration_tree()
         self.tree = py_trees_ros.trees.BehaviourTree(root=root)
