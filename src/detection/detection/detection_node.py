@@ -113,7 +113,7 @@ class ObjectDetectorNode(Node):
 
         # Define HSV ranges for filtering color ranges
         lower_red, upper_red = np.array([2, 230, 95]), np.array([2, 240, 100])
-        lower_green1, upper_green1 = np.array([81, 100, 44]), np.array([84, 255, 105])
+        lower_green1, upper_green1 = np.array([81, 100, 44]), np.array([88, 255, 239])
         lower_green2, upper_green2 = np.array([73, 210, 90]), np.array([74, 240, 120])
         lower_blue, upper_blue = np.array([99, 254, 75]), np.array([99, 255, 80])
 
