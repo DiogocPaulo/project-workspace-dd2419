@@ -149,7 +149,7 @@ class ObjectDetectorNode(Node):
             green_ratio = len(cluster_points[green_mask]) / total_points
             blue_ratio = len(cluster_points[blue_mask]) / total_points
 
-            pure_red = pure_green = pure_blue = False
+            pure_red = pure_green = pure_blue = False 
 
             # Check if the cluster is predominantly red, green, or blue
             if red_ratio > 0.001 and green_ratio == 0.0 and blue_ratio == 0.0:
@@ -173,6 +173,7 @@ class ObjectDetectorNode(Node):
                     if obj is not None:
                         frame_objects.append(obj)
             elif self.is_plushie(cluster_points):
+                print(f"red:{red_ratio}, blue:{blue_ratio}, geen:{green_ratio}")
                 obj = self.create_object(x + 0.01, z, 0.0, Object.PLUSHIE, msg.header.stamp)
                 if obj is not None:
                     frame_objects.append(obj)

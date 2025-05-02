@@ -285,7 +285,7 @@ class Pathing(Node):
         if not self.approaching_object and not self.backing and not self.inflated_map.is_free(self.start_point[0], self.start_point[1], 75):
             self.get_logger().info("Entering reverse travel mode")
             self.backing = True
-            self.safe_point = self.inflated_map.get_safe_point(self.start_point[0], self.start_point[1], 3, 75)
+            self.safe_point = self.inflated_map.get_safe_point(self.start_point[0], self.start_point[1], 5, 75)
             if self.safe_point is None:
                 self.safe_point = (0.0, 0.0)
 

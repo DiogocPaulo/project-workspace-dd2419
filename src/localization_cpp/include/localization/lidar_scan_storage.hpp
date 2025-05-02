@@ -139,6 +139,23 @@ public:
 
     // Retrieve the scan from the closest grid cell based on pose
     std::optional<Scan> getClosestScan(const Pose2D& current_pose) const {
+        GridCell target_cell = poseToGridCell(current_pose);
+        double min_dist_sq = std::numeric_limits<double>::max();
+        std::optional<Scan> closest_scan;
+    
+        // Search all scans for the closest grid cell
+        for (const auto& [cell, scan] : scans_) {
+            double dist_sq = std::pow(cell.x - target_cell.x, 2) + std::pow(cell.y - target_cell.y, 2);
+            if (dist_sq < min_dist_sq) {
+                min_dist_sq = dist_sq;
+                closest_scan = scan;
+            }
+        }
+    
+        return closest_scan;
+    }
+
+    std::optional<Scan> getClosestScan2(const Pose2D& current_pose) const {
         GridCell cell = poseToGridCell(current_pose);
         auto it = scans_.find(cell);
 

@@ -19,6 +19,7 @@ from project_interfaces.msg import Vertex, WorkspaceVertices
 from mapping.map import Map
 
 from project_master import behaviours
+import time 
 
 class ServiceClient(py_trees.behaviour.Behaviour):
     def __init__(self, name, service_type, service_name, **kwargs):
@@ -162,6 +163,42 @@ class ReachedEndPoint(py_trees.behaviour.Behaviour):
             self.node.get_logger().info(f"{self.name}: Reached waypoint of ({self.end_point[0], self.end_point[1]}) at {self.current_yaw}")
             return py_trees.common.Status.SUCCESS
     
+class WaitBehavior(py_trees.behaviour.Behaviour):
+    """
+    A behaviour that waits for a specified duration before succeeding.
+    """
+    def __init__(self, name, duration=0.5):
+        super().__init__(name)
+        self.duration = duration
+        self.start_time = None
+
+    def setup(self, **kwargs):
+        try:
+            self.node = kwargs.get("node")
+        except Exception as e:
+            self.logger.error(f"{self.name} - Setup failed: {e}")
+            return False
+        return True
+
+    def initialise(self):
+        self.start_time = time.time()
+        self.node.get_logger().info(f"{self.name}: Starting {self.duration}-second wait")
+
+    def update(self):
+        if self.start_time is None:
+            self.node.get_logger().error(f"{self.name}: Timer not initialized")
+            return py_trees.common.Status.FAILURE
+
+        elapsed = time.time() - self.start_time
+        if elapsed < self.duration:
+            return py_trees.common.Status.RUNNING
+        else:
+            self.node.get_logger().info(f"{self.name}: Wait complete")
+            return py_trees.common.Status.SUCCESS
+
+    def terminate(self, new_status=None):
+        self.start_time = None
+
 def generate_waypoints_with_map(map: Map, x_resolution, y_resolution):
 
     x_min = 0.0
@@ -278,7 +315,7 @@ class ExploreMaster(Node):
     def __init__(self):
         super().__init__("explore_master")
 
-        workspace_file = "workspaces/angled_workspace.tsv"
+        workspace_file = "workspaces/large_workspace.tsv"
         self.workspace_vertices = self.read_workspace(workspace_file, skip_header=True)
         self.workspace_publisher = self.create_publisher(WorkspaceVertices, "/workspace", 10)
         self.waypoints_path_publisher = self.create_publisher(Path, "/waypoints_path", 10)
@@ -401,8 +438,11 @@ class ExploreMaster(Node):
                 child=end_point_check,
             )
 
+            wait = WaitBehavior(name=f"Wait{i}", duration=0.5)
+
             retry_on_endpoint_failure.add_children([pathing_service, retry_endpoint])
-            service_check_sequence.add_child(retry_on_endpoint_failure)
+            #service_check_sequence.add_child(retry_on_endpoint_failure)
+            service_check_sequence.add_children([retry_on_endpoint_failure, wait]) # <-- wait after endpoints
 
             fallback = py_trees.behaviours.Success(name=f"SkipToNext{i}")
 
