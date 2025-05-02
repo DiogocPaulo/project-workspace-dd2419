@@ -23,6 +23,7 @@ run-explore:
 	ros2 launch project_master explore_launch.py | tee logs/explore.log
 
 run-collection:
+	cp maps/full_map.csv maps/map.csv
 	ros2 launch project_master master_launch.py | tee logs/collection.log
 
 clean:

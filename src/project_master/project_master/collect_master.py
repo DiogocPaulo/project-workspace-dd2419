@@ -27,6 +27,133 @@ from geometry_msgs.msg import Point as GeometryPoint
 
 from project_master import behaviours
 
+class GoToObjectSafePoint(py_trees.behaviour.Behaviour):
+    def __init__(self, name, object_point_key, service_name, **kwargs)
+        super().__init__(name)
+        self.object_point_key = object_point_key
+        self.service_name = service_name
+        self.current_point = (None, None)
+        self.blackboard = py_trees.blackboard.Blackboard()
+        self.safe_point = None
+        self.client = None
+        self.future = None
+        self.sent_request = False
+        self.inflated_map = None
+
+    def setup(self, **kwargs):
+        try:
+            self.node = kwargs.get("node")
+        except Exception as e:
+            self.logger.error(f"{self.name} - Setup failed: {e}")
+            return False
+
+        qos_profile = QoSProfile(
+            depth=1,
+            history=HistoryPolicy.KEEP_LAST,
+            reliability=ReliabilityPolicy.BEST_EFFORT
+        )
+
+        self.client = self.node.create_client(GoToPoint, self.service_name)
+        self.node.create_subscription(OccupancyGrid, "/inflated_map", self.inflated_map_callback, qos_profile)
+        if not self.blackboard.exists(self.object_point_key):
+            self.node.get_logger().warn(f"{self.name} - Blackboard key {self.object_point_key} does not exist")
+        return True
+
+    def initialise(self):
+        self.sent_request = False
+        self.future = None
+
+    def inflated_map_callback(self, msg: OccupancyGrid):
+        width = msg.info.width
+        height = msg.info.height
+        grid = np.array(msg.data, dtype=np.int8).reshape((height, width))
+
+        if self.inflated_map is None:
+            resolution = msg.info.resolution
+            origin_x = msg.info.origin.position.x
+            origin_y = msg.info.origin.position.y
+            self.inflated_map = Map(resolution, origin_x, origin_y, width, height, grid)
+        else:
+            self.inflated_map.update_grid(grid)
+
+    def update(self):
+        if not self.client.service_is_ready():
+            self.node.get_logger().info(f"{self.name} - Waiting for service {self.service_name} ...")
+            return py_trees.common.Status.RUNNING
+        if self.inflated_map is None:
+            self.node.get_logger().info(f"{self.name} - Waiting for inflated map ...")
+            return py_trees.common.Status.RUNNING
+
+        try:
+            object_point = self.blackboard.get(self.object_point_key)
+        except Exception as e:
+            self.logger.error(f"{self.name} - Error reading blackboard: {e}"):
+            return py_trees.common.Status.FAILURE
+
+        self.safe_point = self.inflated_map.get_safe_point(object_point[0], object_point[1], 3, 75)
+        if self.safe_point is None:
+            self.safe_point = (0.0, 0.0)
+
+        if not self.sent_request:
+
+        
+
+class FindClosestObject(py_trees.behaviour.Behaviour):
+    def __init__(self, name, object_list, find_box, output_key, **kwargs):
+        super().__init__(name)
+        self.object_list = object_list
+        self.find_box = find_box
+        self.output_key = output_key
+        self.current_point = (None, None)
+        self.blackboard = py_trees.blackboard.Blackboard()
+
+    def setup(self, **kwargs):
+        try:
+            self.node = kwargs.get("node")
+        except Exception as e:
+            self.logger.error(f"{self.name} - Setup failed: {e}")
+            return False
+
+        qos_profile = QoSProfile(
+            depth=1,
+            history=HistoryPolicy.KEEP_LAST,
+            reliability=ReliabilityPolicy.BEST_EFFORT
+        )
+
+        self.node.create_subscription(Odometry, "/odom", self.odom_callback, qos_profile)
+        return True
+
+    def odom_callback(self, msg: Odometry):
+        self.current_point = (msg.pose.pose.position.x, msg.pose.pose.position.y)
+
+    def update(self):
+        if self.current_point == (None, None):
+            self.node.get_logger().info(f"{self.name} - Waiting for current point ...")
+            return py_trees.common.Status.RUNNING
+        if not self.object_list:
+            self.node.get_logger().info(f"{self.name} - Object list is empty. No objects to find.")
+            return py_trees.common.Status.FAILURE
+
+        closest_object = None
+        min_distance = float("inf")
+        for object_msg in self.object_list:
+            object_type_check = (obj.object_type == Object.BOX) if self.find_box else (obj.object_type != Object.BOX)
+            if object_type_check:
+                distance = np.hypot(object_msg.x - self.current_point[0], object_msg.y - self.current_point[1])
+                if distance < min_distance:
+                    min_distance = distance
+                    closest_object = object_msg
+
+        if closest_object is not None:
+            object_point = (closest_object.x, closest_object.y)
+            self.blackboard.set(self.output_key, object_point)
+            self.object_list.remove(closest_object_msg)
+            self.node.get_logger().info(f"{self.name} - Closest object found (type: {closest_object_msg.object_type}) at ({object_point[0]:.2f}, {object_point[1]:.2f})")
+            return py_trees.common.Status.SUCCESS
+        else:
+            self.node.get_logger().warning(f"{self.name} - No objects (box type: {self.find_box}) found in the list.")
+            return py_trees.common.Status.FAILURE
+
 class ServiceClient(py_trees.behaviour.Behaviour):
     def __init__(self, name, service_type, service_name, **kwargs):
         super().__init__(name)
@@ -148,7 +275,7 @@ class ReachedEndPoint(py_trees.behaviour.Behaviour):
 
     def update(self):
         if self.current_point == (None, None):
-            self.node.get_logger().info(f"{self.name}: Waiting for current point ...")
+            self.node.get_logger().info(f"{self.name} - Waiting for current point ...")
             return py_trees.common.Status.RUNNING
         
         distance_error = np.hypot(
@@ -158,15 +285,15 @@ class ReachedEndPoint(py_trees.behaviour.Behaviour):
         yaw_error = math.atan2(math.sin(self.target_yaw - self.current_yaw), math.cos(self.target_yaw - self.current_yaw))
 
         if distance_error > self.distance_threshold:
-            self.node.get_logger().info(f"{self.name}: Distance to waypoint is {distance_error:.2f}")
+            self.node.get_logger().info(f"{self.name} - Distance to waypoint is {distance_error:.2f}")
             self.broadcast_waypoint()
             return py_trees.common.Status.RUNNING
         elif yaw_error > self.yaw_threshold:
-            self.node.get_logger().info(f"{self.name}: Correcting yaw by {yaw_error:.2f}")
+            self.node.get_logger().info(f"{self.name} - Correcting yaw by {yaw_error:.2f}")
             self.broadcast_waypoint()
             return py_trees.common.Status.RUNNING
         else:
-            self.node.get_logger().info(f"{self.name}: Reached waypoint of ({self.end_point[0], self.end_point[1]}) at {self.current_yaw}")
+            self.node.get_logger().info(f"{self.name} - Reached waypoint of ({self.end_point[0], self.end_point[1]}) at {self.current_yaw}")
             return py_trees.common.Status.SUCCESS
 
 class Look(py_trees.behaviour.Behaviour):
@@ -204,8 +331,6 @@ class Look(py_trees.behaviour.Behaviour):
         self.clock = self.node.get_clock()
 
         self.future = None
-
-
         return True
 
     def initialise(self):
@@ -829,9 +954,6 @@ class Drop(py_trees.behaviour.Behaviour):
 
                 self.future = self.pickup_client.call_async(request)
                 self.stage = 4
-                self.node.get_logger().info(f"{self.name} - Sent request to Pickup")
-                return py_trees.common.Status.RUNNING
-            except Exception as e:
                 self.node.get_logger().error(f"{self.name} - Failed to send request: {e}")
                 return py_trees.common.Status.FAILURE
 
@@ -935,7 +1057,28 @@ class CollectMaster(Node):
         root = py_trees.composites.Selector("CollectionRoot", memory=True)
         collection_sequence = py_trees.composites.Sequence("Collection", memory=True)
 
-         f
+        pickup_sequence = py_trees.composites.Sequence("PickupSequence", memory=True)
+        pickup_sequence.add_children([
+           find_object,
+           goto_object_safe_point,
+           goto_object_approach_point,
+           pickup_object_routine,
+           goto_safe_point,
+        ])
+
+        drop_sequence = py_trees.composites.Sequence("DropSequence", memory=True)
+        drop_sequence.add_children([
+            find_box,
+            goto_box_safe_point,
+            goto_box_approach_point,
+            drop_object_routine,
+            goto_safe_point,
+        ])
+
+        collection_sequence.add_children([
+            pickup_sequence,
+            drop_sequence,
+        ])
 
         return root
 
