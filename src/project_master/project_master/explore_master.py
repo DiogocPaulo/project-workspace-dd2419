@@ -282,8 +282,6 @@ def offset_inner_vertices(vertices, offset):
         offset_vertices = list(largest_polygon.exterior.coords)
     return offset_vertices
 
-
-
 def generate_waypoints(map: Map, workspace_vertices, outer_offset, inner_offset):
     outer_vertices = offset_outer_vertices(workspace_vertices, outer_offset)
     inner_vertices = offset_inner_vertices(workspace_vertices, inner_offset)
@@ -411,7 +409,7 @@ class ExploreMaster(Node):
 
             service_check_sequence = py_trees.composites.Sequence(f"ServiceCheck{i}", memory=True)
 
-            pathing_service = ServiceClient(
+            pathing_service = behaviours.ServiceClient(
                 name=f"GoToPoint{i}",
                 service_type=GoToPoint,
                 service_name="/pathing_end_point",
@@ -426,7 +424,7 @@ class ExploreMaster(Node):
 
             retry_on_endpoint_failure = py_trees.composites.Sequence(f"RetryOnEndpointFailure{i}", memory=False)
             
-            end_point_check = ReachedEndPoint(
+            end_point_check = behaviours.ReachedEndPoint(
                 name=f"ReachedEndPoint{i}",
                 x=x,
                 y=y,
