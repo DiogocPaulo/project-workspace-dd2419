@@ -196,8 +196,8 @@ class CollectMaster(Node):
             self.get_logger().error(f"Exception during tree tick: {e}")
 
     def read_workspace(self, filename, skip_header=False):
-        workspace_vertices = []
         try:
+            workspace_vertices = []
             with open(filename, "r") as file:
                 if skip_header:
                     next(file)
@@ -210,10 +210,10 @@ class CollectMaster(Node):
                             workspace_vertices.append((float(x)/100, float(y)/100))
                             self.get_logger().info(f"Added vertex: ({float(x)/100}, {float(y)/100})")
                         else:
-                            self.get_logger().warn("Skipping invalid line: {line}")
+                            self.get_logger().warn(f"Skipping invalid line: {line}")
             return workspace_vertices
         except FileNotFoundError:
-            self.get_logger().warn(f"File {filename} not found")
+            self.get_logger().error(f"Workspace file ({filename}) not found!")
             return []
 
 def main():
