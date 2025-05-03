@@ -20,36 +20,6 @@ from mapping.map import Map
 
 from project_master import behaviours
 
-def generate_waypoints_with_map(map: Map, x_resolution, y_resolution):
-
-    x_min = 0.0
-    x_max = map.cells_to_distance(map.grid_width)
-    y_min = 0.0
-    y_max = map.cells_to_distance(map.grid_height)-0.35
-
-    waypoints = []
-    reverse = False
-
-    x = x_min
-    while x < x_max:
-        y = y_min if not reverse else y_max
-        first = None
-        last = None
-        while (not reverse and y < y_max) or (reverse and y > y_min):
-            if map.is_free(x, y, 1):
-                if first is None:
-                    first = (x, y, 0.0)
-                last = (x, y, 0.0)
-            y += y_resolution if not reverse else -y_resolution
-        if first is not None:
-            waypoints.append(first)
-        if last is not None and first != last:
-            waypoints.append(last)
-        x += x_resolution
-        reverse = not reverse
-    
-    return waypoints
-
 def offset_outer_vertices(workspace_vertices, offset):
     vertices = [np.array(vertex) for vertex in workspace_vertices]
     num_vertices = len(vertices)
@@ -103,10 +73,38 @@ def offset_inner_vertices(vertices, offset):
         offset_vertices = list(largest_polygon.exterior.coords)
     return offset_vertices
 
+def shortest_edges_midpoints(vertices):
+    if len(vertices) < 2:
+        return []
+
+    edges = []
+    for i in range(len(vertices)):
+        current_x, current_y = vertices[i]
+        next_x, next_y = vertices[(i + 1) % len(vertices)]
+        distance = np.hypot(next_x - current_x, next_y - current_y)
+        edges.append({"p1": (current_x, current_y), "p2": (next_x, next_y), "distance": distance})
+    sorted_edges = sorted(edges, key=lambda edge: edge["distance"])
+
+    midpoints = []
+    headings = []
+    for i in range(len(sorted_edges)):
+        if i > 2:
+            break
+        midpoint_x = (sorted_edges[i]["p1"][0] + sorted_edges[i]["p2"][0]) / 2
+        midpoint_y = (sorted_edges[i]["p1"][1] + sorted_edges[i]["p2"][1]) / 2
+        midpoints.append((midpoint_x, midpoint_y))
+        normal_vector_x = -(sorted_edges[i]["p2"][1] - sorted_edges[i]["p1"][1])
+        normal_vector_y = (sorted_edges[i]["p2"][0] - sorted_edges[i]["p1"][0])
+        heading = np.arctan2(normal_vector_y, normal_vector_x)
+        headings.append(heading)
+
+    return midpoints, headings[-1]
+
 def generate_waypoints(map: Map, workspace_vertices, outer_offset, inner_offset):
     outer_vertices = offset_outer_vertices(workspace_vertices, outer_offset)
     inner_vertices = offset_inner_vertices(workspace_vertices, inner_offset)
-    offset_vertices = outer_vertices + inner_vertices[::-1]
+    inner_midpoints, final_heading = shortest_edges_midpoints(inner_vertices)
+    offset_vertices = outer_vertices + inner_midpoints
     waypoints = []
     for i in range(len(offset_vertices) - 1):
         current_x, current_y = offset_vertices[i]
@@ -125,12 +123,14 @@ def generate_waypoints(map: Map, workspace_vertices, outer_offset, inner_offset)
         next_x, next_y, _ = waypoints[(i + 1) % num_waypoints]
         heading = np.arctan2(next_y - current_y, next_x - current_x)
         rounded_x, rounded_y = map.round_world(current_x, current_y)
-        waypoints[i] = (rounded_x, rounded_y, heading)
+        if i == (num_waypoints - 1):
+            waypoints[i] = (rounded_x, rounded_y, final_heading)
+        else:
+            waypoints[i] = (rounded_x, rounded_y, heading)
 
     return waypoints
 
 class ExploreMaster(Node):
-
     def __init__(self):
         super().__init__("explore_master")
 
@@ -144,9 +144,9 @@ class ExploreMaster(Node):
         self.resolution = 0.05
         self.map = Map(self.resolution)
         self.map.initialise_grid(self.workspace_vertices)
-        self.map.inflate_grid(0.25)
+        self.map.inflate_grid(0.30)
         self.show_waypoints = False
-        self.end_points = generate_waypoints(self.map, self.workspace_vertices, 0.30, 1.15)
+        self.end_points = generate_waypoints(self.map, self.workspace_vertices, 0.30, 0.60)
 
         root = self.create_exploration_tree()
         self.tree = py_trees_ros.trees.BehaviourTree(root=root)
