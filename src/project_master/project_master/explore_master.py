@@ -30,6 +30,178 @@ from project_interfaces.srv import PickObject
 
 from project_master import behaviours
 
+class ServiceClient(py_trees.behaviour.Behaviour):
+    def __init__(self, name, service_type, service_name, **kwargs):
+        super().__init__(name)
+        self.service_type = service_type
+        self.service_name = service_name
+        self.request_args = kwargs
+        self.client = None
+        self.future = None
+        self.sent_request = False
+
+    def setup(self, **kwargs):
+        try:
+            self.node = kwargs.get("node")
+        except Exception as e:
+            self.logger.error(f"{self.name} - Setup failed: {e}")
+            return False
+
+        self.client = self.node.create_client(self.service_type, self.service_name)
+        return True
+
+    def initialise(self):
+        self.sent_request = False
+        self.future = None
+
+    def update(self):
+        if not self.client.service_is_ready():
+            self.node.get_logger().info(f"{self.name} - Waiting for service {self.service_name} ...")
+            return py_trees.common.Status.RUNNING
+            
+        if not self.sent_request:
+            try:
+                request = self.service_type.Request()
+
+                for key, value in self.request_args.items():
+                    setattr(request, key, value)
+
+                self.future = self.client.call_async(request)
+                self.sent_request = True
+                self.node.get_logger().info(f"{self.name} - Sent request to {self.service_name}")
+                return py_trees.common.Status.RUNNING
+            except Exception as e:
+                self.node.get_logger().error(f"{self.name} - Failed to send request: {e}")
+                return py_trees.common.Status.FAILURE
+
+        if self.future.done():
+            try:
+                response = self.future.result()
+                if response.success:
+                    self.node.get_logger().info(f"{self.name} - Service call response: {response.success}, {response.message}")
+                    return py_trees.common.Status.SUCCESS
+                else:
+                    self.node.get_logger().info(f"{self.name} - Service call response: {response.success}, {response.message}")
+                    return py_trees.common.Status.FAILURE
+            except Exception as e:
+                self.node.get_logger().error(f"{self.name} - Service call failed with exception: {e}")
+                return py_trees.common.Status.FAILURE
+        else:
+            return py_trees.common.Status.RUNNING
+
+class ReachedEndPoint(py_trees.behaviour.Behaviour):
+    """
+    A behaviour that checks is an end point has been reached
+    """
+    def __init__(self, name, x, y, yaw, distance_threshold=0.1, yaw_threshold=0.1):
+        super().__init__(name)
+        self.current_point = (None, None)
+        self.current_yaw = 0.0
+        self.end_point = (x, y)
+        self.target_yaw = yaw
+        self.distance_threshold = distance_threshold
+        self.yaw_threshold = yaw_threshold
+
+    def setup(self, **kwargs):
+        try:
+            self.node = kwargs.get("node")
+        except Exception as e:
+            self.logger.error(f"{self.name} - Setup failed: {e}")
+            return False
+
+        qos_profile = QoSProfile(
+            depth=1,
+            history=HistoryPolicy.KEEP_LAST,
+            reliability=ReliabilityPolicy.BEST_EFFORT
+        )
+
+        self.node.waypoint_broadcaster = TransformBroadcaster(self.node)
+        self.node.create_subscription(Odometry, "/odom", self.odom_callback, qos_profile)
+        return True
+
+    def odom_callback(self, msg: Odometry):
+        self.current_point = (msg.pose.pose.position.x, msg.pose.pose.position.y)
+        q = msg.pose.pose.orientation
+        siny_cosp = 2 * (q.w * q.z + q.x * q.y)
+        cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z)
+        self.current_yaw = np.arctan2(siny_cosp, cosy_cosp)
+
+    def broadcast_waypoint(self):
+        quaternion = Quaternion()
+        quaternion.x = 0.0
+        quaternion.y = 0.0
+        quaternion.z = np.sin(self.target_yaw * 0.5)
+        quaternion.w = np.cos(self.target_yaw * 0.5)
+
+        transform_msg = TransformStamped()
+        transform_msg.header.frame_id = "odom"
+        transform_msg.header.stamp = self.node.get_clock().now().to_msg()
+        transform_msg.child_frame_id = "waypoint"
+
+        transform_msg.transform.translation.x = self.end_point[0]
+        transform_msg.transform.translation.y = self.end_point[1]
+        transform_msg.transform.translation.z = 0.0
+
+        transform_msg.transform.rotation.x = quaternion.x
+        transform_msg.transform.rotation.y = quaternion.y
+        transform_msg.transform.rotation.z = quaternion.z
+        transform_msg.transform.rotation.w = quaternion.w
+
+        self.node.waypoint_broadcaster.sendTransform(transform_msg)
+
+    def update(self):
+        if self.current_point == (None, None):
+            self.node.get_logger().info(f"{self.name}: Waiting for current point ...")
+            return py_trees.common.Status.RUNNING
+        
+        distance_error = np.hypot(
+            self.current_point[0] - self.end_point[0],
+            self.current_point[1] - self.end_point[1]
+        )
+        yaw_error = math.atan2(math.sin(self.target_yaw - self.current_yaw), math.cos(self.target_yaw - self.current_yaw))
+
+        if distance_error > self.distance_threshold:
+            self.node.get_logger().info(f"{self.name}: Distance to waypoint is {distance_error:.2f}")
+            self.broadcast_waypoint()
+            return py_trees.common.Status.RUNNING
+        elif yaw_error > self.yaw_threshold:
+            self.node.get_logger().info(f"{self.name}: Correcting yaw by {yaw_error:.2f}")
+            self.broadcast_waypoint()
+            return py_trees.common.Status.RUNNING
+        else:
+            self.node.get_logger().info(f"{self.name}: Reached waypoint of ({self.end_point[0], self.end_point[1]}) at {self.current_yaw}")
+            return py_trees.common.Status.SUCCESS
+    
+def generate_waypoints_with_map(map: Map, x_resolution, y_resolution):
+
+    x_min = 0.0
+    x_max = map.cells_to_distance(map.grid_width)
+    y_min = 0.0
+    y_max = map.cells_to_distance(map.grid_height)-0.35
+
+    waypoints = []
+    reverse = False
+
+    x = x_min
+    while x < x_max:
+        y = y_min if not reverse else y_max
+        first = None
+        last = None
+        while (not reverse and y < y_max) or (reverse and y > y_min):
+            if map.is_free(x, y, 1):
+                if first is None:
+                    first = (x, y, 0.0)
+                last = (x, y, 0.0)
+            y += y_resolution if not reverse else -y_resolution
+        if first is not None:
+            waypoints.append(first)
+        if last is not None and first != last:
+            waypoints.append(last)
+        x += x_resolution
+        reverse = not reverse
+    
+    return waypoints
+
 def offset_outer_vertices(workspace_vertices, offset):
     vertices = [np.array(vertex) for vertex in workspace_vertices]
     num_vertices = len(vertices)
@@ -83,44 +255,18 @@ def offset_inner_vertices(vertices, offset):
         offset_vertices = list(largest_polygon.exterior.coords)
     return offset_vertices
 
-def shortest_edges_midpoints(vertices):
-    if len(vertices) < 2:
-        return []
 
-    edges = []
-    for i in range(len(vertices)):
-        current_x, current_y = vertices[i]
-        next_x, next_y = vertices[(i + 1) % len(vertices)]
-        distance = np.hypot(next_x - current_x, next_y - current_y)
-        edges.append({"p1": (current_x, current_y), "p2": (next_x, next_y), "distance": distance})
-    sorted_edges = sorted(edges, key=lambda edge: edge["distance"])
-
-    midpoints = []
-    headings = []
-    for i in range(len(sorted_edges)):
-        if i > 2:
-            break
-        midpoint_x = (sorted_edges[i]["p1"][0] + sorted_edges[i]["p2"][0]) / 2
-        midpoint_y = (sorted_edges[i]["p1"][1] + sorted_edges[i]["p2"][1]) / 2
-        midpoints.append((midpoint_x, midpoint_y))
-        normal_vector_x = -(sorted_edges[i]["p2"][1] - sorted_edges[i]["p1"][1])
-        normal_vector_y = (sorted_edges[i]["p2"][0] - sorted_edges[i]["p1"][0])
-        heading = np.arctan2(normal_vector_y, normal_vector_x)
-        headings.append(heading)
-
-    return midpoints, headings[-1]
 
 def generate_waypoints(map: Map, workspace_vertices, outer_offset, inner_offset):
     outer_vertices = offset_outer_vertices(workspace_vertices, outer_offset)
     inner_vertices = offset_inner_vertices(workspace_vertices, inner_offset)
-    inner_midpoints, final_heading = shortest_edges_midpoints(inner_vertices)
-    offset_vertices = outer_vertices + inner_midpoints
+    offset_vertices = outer_vertices + inner_vertices[::-1]
     waypoints = []
     for i in range(len(offset_vertices) - 1):
         current_x, current_y = offset_vertices[i]
         next_x, next_y = offset_vertices[i + 1]
         distance = np.hypot(next_x - current_x, next_y - current_y)
-        resolution = max(1, math.ceil(distance * 1.0))
+        resolution = max(1, math.ceil(distance * 1.2))
         for j in range(resolution):
             x = current_x + (next_x - current_x) * (j + 1) / resolution
             y = current_y + (next_y - current_y) * (j + 1) / resolution
@@ -133,14 +279,12 @@ def generate_waypoints(map: Map, workspace_vertices, outer_offset, inner_offset)
         next_x, next_y, _ = waypoints[(i + 1) % num_waypoints]
         heading = np.arctan2(next_y - current_y, next_x - current_x)
         rounded_x, rounded_y = map.round_world(current_x, current_y)
-        if i == (num_waypoints - 1):
-            waypoints[i] = (rounded_x, rounded_y, final_heading)
-        else:
-            waypoints[i] = (rounded_x, rounded_y, heading)
+        waypoints[i] = (rounded_x, rounded_y, heading)
 
     return waypoints
 
 class ExploreMaster(Node):
+
     def __init__(self):
         super().__init__("explore_master")
 
@@ -154,9 +298,9 @@ class ExploreMaster(Node):
         self.resolution = 0.05
         self.map = Map(self.resolution)
         self.map.initialise_grid(self.workspace_vertices)
-        self.map.inflate_grid(0.30)
+        self.map.inflate_grid(0.35)
         self.show_waypoints = False
-        self.end_points = generate_waypoints(self.map, self.workspace_vertices, 0.30, 0.60)
+        self.end_points = generate_waypoints(self.map, self.workspace_vertices, 0.35, 1.05)
 
         self.objects, self.boxes = self.process_map_file("maps/Map_test.txt")
 
@@ -220,7 +364,7 @@ class ExploreMaster(Node):
             transform = TransformStamped()
             transform.header.frame_id = "odom"  # Change to your desired parent frame
             transform.header.stamp = self.get_clock().now().to_msg()
-            transform.child_frame_id = f"end_point_{i}"
+            transform.child_frame_id = f'EndPoint{i}'
             
             # Set translation from end_point coordinates
             transform.transform.translation.x = point[0]
@@ -333,8 +477,10 @@ class ExploreMaster(Node):
 
             point_selector = py_trees.composites.Selector(f"EndPoint{i}", memory=True)
 
-            end_point_client = behaviours.ServiceClient(
-                name=f"GoToPoint_{i}",
+            service_check_sequence = py_trees.composites.Sequence(f"ServiceCheck{i}", memory=True)
+
+            pathing_service = ServiceClient(
+                name=f"GoToPoint{i}",
                 service_type=GoToPoint,
                 service_name="/pathing_end_point",
                 x=rob_x,
@@ -466,24 +612,15 @@ class ExploreMaster(Node):
                 yaw=yaw,
             )
 
-            end_point_sequence = py_trees.composites.Sequence(f"EndPointSequence_{i}", memory=False)
-            end_point_sequence.add_children([
-                end_point_client,
-                reached_end_point,
-            ])
-
-            wait = behaviours.WaitBehavior(
-                name=f"Wait_{i}",
-                duration=0.5
+            retry_endpoint = py_trees.decorators.FailureIsRunning(
+                name=f"RetryEndpoint{i}",
+                child=end_point_check,
             )
 
-            end_point_check = py_trees.composites.Sequence(f"EndPointCheck_{i}", memory=True)
-            end_point_check.add_children([
-                end_point_sequence,
-                wait,
-            ])
+            retry_on_endpoint_failure.add_children([pathing_service, retry_endpoint])
+            service_check_sequence.add_child(retry_on_endpoint_failure)
 
-            fallback = py_trees.behaviours.Success(name=f"SkipToNext_{i}")
+            fallback = py_trees.behaviours.Success(name=f"SkipToNext{i}")
 
             point_selector.add_children([service_check_sequence, fallback])
             # exploration_sequence.add_child(point_selector)
@@ -544,7 +681,7 @@ class ExploreMaster(Node):
             num_success=2
         )
         
-        root.add_child(exploration_sequence)
+        root.add_child(repeater)
         return root
 
     def tick_tree(self):

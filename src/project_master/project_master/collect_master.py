@@ -37,7 +37,7 @@ class CollectMaster(Node):
         self.resolution = 0.05
 
         # Variables
-        workspace_file = "workspaces/large_workspace.tsv"
+        workspace_file = "workspaces/small_workspace.tsv"
         self.workspace_vertices = self.read_workspace(workspace_file, skip_header=True)
 
         root = self.create_collection_tree()
