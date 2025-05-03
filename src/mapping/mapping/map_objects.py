@@ -56,7 +56,6 @@ class MapObjects(Node):
         if not np.array_equal(current_object_list, self.previous_object_list):
             self.objects_map.empty_grid()
             for object_type, x, y, angle in current_object_list:
-                self.get_logger().info(f"Object Type {str(object_type)}")
                 self.objects_map.add_object(str(object_type), x, y, angle)
             self.publish_objects_map()
 

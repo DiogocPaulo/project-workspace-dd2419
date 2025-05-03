@@ -23,9 +23,7 @@ class ObjectFilterNode(Node):
         self.create_subscription(ObjectList, "/raw_detected_objects", self.raw_objects_callback, 10)
         self.create_subscription(OccupancyGrid, "/obstacles_map", self.obstacles_map_callback, 10)
         self.object_list_publisher = self.create_publisher(ObjectList, "/detected_objects", 10)
-
         self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
-        
 
         # Variables
         self.raw_objects = []
@@ -33,15 +31,11 @@ class ObjectFilterNode(Node):
         self.initial_object_list = []  
         self.obstacles_map = None
         
-        # File I/O setup
-        self.maps_dir = os.path.join(os.getcwd(), "maps")
-        if not os.path.exists(self.maps_dir):
-            os.makedirs(self.maps_dir)
-        self.map_file = os.path.join(self.maps_dir, "map.csv")
+        # Constant
+        self.map_file = "maps/map.csv"
         
-        # Load existing map on startup
-        self.read_map_file()
-        self.create_timer(5.0, self.update_object_list)
+        self.read_map(self.map_file)
+        self.create_timer(2.0, self.update_object_list)
 
     def obstacles_map_callback(self, msg: OccupancyGrid):
         width = msg.info.width
@@ -69,7 +63,7 @@ class ObjectFilterNode(Node):
                     if distance < 0.24:    #f the object is within 1 cm of an existing object
                         is_duplicate = True
                         break
-                elif distance < 0.15:   # If the object is within 1 cm of an existing object
+                elif distance < 0.06:   # If the object is within 1 cm of an existing object
                     is_duplicate = True
                     break
 
@@ -101,7 +95,7 @@ class ObjectFilterNode(Node):
                 self.get_logger().info(f"Published new object list now includes: {raw_obj.object_type} at ({raw_obj.x:.2f}, {raw_obj.y:.2f})")
 
                 # Confidence-based correction
-            CONFIDENCE_RADIUS = 0.15 # 5cm
+            CONFIDENCE_RADIUS = 0.06 # 5cm
             MIN_CONSISTENT = 2        # Need at least 2 consistent observations
             self.get_logger().info(f"obstacles:{self.object_list}")
             
@@ -174,7 +168,7 @@ class ObjectFilterNode(Node):
                 elif obj1.object_type == obj2.object_type: 
                     threshold = 0.15
                 else:
-                    threshold = 0.15 # Others need 5cm
+                    threshold = 0.06 # Others need 5cm
 
                 # If too close, mark the second object for removal
                 if dist < threshold:
@@ -224,73 +218,57 @@ class ObjectFilterNode(Node):
         self.publish_object_list()
         self.broadcast_object_list()
 
-    def read_map_file(self):
-        if not os.path.exists(self.map_file):
-            self.get_logger().warn(f"Map file not found: {self.map_file}")
-            return
-
+    def read_map(self, filename):
+        objects = []
         try:
-            objects = []
-            with open(self.map_file, 'r') as f:
-                for line in f:
+            with open(filename, "r") as file:
+                for line in file:
                     parts = line.strip().split(',')
                     if len(parts) < 4:
+                        self.get_logger().warn(f"Skipping invalid line: {line}")
                         continue
-                    
-                    obj = Object()
-                    
-                    # Parse object type
+                    object_msg = Object()
                     if parts[0] == "1":
-                        obj.object_type = Object.CUBE
+                        object_msg.object_type = Object.CUBE
                     elif parts[0] == "2":
-                        obj.object_type = Object.SPHERE
+                        object_msg.object_type = Object.SPHERE
                     elif parts[0] == "3":
-                        obj.object_type = Object.PLUSHIE
+                        object_msg.object_type = Object.PLUSHIE
                     elif parts[0] == "B":
-                        obj.object_type = Object.BOX
+                        object_msg.object_type = Object.BOX
                     else:
-                        continue  # Skip unknown types
-                    
-                    # Parse coordinates (convert from cm back to meters)
-                    obj.x = float(parts[1])/100
-                    obj.y = float(parts[2])/100
-                    obj.angle = float(parts[3])
-                    
-                    objects.append(obj)
-            
-            # Merge with current objects through the standard processing pipeline
+                        self.get_logger().warn(f"Skipping line due to unknown object type: {line}")
+                        continue
+                    object_msg.x = float(parts[1])/100
+                    object_msg.y = float(parts[2])/100
+                    object_msg.angle = float(parts[3])
+                    objects.append(object_msg)
+                    self.get_logger().info(f"Added object (type: {object_msg.object_type}) at ({object_msg.x:.2f}, {object_msg.y:.2f})")
+            self.get_logger().info(f"Read {len(objects)} objects from {filename}")
             self.object_list.extend(objects)
-            # self.initial_object_list.extend(objects)
-            self.publish_object_list()
-            self.get_logger().info(f"Loaded {len(objects)} objects from {self.map_file}")
-            
-        except Exception as e:
-            self.get_logger().error(f"Error loading map: {str(e)}")
+            self.update_object_list()
+        except FileNotFoundError:
+            self.get_logger().warn(f"Map file ({filename}) not found!")
 
-    def write_map_file(self):
+    def write_map(self, filename):
         try:
-            with open(self.map_file, 'w') as f:
-                for obj in self.object_list:
-                    if obj.object_type == Object.CUBE:
+            with open(filename, 'w') as file:
+                for object_msg in self.object_list:
+                    if object_msg.object_type == Object.CUBE:
                         type_label = "1"
-                    elif obj.object_type == Object.SPHERE:
+                    elif object_msg.object_type == Object.SPHERE:
                         type_label = "2"
-                    elif obj.object_type == Object.PLUSHIE:
+                    elif object_msg.object_type == Object.PLUSHIE:
                         type_label = "3"
-                    elif obj.object_type == Object.BOX:
+                    elif object_msg.object_type == Object.BOX:
                         type_label = "B"
                     else:
+                        self.get_logger().warn(f"Skipping writing object due to unknown object type: {object_msg.object_type}")
                         continue
-                    
-                    f.write(f"{type_label},{obj.x*100:.2f},{obj.y*100:.2f},{obj.angle:.1f}\n")
-            
-            self.get_logger().info(f"Saved {len(self.object_list)} objects to {self.map_file}")
-
-            
+                    file.write(f"{type_label},{object_msg.x*100:.2f},{object_msg.y*100:.2f},{object_msg.angle:.1f}\n")
+            self.get_logger().info(f"Wrote {len(self.object_list)} objects to {filename}")
         except Exception as e:
-            self.get_logger().error(f"Error saving map: {str(e)}")
-
-
+            self.get_logger().error(f"Error writing map file (filename): {str(e)}")
 
 def main():
     rclpy.init()
@@ -299,7 +277,7 @@ def main():
         rclpy.spin(node)
     except KeyboardInterrupt:
         node.get_logger().info("Keyboard interrupt, shutting down...")
-        node.write_map_file()  # Save on shutdown
+        node.write_map(node.map_file)
     finally:
         node.destroy_node()
         rclpy.shutdown()
