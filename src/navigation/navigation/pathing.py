@@ -6,12 +6,13 @@ import numpy as np
 import heapq
 
 import rclpy
+import tf2_ros
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, HistoryPolicy, ReliabilityPolicy
 
 from project_interfaces.msg import Object, ObjectList
 from nav_msgs.msg import Path, OccupancyGrid, Odometry
-from geometry_msgs.msg import PoseStamped, Point
+from geometry_msgs.msg import PoseStamped, TransformStamped, Quaternion
 
 from project_interfaces.srv import GoToPoint, Trigger
 from project_interfaces.msg import NavPoint, NavPath
@@ -50,6 +51,7 @@ class Pathing(Node):
         self.path_map_publisher = self.create_publisher(OccupancyGrid, "/path_map", 10)
         self.inflated_map_publisher = self.create_publisher(OccupancyGrid, "/inflated_map", 10)
         self.end_point_service = self.create_service(GoToPoint, "/pathing_end_point", self.receive_end_point)
+        self.end_point_broadcaster = tf2_ros.TransformBroadcaster(self)
 
         # Constants
         self.adaptive_h = {}
@@ -73,6 +75,8 @@ class Pathing(Node):
         self.reversing = False
         self.slow_approach = False
         self.approaching_object = False
+
+        self.create_timer(5, self.broadcast_end_point)
 
     def odom_callback(self, msg: Odometry):
         self.start_point = (msg.pose.pose.position.x, msg.pose.pose.position.y)
@@ -197,9 +201,14 @@ class Pathing(Node):
         self.inflated_map_publisher.publish(map_msg)
         self.get_logger().info("Published inflated occupancy map")
 
-    def publish_path_map(self):
-        if self.inflated_map is None or self.path_grid is None:
+    def publish_path_map(self, path):
+        if self.inflated_map is None:
             return
+
+        self.path_grid = np.full(self.inflated_map.grid.shape, -1, dtype=np.int8)
+        if path is not None:
+            for x, y in path:
+                self.path_grid[x, y] = 100
 
         map_msg = OccupancyGrid()
         map_msg.header.stamp = self.get_clock().now().to_msg()
@@ -268,6 +277,36 @@ class Pathing(Node):
 
         self.path_publisher.publish(path_msg)
         self.get_logger().info("Published custom path")
+
+    def broadcast_end_point(self):
+        if self.end_point == (None, None):
+            return
+        quaternion = Quaternion()
+        quaternion.x = 0.0
+        quaternion.y = 0.0
+        quaternion.z = np.sin(self.target_yaw * 0.5)
+        quaternion.w = np.cos(self.target_yaw * 0.5)
+
+        transform_msg = TransformStamped()
+        transform_msg.header.frame_id = "odom"
+        transform_msg.header.stamp = self.get_clock().now().to_msg()
+        transform_msg.child_frame_id = "end_point"
+
+        transform_msg.transform.translation.x = self.end_point[0]
+        transform_msg.transform.translation.y = self.end_point[1]
+        transform_msg.transform.translation.z = 0.0
+
+        transform_msg.transform.rotation.x = quaternion.x
+        transform_msg.transform.rotation.y = quaternion.y
+        transform_msg.transform.rotation.z = quaternion.z
+        transform_msg.transform.rotation.w = quaternion.w
+
+        self.end_point_broadcaster.sendTransform(transform_msg)
+
+    def update_path(self, path):
+        self.publish_path(path)
+        self.publish_path_map(path)
+        self.broadcast_end_point()
     
     def calculate_astar_path(self):
         if self.start_point == (None, None):
@@ -303,14 +342,7 @@ class Pathing(Node):
 
         if path is None:
             self.pathing_failed = True
-            self.path_grid = None
-        self.publish_path(path)
-        self.publish_temp_path(path)
-        if path is not None:
-            self.path_grid = np.full(self.inflated_map.grid.shape, -1, dtype=np.int8)
-            for x, y in path:
-                self.path_grid[x, y] = 100
-        self.publish_path_map()
+        self.update_path(path)
 
 def main():
     rclpy.init()
