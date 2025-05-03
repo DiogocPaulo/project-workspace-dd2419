@@ -228,9 +228,7 @@ class ExploreMaster(Node):
         for i, (x, y, yaw) in enumerate(self.end_points):
             point_selector = py_trees.composites.Selector(f"EndPoint_{i}", memory=True)
 
-            service_check_sequence = py_trees.composites.Sequence(f"ServiceCheck_{i}", memory=True)
-
-            pathing_service = behaviours.ServiceClient(
+            end_point_client = behaviours.ServiceClient(
                 name=f"GoToPoint_{i}",
                 service_type=GoToPoint,
                 service_name="/pathing_end_point",
@@ -243,38 +241,39 @@ class ExploreMaster(Node):
                 approaching_object=False,
             )
 
-            retry_on_endpoint_failure = py_trees.composites.Sequence(f"RetryOnEndpointFailure_{i}", memory=False)
-            
-            end_point_check = behaviours.ReachedEndPoint(
+            reached_end_point = behaviours.ReachedEndPoint(
                 name=f"ReachedEndPoint_{i}",
                 x=x,
                 y=y,
                 yaw=yaw,
             )
 
-            retry_endpoint = py_trees.decorators.FailureIsRunning(
-                name=f"RetryEndpoint_{i}",
-                child=end_point_check,
+            end_point_sequence = py_trees.composites.Sequence(f"EndPointSequence_{i}", memory=False)
+            end_point_sequence.add_children([
+                end_point_client,
+                reached_end_point,
+            ])
+
+            wait = behaviours.WaitBehavior(
+                name=f"Wait_{i}",
+                duration=0.5
             )
 
-            wait = behaviours.WaitBehavior(name=f"Wait_{i}", duration=0.5)
-
-            retry_on_endpoint_failure.add_children([pathing_service, retry_endpoint])
-            #service_check_sequence.add_child(retry_on_endpoint_failure)
-            service_check_sequence.add_children([retry_on_endpoint_failure, wait]) # <-- wait after endpoints
+            end_point_check = py_trees.composites.Sequence(f"EndPointCheck_{i}", memory=True)
+            end_point_check.add_children([
+                end_point_sequence,
+                wait,
+            ])
 
             fallback = py_trees.behaviours.Success(name=f"SkipToNext_{i}")
 
-            point_selector.add_children([service_check_sequence, fallback])
+            point_selector.add_children([
+                end_point_check,
+                fallback,
+            ])
             exploration_sequence.add_child(point_selector)
-
-        repeater = py_trees.decorators.Repeat(
-            name="RepeatExploration", 
-            child=exploration_sequence,
-            num_success=2
-        )
         
-        root.add_child(repeater)
+        root.add_child(exploration_sequence)
         return root
 
     def tick_tree(self):
