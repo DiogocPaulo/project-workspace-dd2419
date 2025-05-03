@@ -25,7 +25,6 @@ from geometry_msgs.msg import Point as GeometryPoint
 from project_master import behaviours
 
 # a node has executed completely after returning a SUCCESS or FAILURE
-
 # setup - one time constructor
 # initialized - run when node was first ticked or execution completed
 # update - called every time the node is ticked
@@ -49,7 +48,6 @@ class FindClosestObject(py_trees.behaviour.Behaviour):
         except Exception as e:
             self.logger.error(f"{self.name} - Setup failed: {e}")
             return False
-
         qos_profile = QoSProfile(
             depth=1,
             history=HistoryPolicy.KEEP_LAST,
@@ -306,6 +304,12 @@ class GoToSafePointClient(py_trees.behaviour.Behaviour):
                 return py_trees.common.Status.FAILURE
         else:
             return py_trees.common.Status.RUNNING
+        elif yaw_error > self.yaw_threshold:
+            self.node.get_logger().info(f"{self.name}: Correcting yaw by {yaw_error:.2f}")
+            return py_trees.common.Status.RUNNING
+        else:
+            self.node.get_logger().info(f"{self.name}: Reached waypoint of ({self.end_point[0], self.end_point[1]}) at {self.current_yaw}")
+            return py_trees.common.Status.SUCCESS
 
 class GoToApproachPointClient(py_trees.behaviour.Behaviour):
     def __init__(self, name, service_name, approach_offset, input_key, output_key):
@@ -569,6 +573,20 @@ class Look(py_trees.behaviour.Behaviour):
             self.logger.error(f"{self.name} - Setup failed: {e}")
             return False
 
+    def update(self):
+        if self.start_time is None:
+            self.node.get_logger().error(f"{self.name}: Timer not initialized")
+            return py_trees.common.Status.FAILURE
+
+        elapsed = time.time() - self.start_time
+        if elapsed < self.duration:
+            return py_trees.common.Status.RUNNING
+        else:
+            self.node.get_logger().info(f"{self.name}: Wait complete")
+            return py_trees.common.Status.SUCCESS
+
+    def terminate(self, new_status=None):
+        self.start_time = None
 
         self.pickup_client = self.node.create_client(PickObject, 'PickObject')
         while not self.pickup_client.wait_for_service(timeout_sec=1.0):

@@ -30,14 +30,14 @@ def generate_launch_description():
             executable="pathing", #aka py file
             name="robot_pathing",
             emulate_tty=True,
-            ros_arguments=["--log-level", "info"]
+            ros_arguments=["--log-level", "warn"]
         ),
         Node(
             package="navigation",
             executable="navigation",
             name="robot_navigation",
             emulate_tty=True,
-            ros_arguments=["--log-level", "info"]
+            ros_arguments=["--log-level", "warn"]
         ),
         # Node(
         #     package="detection",

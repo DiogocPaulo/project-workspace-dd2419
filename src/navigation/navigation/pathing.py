@@ -55,9 +55,9 @@ class Pathing(Node):
 
         # Constants
         self.adaptive_h = {}
-        self.workspace_inflation_radius = 0.35
+        self.workspace_inflation_radius = 0.30
         self.objects_inflation_radius = 0.35
-        self.obstacles_inflation_radius = 0.40
+        self.obstacles_inflation_radius = 0.35
 
         # Variables
         self.start_point = (0.0, 0.0)
@@ -167,10 +167,11 @@ class Pathing(Node):
         if self.pathing_failed and self.backing:
             response.success = False
             response.message = f"Failed to find path to safe point: ({self.safe_point[0]:.2f}, {self.safe_point[1]:.2f})"
-
+            return response
         if self.pathing_failed:
             response.success = False
             response.message = f"Failed to find path to end point: ({self.end_point[0]:.2f}, {self.end_point[1]:.2f})"
+            return response
 
         response.success = True
         response.message = f"Pathing end point set: ({self.end_point[0]:.2f}, {self.end_point[1]:.2f})"
@@ -322,7 +323,7 @@ class Pathing(Node):
         if not self.approaching_object and not self.backing and not self.inflated_map.is_free(self.start_point[0], self.start_point[1], 75):
             self.get_logger().info("Entering reverse travel mode")
             self.backing = True
-            self.safe_point = self.inflated_map.get_safe_point(self.start_point[0], self.start_point[1], 3, 75)
+            self.safe_point = self.inflated_map.get_safe_point(self.start_point[0], self.start_point[1], 5, 75)
             if self.safe_point is None:
                 self.safe_point = (0.0, 0.0)
 

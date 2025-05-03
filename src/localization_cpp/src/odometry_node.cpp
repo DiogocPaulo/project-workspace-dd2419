@@ -100,7 +100,7 @@ void OdometryNode::updateOdometry() {
         //RCLCPP_INFO(this->get_logger(), "Encoder vs IMU angular velocity: %.2f vs %.2f", angular_velocity, -angular_velocity_imu_.z);
 
         // Correct the state based on IMU data
-        //ekf_.correct(-angular_velocity_imu_.z, elapsed_time); // <-- negative to match encoder data
+        ekf_.correct(-angular_velocity_imu_.z, elapsed_time); // <-- negative to match encoder data
 
         // Reset IMU data received flag
         imu_data_received_ = false;

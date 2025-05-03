@@ -35,7 +35,7 @@ Node::Node() : rclcpp::Node("localization_node") {
 }
 
 void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) {
-    if (std::abs(angular_velocity_) > 0.5) {
+    if (std::abs(angular_velocity_) > 0.1) {
         RCLCPP_DEBUG(this->get_logger(), "Robot is rotating too fast, skipping scan processing.");
         return; // Skip processing if robot is not moving
     }
@@ -109,7 +109,7 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
             rotation_ = icp_rotation_quat * pre_rotation_quat * rotation_;
 
             // Store the current scan in the LidarScanStorage
-            if ((current_pose_.position - stored_scan->pose.position).norm() > 0.1 || std::abs(angular_velocity_) > 0.2) {
+            if ((current_pose_.position - stored_scan->pose.position).norm() > 0.1 || std::abs(angular_velocity_) > 0.1) {
                 //stored_scan->agePoints(10); // Age points in the storage
                 scan_storage_.addScan(aligned_points, current_pose_);
             }

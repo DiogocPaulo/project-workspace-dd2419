@@ -74,16 +74,13 @@ class MapObstacles(Node):
 
         angle = msg.angle_min
 
-        # Process laser scan readings
         for reading in msg.ranges:
             valid = not (math.isinf(reading) or math.isnan(reading))
-            if not valid:
-                reading = msg.range_max
+            distance = reading if valid else msg.range_max
 
-            point_x = reading * math.cos(angle)
-            point_y = reading * math.sin(angle)
-            distance = np.hypot(point_x, point_y)
             if distance > self.ignore_distance:
+                point_x = reading * math.cos(angle)
+                point_y = reading * math.sin(angle)
                 lidar_point_x, lidar_point_y = self.transform_point(point_x, point_y, lidar_transform)
                 self.obstacles_map.update_obstacles(valid, lidar_origin_x, lidar_origin_y, lidar_point_x, lidar_point_y)
 
