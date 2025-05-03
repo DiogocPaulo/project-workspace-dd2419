@@ -22,6 +22,9 @@ run-explore:
 	rm -rf maps/map.csv
 	ros2 launch project_master explore_launch.py | tee logs/explore.log
 
+check-explore:
+	python3.12 src/project_master/project_master/explore_evaluation.py
+
 clean:
 	rm -rf build/ install/ package/ logs/
 
