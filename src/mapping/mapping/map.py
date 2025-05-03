@@ -154,13 +154,15 @@ class Map:
         start_x, start_y = self.world_to_grid(start_x, start_y)
         end_x, end_y = self.world_to_grid(end_x, end_y)
         cells = self.point_to_line(start_x, start_y, end_x, end_y)
+        if not cells:
+            return
         for cell in cells[:-1]:
             x, y = cell
-            if not self.is_within_workspace(x, y, world=False):
+            if not self.is_within_grid(x, y, world=False):
                 continue
             self.grid[y, x] = max(self.grid[y, x] - self.occupancy_decrease, 0)
         x, y = cells[-1]
-        if not self.is_within_grid(x, y, world=False):
+        if not self.is_within_workspace(x, y, world=False):
             return
         if valid:
             self.grid[y, x] = min(self.grid[y, x] + self.occupancy_increase, 100)
