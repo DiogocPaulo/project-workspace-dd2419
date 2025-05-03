@@ -79,8 +79,8 @@ class MapObstacles(Node):
             distance = reading if valid else msg.range_max
 
             if distance > self.ignore_distance:
-                point_x = reading * math.cos(angle)
-                point_y = reading * math.sin(angle)
+                point_x = distance * math.cos(angle)
+                point_y = distance * math.sin(angle)
                 lidar_point_x, lidar_point_y = self.transform_point(point_x, point_y, lidar_transform)
                 self.obstacles_map.update_obstacles(valid, lidar_origin_x, lidar_origin_y, lidar_point_x, lidar_point_y)
 
