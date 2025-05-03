@@ -30,12 +30,13 @@ from project_master import behaviours
 # initialized - run when node was first ticked or execution completed
 # update - called every time the node is ticked
 class FindClosestObject(py_trees.behaviour.Behaviour):
-    def __init__(self, name, object_list, find_box, output_key):
+    def __init__(self, name, find_box, output_key):
         super().__init__(name)
-        self.object_list = object_list
         self.find_box = find_box
         self.object_point_key = output_key
         self.current_point = (0.0, 0.0)
+        self.object_list = []
+        self.received_objects = False
         self.blackboard = self.attach_blackboard_client(name=name)
         self.blackboard.register_key(
             key=self.object_point_key,
@@ -56,17 +57,27 @@ class FindClosestObject(py_trees.behaviour.Behaviour):
         )
 
         self.node.create_subscription(Odometry, "/odom", self.odom_callback, qos_profile)
+        self.node.create_subscription(ObjectList, "/detected_objects", self.objects_callback, qos_profile)
         return True
 
     def odom_callback(self, msg: Odometry):
         self.current_point = (msg.pose.pose.position.x, msg.pose.pose.position.y)
 
+    def objects_callback(self, msg: ObjectList):
+        if self.received_objects:
+            return
+        self.received_objects = True
+        self.object_list = msg.objects
+
     def update(self):
         if self.current_point == (None, None):
             self.node.get_logger().info(f"{self.name} - Waiting for current point ...")
             return py_trees.common.Status.RUNNING
+        if not self.received_objects:
+            self.node.get_logger().info(f"{self.name} - Waiting for object list ...")
+            return py_trees.common.Status.RUNNING
         if not self.object_list:
-            self.node.get_logger().info(f"{self.name} - Object list is empty. No objects to find.")
+            self.node.get_logger().info(f"{self.name} - Object list is empty. No objects to find!")
             return py_trees.common.Status.FAILURE
 
         closest_object_msg = None
@@ -79,16 +90,20 @@ class FindClosestObject(py_trees.behaviour.Behaviour):
                     min_distance = distance
                     closest_object_msg = object_msg
 
-        if closest_object_msg is not None and not self.find_box:
-            self.object_list.remove(closest_object_msg)
-        if closest_object_msg is not None:
-            object_point = (closest_object_msg.x, closest_object_msg.y)
-            self.blackboard.set(self.object_point_key, object_point)
-            self.node.get_logger().info(f"{self.name} - Closest object found (type: {closest_object_msg.object_type}) at ({object_point[0]:.2f}, {object_point[1]:.2f})")
-            return py_trees.common.Status.SUCCESS
-        else:
-            self.node.get_logger().warning(f"{self.name} - No objects (box type: {self.find_box}) found in the list.")
+        if closest_object_msg is None and self.find_box:
+            self.node.get_logger().warning(f"{self.name} - No boxes found in object list")
             return py_trees.common.Status.FAILURE
+        if closest_object_msg is None:
+            self.node.get_logger().warning(f"{self.name} - No objects found in object list")
+            return py_trees.common.Status.FAILURE
+        if self.find_box:
+            self.node.get_logger().info(f"{self.name} - Closest box found at ({closest_object_msg.x:.2f}, {closest_object_msg.y:.2f}) with (angle: {closest_object_msg.angle:.2f})")
+        else:
+            self.node.get_logger().info(f"{self.name} - Closest object found (type: {closest_object_msg.object_type}) at ({closest_object_msg.x:.2f}, {closest_object_msg.y:.2f})")
+            self.object_list.remove(closest_object_msg)
+        object_point = (closest_object_msg.x, closest_object_msg.y)
+        self.blackboard.set(self.object_point_key, object_point)
+        return py_trees.common.Status.SUCCESS
 
 class ReachedWaypoint(py_trees.behaviour.Behaviour):
     def __init__(self, name, input_key, distance_threshold=0.1, yaw_threshold=0.1):
@@ -299,6 +314,8 @@ class GoToApproachPointClient(py_trees.behaviour.Behaviour):
         self.approach_offset = approach_offset
         self.object_point_key = input_key
         self.waypoint_key = output_key
+        self.current_point = (0.0, 0.0)
+        self.current_yaw = 0.0
         self.approach_point = None
         self.approach_yaw = 0.0
         self.client = None
