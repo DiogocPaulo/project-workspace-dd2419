@@ -113,7 +113,7 @@ class ObjectDetectorNode(Node):
 
         # Define HSV ranges for filtering color ranges
         lower_red, upper_red = np.array([2, 230, 95]), np.array([2, 240, 100])
-        lower_green1, upper_green1 = np.array([81, 100, 44]), np.array([84, 255, 105])
+        lower_green1, upper_green1 = np.array([81, 100, 44]), np.array([88, 255, 205])
         lower_green2, upper_green2 = np.array([73, 210, 90]), np.array([74, 240, 120])
         lower_blue, upper_blue = np.array([99, 254, 75]), np.array([99, 255, 80])
 
@@ -156,7 +156,7 @@ class ObjectDetectorNode(Node):
                 pure_red = True
             elif green_ratio > 0.001 and red_ratio == 0.0 and blue_ratio == 0.0:
                 pure_green = True
-            elif blue_ratio > 0.001 and red_ratio == 0.0 and green_ratio == 0.0:
+            elif blue_ratio > 0.001 and red_ratio == 0.0 and green_ratio >= 0.02:
                 pure_blue = True
 
             x, y, z = np.mean(cluster_points, axis=0)
@@ -173,8 +173,9 @@ class ObjectDetectorNode(Node):
                     if obj is not None:
                         frame_objects.append(obj)
             elif self.is_plushie(cluster_points):
-                print(f"red:{red_ratio}, blue:{blue_ratio}, geen:{green_ratio}")
+                self.get_logger().info(f"red:{red_ratio}, blue:{blue_ratio}, green:{green_ratio} IM PLUSHIE")
                 obj = self.create_object(x + 0.01, z, 0.0, Object.PLUSHIE, msg.header.stamp)
+                self.get_logger().info(f"OI: {obj}")
                 if obj is not None:
                     frame_objects.append(obj)
             elif self.is_box(cluster_points):

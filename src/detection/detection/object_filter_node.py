@@ -72,7 +72,7 @@ class ObjectFilterNode(Node):
             else:
                 free_from_obstacles = True
 
-            self.get_logger().info(f"initial:{self.initial_object_list}")
+            self.get_logger().info(f"initial:{self.initial_object_list} and free:{free_from_obstacles}")
 
             # If not a duplicate, add the new object to the list
             if not is_duplicate and free_from_obstacles:
