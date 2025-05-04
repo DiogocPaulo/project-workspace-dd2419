@@ -265,7 +265,7 @@ class ObjectFilterNode(Node):
                     else:
                         self.get_logger().warn(f"Skipping writing object due to unknown object type: {object_msg.object_type}")
                         continue
-                    file.write(f"{type_label},{object_msg.x*100:.2f},{object_msg.y*100:.2f},{object_msg.angle:.1f}\n")
+                    file.write(f"{type_label}, {object_msg.x*100:.2f}, {object_msg.y*100:.2f}, {object_msg.angle:.1f}\n")
             self.get_logger().info(f"Wrote {len(self.object_list)} objects to {filename}")
         except Exception as e:
             self.get_logger().error(f"Error writing map file (filename): {str(e)}")
