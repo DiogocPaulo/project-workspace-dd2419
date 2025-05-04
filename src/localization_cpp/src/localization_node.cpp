@@ -29,7 +29,7 @@ Node::Node() : rclcpp::Node("localization_node") {
     transform_z_ = 0.0;
 
     // Initialize LidarScanStorage and ICP
-    scan_storage_ = LidarScanStorage(3); // 50 cm grid size
+    scan_storage_ = LidarScanStorage(2); // 50 cm grid size
     icp_ = ICP(0.3, 100); // 10 cm threshold, 50 iterations
 
     RCLCPP_INFO(this->get_logger(), "Localization node initialized.");
@@ -42,39 +42,47 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
     }
 
     // Ensure TF buffer has data
-    if (!tf_buffer_->canTransform("odom", msg->header.frame_id, tf2::TimePointZero, std::chrono::milliseconds(500))) {
+    if (!tf_buffer_->canTransform("odom", msg->header.frame_id, tf2::TimePointZero, std::chrono::milliseconds(500))
+        || !tf_buffer_->canTransform("map", "odom", tf2::TimePointZero, std::chrono::milliseconds(500))
+        || !tf_buffer_->canTransform("odom", "map", tf2::TimePointZero, std::chrono::milliseconds(500))) {
         RCLCPP_WARN(this->get_logger(), "Transform from %s to map not available yet!", msg->header.frame_id.c_str());
         return;
     }
-    // Get the transform from Lidar frame to Map frame
     try {
+        // Get the transform from Lidar frame to Odom frame
         RCLCPP_DEBUG(this->get_logger(), "Transform exists from %s to map.", msg->header.frame_id.c_str());
-        geometry_msgs::msg::TransformStamped transform = tf_buffer_->lookupTransform("odom", msg->header.frame_id, tf2::TimePointZero);
-        transform_z_ = transform.transform.translation.z;
+        geometry_msgs::msg::TransformStamped lidar_to_odom = tf_buffer_->lookupTransform("odom", msg->header.frame_id, tf2::TimePointZero);
+        transform_z_ = lidar_to_odom.transform.translation.z;
+
+        // Get the transform from Map frame to Odom frame
+        geometry_msgs::msg::TransformStamped map_to_odom = tf_buffer_->lookupTransform("odom", "map", tf2::TimePointZero);
+
+        // Get the transform from Map frame to Odom frame
+        geometry_msgs::msg::TransformStamped odom_to_map = tf_buffer_->lookupTransform("map", "odom", tf2::TimePointZero);
 
         // Convert LaserScan to 2D points in Map frame
         std::vector<Eigen::Vector2d> points = laserScanToPoints(msg, time_stamp_, linear_velocity_, angular_velocity_);
-        transformPoints(points, transform);
+        transformPoints(points, lidar_to_odom);
 
         // Get stored scan data from LidarScanStorage
         auto stored_scan = scan_storage_.getClosestScan(current_pose_);
 
         if (stored_scan) {
-            /*
-            
-            */
+            // Transform stored points to the Odom frame
+            std::vector<Eigen::Vector2d> stored_points = stored_scan->points;
+            transformPoints(stored_points, map_to_odom);
+
             // Align Principal Components before ICP
-            Eigen::Matrix2d pre_rotation = computeRotationAlignment(points, stored_scan->points);
+            Eigen::Matrix2d pre_rotation = computeRotationAlignment(points, stored_points);
             std::vector<Eigen::Vector2d> pre_aligned_points(points.size());
             for (size_t i = 0; i < points.size(); ++i) {
                 pre_aligned_points[i] = pre_rotation * points[i];
             }
 
-
             // Perform ICP to find transformation and get aligned points
             std::vector<Eigen::Vector2d> aligned_points;
             Eigen::Matrix3d icp_transform;
-            icp_.setTarget(stored_scan->points);
+            icp_.setTarget(stored_points);
 
             auto start_time = std::chrono::high_resolution_clock::now();
             icp_.computeICP(pre_aligned_points, icp_transform, aligned_points);
@@ -112,12 +120,13 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
             // Store the current scan in the LidarScanStorage
             if ((current_pose_.position - stored_scan->pose.position).norm() > 0.1 || std::abs(angular_velocity_) > 0.1) {
                 //stored_scan->agePoints(10); // Age points in the storage
+                transformPoints(aligned_points, odom_to_map); // Transform back to map frame
                 scan_storage_.addScan(aligned_points, current_pose_);
             }
 
             // Publish the reference point cloud
-            publishPointCloud(stored_scan->points);
-            publishAllScans();
+            publishPointCloud(stored_points);
+            publishAllScans(map_to_odom);
 
         } else {
             RCLCPP_WARN(this->get_logger(), "No stored scan found for ICP.");
@@ -202,19 +211,22 @@ void Node::publishPointCloud(const std::vector<Eigen::Vector2d>& points) {
     cloud.width = static_cast<uint32_t>(cloud.points.size());
     cloud.height = 1; // Unorganized
     pcl::toROSMsg(cloud, cloud_msg);
-    cloud_msg.header.frame_id = "map";
+    cloud_msg.header.frame_id = "odom";
     cloud_msg.header.stamp = time_stamp_;
     cloud_pub_->publish(cloud_msg);
 }
 
-void Node::publishAllScans() {
+void Node::publishAllScans(const geometry_msgs::msg::TransformStamped& map_to_odom) {
     std::vector<Scan> all_scans = scan_storage_.getAllScans();
 
     sensor_msgs::msg::PointCloud2 cloud_msg;
     pcl::PointCloud<pcl::PointXYZRGB> cloud;
 
     for (const auto& scan : all_scans) {
-        for (const auto& point : scan.points) {
+        // Transform points to the odom frame
+        std::vector<Eigen::Vector2d> points = scan.points;
+        transformPoints(points, map_to_odom);
+        for (const auto& point : points) {
             pcl::PointXYZRGB colored_point;
             colored_point.x = point.x();
             colored_point.y = point.y();
@@ -229,7 +241,7 @@ void Node::publishAllScans() {
     cloud.width = static_cast<uint32_t>(cloud.points.size());
     cloud.height = 1; // Unorganized
     pcl::toROSMsg(cloud, cloud_msg);
-    cloud_msg.header.frame_id = "map";
+    cloud_msg.header.frame_id = "odom";
     cloud_msg.header.stamp = time_stamp_;
     all_cloud_pub_->publish(cloud_msg);
 }
