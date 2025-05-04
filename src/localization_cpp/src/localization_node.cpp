@@ -11,6 +11,7 @@ Node::Node() : rclcpp::Node("localization_node") {
 
     // Initialize the point cloud publisher
     cloud_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("reference_scan_cloud", 10);
+    all_cloud_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("all_reference_scan_cloud", 10);
 
     // Initialize timer
     timer_ = create_wall_timer(std::chrono::milliseconds(100), std::bind(&Node::publishTransform, this));
@@ -28,7 +29,7 @@ Node::Node() : rclcpp::Node("localization_node") {
     transform_z_ = 0.0;
 
     // Initialize LidarScanStorage and ICP
-    scan_storage_ = LidarScanStorage(1); // 50 cm grid size
+    scan_storage_ = LidarScanStorage(3); // 50 cm grid size
     icp_ = ICP(0.3, 100); // 10 cm threshold, 50 iterations
 
     RCLCPP_INFO(this->get_logger(), "Localization node initialized.");
@@ -116,6 +117,7 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
 
             // Publish the reference point cloud
             publishPointCloud(stored_scan->points);
+            publishAllScans();
 
         } else {
             RCLCPP_WARN(this->get_logger(), "No stored scan found for ICP.");
@@ -173,8 +175,8 @@ void Node::odomCallback(const nav_msgs::msg::Odometry::ConstSharedPtr& msg) {
 void Node::publishTransform() {
     geometry_msgs::msg::TransformStamped tf_msg;
     tf_msg.header.stamp = time_stamp_;
-    tf_msg.header.frame_id = "odom";
-    tf_msg.child_frame_id = "map";
+    tf_msg.header.frame_id = "map";
+    tf_msg.child_frame_id = "odom";
     tf_msg.transform.translation.x = translation_[0];
     tf_msg.transform.translation.y = translation_[1];
     tf_msg.transform.translation.z = 0;
@@ -200,9 +202,36 @@ void Node::publishPointCloud(const std::vector<Eigen::Vector2d>& points) {
     cloud.width = static_cast<uint32_t>(cloud.points.size());
     cloud.height = 1; // Unorganized
     pcl::toROSMsg(cloud, cloud_msg);
-    cloud_msg.header.frame_id = "odom";
+    cloud_msg.header.frame_id = "map";
     cloud_msg.header.stamp = time_stamp_;
     cloud_pub_->publish(cloud_msg);
+}
+
+void Node::publishAllScans() {
+    std::vector<Scan> all_scans = scan_storage_.getAllScans();
+
+    sensor_msgs::msg::PointCloud2 cloud_msg;
+    pcl::PointCloud<pcl::PointXYZRGB> cloud;
+
+    for (const auto& scan : all_scans) {
+        for (const auto& point : scan.points) {
+            pcl::PointXYZRGB colored_point;
+            colored_point.x = point.x();
+            colored_point.y = point.y();
+            colored_point.z = transform_z_;
+            colored_point.r = 0; // Red
+            colored_point.g = 0; // Orange
+            colored_point.b = 255;   // Blue
+            cloud.points.push_back(colored_point);
+        }
+    }
+
+    cloud.width = static_cast<uint32_t>(cloud.points.size());
+    cloud.height = 1; // Unorganized
+    pcl::toROSMsg(cloud, cloud_msg);
+    cloud_msg.header.frame_id = "map";
+    cloud_msg.header.stamp = time_stamp_;
+    all_cloud_pub_->publish(cloud_msg);
 }
 
 } // namespace Localization

@@ -51,6 +51,7 @@ private:
     // Timed publishing of transforms
     void publishTransform();
     void publishPointCloud(const std::vector<Eigen::Vector2d>& points);
+    void publishAllScans();
 
     // ROS Subscribers
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_sub_;
@@ -84,6 +85,7 @@ private:
     
     // Publisher for the point cloud
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr cloud_pub_;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr all_cloud_pub_;
 };
 
 } // namespace Localization
