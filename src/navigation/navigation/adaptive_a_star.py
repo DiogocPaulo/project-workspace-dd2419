@@ -34,10 +34,10 @@ class AdaptiveAStar:
                     if abs(dy) == 1 and abs(dx) == 1:
                         if self.grid[y + dy, x] < 100 and self.grid[y, x + dx] < 100:
                             neighbours.append((next_y, next_x))
-                            costs.append(cost if self.grid[next_y, next_x] < 75 else cost + 5)
+                            costs.append(cost if self.grid[next_y, next_x] < 75 else cost + 25)
                     else:
                         neighbours.append((next_y, next_x))
-                        costs.append(cost if self.grid[next_y, next_x] < 75 else cost + 5)
+                        costs.append(cost if self.grid[next_y, next_x] < 75 else cost + 25)
         return neighbours, costs
 
     def plan_path(self, start_node, end_node):
