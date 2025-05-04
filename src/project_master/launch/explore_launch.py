@@ -44,13 +44,13 @@ def generate_launch_description():
             executable="detection_node",
             name="robot_detection",
             emulate_tty=True,
-            ros_arguments=["--log-level", "info"]
+            ros_arguments=["--log-level", "warn"]
         ),
         Node(
             package="detection",
             executable="object_filter_node",
             name="robot_detection_filter",
             emulate_tty=True,
-            ros_arguments=["--log-level", "info"]
+            ros_arguments=["--log-level", "warn"]
         ),
     ])

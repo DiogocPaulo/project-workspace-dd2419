@@ -174,7 +174,7 @@ class Pathing(Node):
             return response
 
         response.success = True
-        response.message = f"Pathing end point set: ({self.end_point[0]:.2f}, {self.end_point[1]:.2f})"
+        response.message = f"Set pathing end point: ({self.end_point[0]:.2f}, {self.end_point[1]:.2f}) with yaw {self.target_yaw:.2f}"
         return response
 
     def publish_inflated_map(self):
