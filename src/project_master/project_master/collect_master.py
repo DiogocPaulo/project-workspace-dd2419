@@ -117,12 +117,18 @@ class CollectMaster(Node):
         ])
 
         # Pickup Routine
+        pickup_wait = py_trees.behaviours.TickCounter(
+            name="PickupWait",
+            duration=20,
+            completion_status=py_trees.common.Status.SUCCESS,
+        )
 
         pickup_sequence = py_trees.composites.Sequence("PickupSequence", memory=True)
         pickup_sequence.add_children([
             find_closest_object,
             object_safe_point_sequence,
             object_approach_point_sequence,
+            pickup_wait,
         ])
 
         find_closest_box = behaviours.FindClosestObject(
@@ -173,12 +179,18 @@ class CollectMaster(Node):
         ])
 
         # Drop Routine
+        drop_wait = py_trees.behaviours.TickCounter(
+            name="DropWait",
+            duration=20,
+            completion_status=py_trees.common.Status.SUCCESS,
+        )
 
         drop_sequence = py_trees.composites.Sequence("DropSequence", memory=True)
         drop_sequence.add_children([
             find_closest_box,
             box_safe_point_sequence,
             box_approach_point_sequence,
+            drop_wait,
         ])
 
         collection_sequence.add_children([
