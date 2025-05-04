@@ -71,10 +71,10 @@ def offset_inner_vertices(vertices, offset):
     if offset_polygon.geom_type == 'MultiPolygon':
         largest_polygon = max(offset_polygon.geoms, key=lambda p: p.area)
         offset_vertices = list(largest_polygon.exterior.coords)
-    return offset_vertices
+    return offset_vertices[:-1]
 
 def shortest_edges_midpoints(vertices):
-    if len(vertices) < 2:
+    if len(vertices) < 4:
         return []
 
     edges = []
@@ -82,19 +82,24 @@ def shortest_edges_midpoints(vertices):
         current_x, current_y = vertices[i]
         next_x, next_y = vertices[(i + 1) % len(vertices)]
         distance = np.hypot(next_x - current_x, next_y - current_y)
-        edges.append({"p1": (current_x, current_y), "p2": (next_x, next_y), "distance": distance})
+        edges.append({
+            "p1": (current_x, current_y),
+            "p2": (next_x, next_y),
+            "distance": distance
+        })
     sorted_edges = sorted(edges, key=lambda edge: edge["distance"])
+    shortest_edges = sorted_edges[:2]
 
     midpoints = []
     headings = []
-    for i in range(len(sorted_edges)):
-        if i > 2:
-            break
-        midpoint_x = (sorted_edges[i]["p1"][0] + sorted_edges[i]["p2"][0]) / 2
-        midpoint_y = (sorted_edges[i]["p1"][1] + sorted_edges[i]["p2"][1]) / 2
+    for edge in shortest_edges:
+        p1 = edge["p1"]
+        p2 = edge["p2"]
+        midpoint_x = (p1[0] + p2[0]) / 2
+        midpoint_y = (p1[1] + p2[1]) / 2
         midpoints.append((midpoint_x, midpoint_y))
-        normal_vector_x = -(sorted_edges[i]["p2"][1] - sorted_edges[i]["p1"][1])
-        normal_vector_y = (sorted_edges[i]["p2"][0] - sorted_edges[i]["p1"][0])
+        normal_vector_x = -(p2[1] - p1[1])
+        normal_vector_y = (p2[0] - p1[0])
         heading = np.arctan2(normal_vector_y, normal_vector_x)
         headings.append(heading)
 
@@ -104,11 +109,12 @@ def generate_waypoints(map: Map, workspace_vertices, outer_offset, inner_offset)
     outer_vertices = offset_outer_vertices(workspace_vertices, outer_offset)
     inner_vertices = offset_inner_vertices(workspace_vertices, inner_offset)
     inner_midpoints, final_heading = shortest_edges_midpoints(inner_vertices)
-    offset_vertices = outer_vertices + inner_midpoints
+    offset_vertices = outer_vertices[:-1] + inner_midpoints
     waypoints = []
-    for i in range(len(offset_vertices) - 1):
+    num_vertices = len(offset_vertices)
+    for i in range(num_vertices - 1):
         current_x, current_y = offset_vertices[i]
-        next_x, next_y = offset_vertices[i + 1]
+        next_x, next_y = offset_vertices[(i + 1) % num_vertices]
         distance = np.hypot(next_x - current_x, next_y - current_y)
         resolution = max(1, math.ceil(distance * 1.2))
         for j in range(resolution):
@@ -146,7 +152,7 @@ class ExploreMaster(Node):
         self.map.initialise_grid(self.workspace_vertices)
         self.map.inflate_grid(0.30)
         self.show_waypoints = True
-        self.end_points = generate_waypoints(self.map, self.workspace_vertices, 0.35, 0.60)
+        self.end_points = generate_waypoints(self.map, self.workspace_vertices, 0.35, 0.50)
 
         root = self.create_exploration_tree()
         self.tree = py_trees_ros.trees.BehaviourTree(root=root)
@@ -222,8 +228,8 @@ class ExploreMaster(Node):
             self.end_points_broadcaster.sendTransform(transform)
 
     def create_exploration_tree(self):
-        root = py_trees.composites.Selector("ExplorationRoot", memory=True)
-        exploration_sequence = py_trees.composites.Sequence("Exploration", memory=True)
+        root = py_trees.composites.Sequence("ExplorationRoot", memory=True)
+        exploration_sequence = py_trees.composites.Sequence("ExplorationSequence", memory=True)
 
         for i, (x, y, yaw) in enumerate(self.end_points):
             point_selector = py_trees.composites.Selector(f"EndPoint_{i}", memory=True)
@@ -272,13 +278,21 @@ class ExploreMaster(Node):
                 fallback,
             ])
             exploration_sequence.add_child(point_selector)
-        
-        root.add_child(exploration_sequence)
+
+        exploration_complete = py_trees.behaviours.Success(name="ExplorationComplete")
+        root.add_children([
+            exploration_sequence,
+            exploration_complete,
+        ])
+
         return root
 
     def tick_tree(self):
         try:
             self.tree.tick()
+            if self.tree.root.status != py_trees.common.Status.RUNNING:
+                self.get_logger().info(f"Exploration phase complete (state: {self.tree.root.status})", once=True)
+                return
         except Exception as e:
             self.get_logger().error(f"Exception during tree tick: {e}")
 
