@@ -152,6 +152,7 @@ class ExploreMaster(Node):
         self.map.initialise_grid(self.workspace_vertices)
         self.map.inflate_grid(0.30)
         self.show_waypoints = True
+        self.explore_complete = False
         self.end_points = generate_waypoints(self.map, self.workspace_vertices, 0.35, 0.50)
 
         root = self.create_exploration_tree()
@@ -289,10 +290,12 @@ class ExploreMaster(Node):
 
     def tick_tree(self):
         try:
+            if self.explore_complete:
+                return
             self.tree.tick()
             if self.tree.root.status != py_trees.common.Status.RUNNING:
-                self.get_logger().info(f"Exploration phase complete (state: {self.tree.root.status})", once=True)
-                return
+                self.get_logger().info(f"Exploration phase complete (state: {self.tree.root.status})")
+                self.explore_complete = True
         except Exception as e:
             self.get_logger().error(f"Exception during tree tick: {e}")
 
