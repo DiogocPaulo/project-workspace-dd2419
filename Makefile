@@ -12,8 +12,8 @@ run-setup:
 	ros2 launch project_master setup_launch.py | tee logs/setup.log
 
 run-localisation:
-	ros2 launch localisation localisation_launch.py  | tee logs/localisation.log
-	# ros2 launch localization_cpp localization_launch.py  | tee logs/localisation.log
+	# ros2 launch localisation localisation_launch.py  | tee logs/localisation.log
+	ros2 launch localization_cpp localization_launch.py  | tee logs/localisation.log
 
 run-joystick:
 	ros2 launch navigation joystick_launch.py | tee logs/joystick.log

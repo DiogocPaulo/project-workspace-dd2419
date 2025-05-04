@@ -48,7 +48,7 @@ def compare_object_lists(correct_object_list, found_object_list):
                 correct_object_list.remove(correct_object)
                 break
         if not match_found:
-            print(f"No match for (object type: {found_object.object_type}, x: {found_object.x}, y: {found_object.y})")
+            print(f"No match for (object type: {found_object.object_type}, x: {found_object.x:.2f}, y: {found_object.y:.2f})")
             score -= 1
     return score
 

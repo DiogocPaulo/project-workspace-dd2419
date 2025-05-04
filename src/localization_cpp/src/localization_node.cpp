@@ -5,9 +5,9 @@ namespace Localization {
 Node::Node() : rclcpp::Node("localization_node") {
     // Initialize subscribers
     scan_sub_ = create_subscription<sensor_msgs::msg::LaserScan>(
-        "scan", 10, std::bind(&Node::scanCallback, this, std::placeholders::_1));
+        "scan", rclcpp::SensorDataQoS().keep_last(1), std::bind(&Node::scanCallback, this, std::placeholders::_1));
     odom_sub_ = create_subscription<nav_msgs::msg::Odometry>(
-        "odom", 10, std::bind(&Node::odomCallback, this, std::placeholders::_1));
+        "odom", rclcpp::SensorDataQoS().keep_last(1), std::bind(&Node::odomCallback, this, std::placeholders::_1));
 
     // Initialize the point cloud publisher
     cloud_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("reference_scan_cloud", 10);
@@ -29,7 +29,7 @@ Node::Node() : rclcpp::Node("localization_node") {
 
     // Initialize LidarScanStorage and ICP
     scan_storage_ = LidarScanStorage(1); // 50 cm grid size
-    icp_ = ICP(0.1, 50); // 10 cm threshold, 50 iterations
+    icp_ = ICP(0.3, 100); // 10 cm threshold, 50 iterations
 
     RCLCPP_INFO(this->get_logger(), "Localization node initialized.");
 }
@@ -41,14 +41,14 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
     }
 
     // Ensure TF buffer has data
-    if (!tf_buffer_->canTransform("map", msg->header.frame_id, tf2::TimePointZero, std::chrono::milliseconds(500))) {
+    if (!tf_buffer_->canTransform("odom", msg->header.frame_id, tf2::TimePointZero, std::chrono::milliseconds(500))) {
         RCLCPP_WARN(this->get_logger(), "Transform from %s to map not available yet!", msg->header.frame_id.c_str());
         return;
     }
     // Get the transform from Lidar frame to Map frame
     try {
         RCLCPP_DEBUG(this->get_logger(), "Transform exists from %s to map.", msg->header.frame_id.c_str());
-        geometry_msgs::msg::TransformStamped transform = tf_buffer_->lookupTransform("map", msg->header.frame_id, tf2::TimePointZero);
+        geometry_msgs::msg::TransformStamped transform = tf_buffer_->lookupTransform("odom", msg->header.frame_id, tf2::TimePointZero);
         transform_z_ = transform.transform.translation.z;
 
         // Convert LaserScan to 2D points in Map frame
@@ -173,8 +173,8 @@ void Node::odomCallback(const nav_msgs::msg::Odometry::ConstSharedPtr& msg) {
 void Node::publishTransform() {
     geometry_msgs::msg::TransformStamped tf_msg;
     tf_msg.header.stamp = time_stamp_;
-    tf_msg.header.frame_id = "map";
-    tf_msg.child_frame_id = "odom";
+    tf_msg.header.frame_id = "odom";
+    tf_msg.child_frame_id = "map";
     tf_msg.transform.translation.x = translation_[0];
     tf_msg.transform.translation.y = translation_[1];
     tf_msg.transform.translation.z = 0;
@@ -200,7 +200,7 @@ void Node::publishPointCloud(const std::vector<Eigen::Vector2d>& points) {
     cloud.width = static_cast<uint32_t>(cloud.points.size());
     cloud.height = 1; // Unorganized
     pcl::toROSMsg(cloud, cloud_msg);
-    cloud_msg.header.frame_id = "map";
+    cloud_msg.header.frame_id = "odom";
     cloud_msg.header.stamp = time_stamp_;
     cloud_pub_->publish(cloud_msg);
 }

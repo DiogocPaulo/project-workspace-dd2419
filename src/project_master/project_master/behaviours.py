@@ -80,7 +80,7 @@ class ServiceClient(py_trees.behaviour.Behaviour):
             return py_trees.common.Status.RUNNING
 
 class ReachedEndPoint(py_trees.behaviour.Behaviour):
-    def __init__(self, name, x, y, yaw, distance_threshold=0.05, yaw_threshold=0.053):
+    def __init__(self, name, x, y, yaw, distance_threshold=0.08, yaw_threshold=0.1):
         super().__init__(name)
         self.current_point = (None, None)
         self.current_yaw = 0.0

@@ -5,10 +5,10 @@ namespace Localization {
 OdometryNode::OdometryNode() : Node("odometry"), then_time_(this->get_clock()->now()) {
     // Initialize subscribers
     encoder_sub_ = this->create_subscription<robp_interfaces::msg::Encoders>(
-        "/motor/encoders", 10,
+        "/motor/encoders", rclcpp::SensorDataQoS().keep_last(1),
         std::bind(&OdometryNode::encoderCallback, this, std::placeholders::_1));
     imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
-        "/imu/data_raw", 10,
+        "/imu/data_raw", rclcpp::SensorDataQoS().keep_last(1),
         std::bind(&OdometryNode::imuCallback, this, std::placeholders::_1));
 
     // Initialize publishers

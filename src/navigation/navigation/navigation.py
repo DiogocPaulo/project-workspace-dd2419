@@ -21,9 +21,9 @@ from navigation.target_path import TargetPath
 # Robot parameters
 base = 0.3                  # Wheelbase of the vehicle
 lookahead_gain = 0.1        # Look-ahead distance gain
-lookahead_min = 0.2         # Minimum look-ahead distance
-distance_threshold = 0.04   # Stop distance threshold
-yaw_threshold = 0.05        # Stop yaw threshold
+lookahead_min = 0.2        # Minimum look-ahead distance
+distance_threshold = 0.05   # Stop distance threshold
+yaw_threshold = 0.08        # Stop yaw threshold
 min_velocity = 0.10         # Minimum velocity
 wheel_duty_min = 0.09       # Minimum wheel duty cycles
 
