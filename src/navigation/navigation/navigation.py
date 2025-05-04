@@ -21,7 +21,7 @@ from navigation.target_path import TargetPath
 # Robot parameters
 base = 0.3                  # Wheelbase of the vehicle
 lookahead_gain = 0.1        # Look-ahead distance gain
-lookahead_min = 0.2         # Minimum look-ahead distance
+lookahead_min = 0.2        # Minimum look-ahead distance
 distance_threshold = 0.05   # Stop distance threshold
 yaw_threshold = 0.08        # Stop yaw threshold
 min_velocity = 0.10         # Minimum velocity
@@ -114,7 +114,7 @@ class Navigation(Node):
             self.get_logger().info(f"Recived new path with end point: ({msg.path[-1].x:.2f}, {msg.path[-1].y:.2f})")
         else:
             self.waiting_for_path = True
-            #self.get_logger().warn("Recived empty path")
+            self.get_logger().warn("Recived empty path")
 
 
     def inflated_map_callback(self, msg: OccupancyGrid):
@@ -148,7 +148,7 @@ class Navigation(Node):
 
     def control_loop(self):
         if not self.target_path.x_points or self.waiting_for_path:
-            # self.get_logger().info("Waiting for path")
+            self.get_logger().info("Waiting for path")
             self.publish_duty_cycles(0.0, 0.0)
             return
 

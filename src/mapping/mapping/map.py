@@ -275,7 +275,7 @@ class Map:
                 if self.are_adjacent_free(nx, ny, radius, threshold, world=False):
                     sx, sy = self.grid_to_world(nx, ny)
                     return (sx, sy)
-            if search_radius > 25:
+            if search_radius > 30:
                 return None
 
     def world_to_grid(self, x, y):

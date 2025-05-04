@@ -82,7 +82,7 @@ class Pathing(Node):
         self.start_point = (msg.pose.pose.position.x, msg.pose.pose.position.y)
         if self.inflated_map is None:
             return
-        if not self.approaching_object and self.backing and self.inflated_map.are_adjacent_free(self.start_point[0], self.start_point[1], 1, 75):
+        if not self.approaching_object and self.backing and self.inflated_map.are_adjacent_free(self.start_point[0], self.start_point[1], 3, 75):
             self.get_logger().info("Exiting reverse travel mode")
             self.backing = False
             self.calculate_astar_path()
@@ -174,7 +174,7 @@ class Pathing(Node):
             return response
 
         response.success = True
-        response.message = f"Pathing end point set: ({self.end_point[0]:.2f}, {self.end_point[1]:.2f})"
+        response.message = f"Set pathing end point: ({self.end_point[0]:.2f}, {self.end_point[1]:.2f}) with yaw {self.target_yaw:.2f}"
         return response
 
     def publish_inflated_map(self):
@@ -323,7 +323,7 @@ class Pathing(Node):
         if not self.approaching_object and not self.backing and not self.inflated_map.is_free(self.start_point[0], self.start_point[1], 75):
             self.get_logger().info("Entering reverse travel mode")
             self.backing = True
-            self.safe_point = self.inflated_map.get_safe_point(self.start_point[0], self.start_point[1], 5, 75)
+            self.safe_point = self.inflated_map.get_safe_point(self.start_point[0], self.start_point[1], 6, 75)
             if self.safe_point is None:
                 self.safe_point = (0.0, 0.0)
 
