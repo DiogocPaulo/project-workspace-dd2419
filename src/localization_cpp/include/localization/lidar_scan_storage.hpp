@@ -44,7 +44,7 @@ struct Scan {
 
     Scan(const std::vector<Eigen::Vector2d>& pts, const Pose2D& p, double sub_size)
         : pose(p), sub_cell_size(sub_size) {
-        points.reserve(10000); // Preallocate for efficiency
+        points.reserve(1000); // Preallocate for efficiency
         addPoints(pts);
     }
 
@@ -52,7 +52,7 @@ struct Scan {
     void addPoints(const std::vector<Eigen::Vector2d>& new_points) {
         // Check available slots (max 1000 points)
         size_t current_count = points.size();
-        size_t max_points = 10000;
+        size_t max_points = 1000;
         size_t available_slots = current_count < max_points ? max_points - current_count : 0;
 
         // Early exit if no slots available

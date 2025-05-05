@@ -16,7 +16,7 @@ namespace Localization {
 // Default distance threshold for segment splitting (in meters)
 constexpr double DEFAULT_SEGMENT_THRESHOLD = 0.1;
 constexpr double MIN_RANGE = 0.4;
-constexpr double MAX_RANGE = 7.0;
+constexpr double MAX_RANGE = 3.0;
 
 // Correct the coordinate of a point based on velocity and time
 Eigen::Vector2d correctCoordinate(const Eigen::Vector2d& point,
@@ -99,6 +99,36 @@ std::vector<Eigen::Vector2d> laserScanToPoints(const sensor_msgs::msg::LaserScan
 
 // Transform a set of 2D points using a given transform
 void transformPoints(std::vector<Eigen::Vector2d>& points, 
+                     const geometry_msgs::msg::TransformStamped& transform) {
+    double tx = transform.transform.translation.x;
+    double ty = transform.transform.translation.y;
+
+    // Convert geometry_msgs quaternion to tf2::Quaternion
+    tf2::Quaternion q(
+        transform.transform.rotation.x,
+        transform.transform.rotation.y,
+        transform.transform.rotation.z,
+        transform.transform.rotation.w
+    );
+
+    // Convert quaternion to rotation matrix and extract yaw
+    tf2::Matrix3x3 m(q);
+    double roll, pitch, yaw;
+    m.getRPY(roll, pitch, yaw); // Extract roll, pitch, yaw; we only need yaw for 2D
+
+    double cos_yaw = std::cos(yaw);
+    double sin_yaw = std::sin(yaw);
+
+    for (auto& point : points) {
+        double x = point.x();
+        double y = point.y();
+        point.x() = x * cos_yaw - y * sin_yaw + tx;
+        point.y() = x * sin_yaw + y * cos_yaw + ty;
+    }
+}
+
+// Transform a set of 2D points using a given transform
+void transformPoint(std::vector<Eigen::Vector2d>& points, 
                      const geometry_msgs::msg::TransformStamped& transform) {
     double tx = transform.transform.translation.x;
     double ty = transform.transform.translation.y;

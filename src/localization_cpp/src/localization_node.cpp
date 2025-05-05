@@ -36,7 +36,7 @@ Node::Node() : rclcpp::Node("localization_node") {
 }
 
 void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) {
-    if (std::abs(angular_velocity_) > 0.1) {
+    if (std::abs(angular_velocity_) > 0.3) {
         RCLCPP_DEBUG(this->get_logger(), "Robot is rotating too fast, skipping scan processing.");
         return; // Skip processing if robot is not moving
     }
@@ -96,7 +96,7 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
             double icp_rotation_theta = std::atan2(icp_transform(1, 0), icp_transform(0, 0));
 
             // Skip invalid icp
-            if (std::abs(icp_translation_x) > 0.4 || std::abs(icp_translation_y) > 0.4 || std::abs(icp_rotation_theta) > M_PI / 4) {
+            if (std::abs(icp_translation_x) > 0.2 || std::abs(icp_translation_y) > 0.2 || std::abs(icp_rotation_theta) > M_PI / 4) {
                 return;
             }
 
@@ -125,7 +125,7 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
             }
 
             // Publish the reference point cloud
-            publishPointCloud(stored_points);
+            publishPointCloud(stored_scan->points);
             publishAllScans(map_to_odom);
 
         } else if (std::abs(linear_velocity_) < 0.01) {
@@ -211,7 +211,7 @@ void Node::publishPointCloud(const std::vector<Eigen::Vector2d>& points) {
     cloud.width = static_cast<uint32_t>(cloud.points.size());
     cloud.height = 1; // Unorganized
     pcl::toROSMsg(cloud, cloud_msg);
-    cloud_msg.header.frame_id = "odom";
+    cloud_msg.header.frame_id = "map";
     cloud_msg.header.stamp = time_stamp_;
     cloud_pub_->publish(cloud_msg);
 }
@@ -225,7 +225,6 @@ void Node::publishAllScans(const geometry_msgs::msg::TransformStamped& map_to_od
     for (const auto& scan : all_scans) {
         // Transform points to the odom frame
         std::vector<Eigen::Vector2d> points = scan.points;
-        transformPoints(points, map_to_odom);
         for (const auto& point : points) {
             pcl::PointXYZRGB colored_point;
             colored_point.x = point.x();
@@ -241,7 +240,7 @@ void Node::publishAllScans(const geometry_msgs::msg::TransformStamped& map_to_od
     cloud.width = static_cast<uint32_t>(cloud.points.size());
     cloud.height = 1; // Unorganized
     pcl::toROSMsg(cloud, cloud_msg);
-    cloud_msg.header.frame_id = "odom";
+    cloud_msg.header.frame_id = "map";
     cloud_msg.header.stamp = time_stamp_;
     all_cloud_pub_->publish(cloud_msg);
 }
