@@ -547,7 +547,7 @@ class ExploreMaster(Node):
             look_fallback = py_trees.composites.Selector(f"LOOK FALLBACK", memory=True)
             look_fallback.add_child(look)   
             look_fallback.add_child(sweep)
-            pickup_routine.add_children([look_fallback])
+            pickup_routine.add_children([look_fallback, adjust,pick])
             retry_pickup = py_trees.decorators.Retry(name="RetryPickup", child=pickup_routine, num_failures=2)
 
             exploration_sequence.add_child(retry_pickup)
@@ -999,7 +999,7 @@ class Sweep(py_trees.behaviour.Behaviour):
 
         return True
 
-    def initialise(self):   
+    def initialise(self):
         self.stage = 0
         self.counter = 0
         self.look_counter = 0
