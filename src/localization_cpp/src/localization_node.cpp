@@ -29,7 +29,7 @@ Node::Node() : rclcpp::Node("localization_node") {
     transform_z_ = 0.0;
 
     // Initialize LidarScanStorage and ICP
-    scan_storage_ = LidarScanStorage(2); // 50 cm grid size
+    scan_storage_ = LidarScanStorage(0.8); // grid size
     icp_ = ICP(0.3, 100); // 10 cm threshold, 50 iterations
 
     RCLCPP_INFO(this->get_logger(), "Localization node initialized.");
