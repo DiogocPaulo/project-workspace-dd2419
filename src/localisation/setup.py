@@ -27,7 +27,6 @@ setup(
             'odometry = localisation.odometry:main',
             'ag_scan = localisation.ag_scan:main',
             'transform_consumer = localisation.transform_consumer:main',
-            'navigation = localisation.navigation:main',
         ],
     },
 )
