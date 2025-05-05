@@ -86,7 +86,7 @@ class ObjectFilterNode(Node):
                 self.object_list.append(object_msg)
 
                 object_list_msg = ObjectList()
-                object_list_msg.header.frame_id = "odom"
+                object_list_msg.header.frame_id = "map"
                 object_list_msg.header.stamp = msg.header.stamp
                 object_list_msg.length = len(self.object_list)
                 object_list_msg.objects = self.object_list
@@ -133,7 +133,7 @@ class ObjectFilterNode(Node):
 
                     # Re-publish the corrected object list
                     object_list_msg = ObjectList()
-                    object_list_msg.header.frame_id = "odom"
+                    object_list_msg.header.frame_id = "map"
                     object_list_msg.header.stamp = msg.header.stamp
                     object_list_msg.length = len(self.object_list)
                     object_list_msg.objects = self.object_list
@@ -181,7 +181,7 @@ class ObjectFilterNode(Node):
 
     def publish_object_list(self):
         object_list_msg = ObjectList()
-        object_list_msg.header.frame_id = "odom"
+        object_list_msg.header.frame_id = "map"
         object_list_msg.header.stamp = self.get_clock().now().to_msg()
         object_list_msg.length = len(self.object_list)
         object_list_msg.objects = self.object_list
@@ -199,7 +199,7 @@ class ObjectFilterNode(Node):
 
             transform_msg = TransformStamped()
             transform_msg.header.stamp = self.get_clock().now().to_msg()
-            transform_msg.header.frame_id = "odom"
+            transform_msg.header.frame_id = "map"
             transform_msg.child_frame_id = f"{object_msg.object_type}_{i}"
             transform_msg
             transform_msg.transform.translation.x = object_msg.x

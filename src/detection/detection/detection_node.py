@@ -200,7 +200,7 @@ class ObjectDetectorNode(Node):
 
         try:
             tf_future = self.tf_buffer.wait_for_transform_async(
-            target_frame="odom",
+            target_frame="map",
             source_frame=point_in.header.frame_id,
             time=stamp
         )
@@ -209,7 +209,7 @@ class ObjectDetectorNode(Node):
 
             if tf_future.done():
                 transform = self.tf_buffer.lookup_transform(
-                    "odom",
+                    "map",
                     point_in.header.frame_id,
                     point_in.header.stamp,
                     rclpy.duration.Duration(seconds=1.0)
@@ -245,7 +245,7 @@ class ObjectDetectorNode(Node):
 
     def publish_raw_objects(self, objects, stamp):
         object_list_msg = ObjectList()
-        object_list_msg.header.frame_id = "odom"
+        object_list_msg.header.frame_id = "map"
         object_list_msg.header.stamp = stamp
         object_list_msg.length = len(objects)
         object_list_msg.objects = objects

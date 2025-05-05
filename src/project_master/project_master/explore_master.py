@@ -170,7 +170,7 @@ class ExploreMaster(Node):
     def publish_workspace(self):
         workspace_msg = WorkspaceVertices()
         workspace_msg.header.stamp = self.get_clock().now().to_msg()
-        workspace_msg.header.frame_id = "odom"
+        workspace_msg.header.frame_id = "map"
 
         for vertex in self.workspace_vertices:
             vertex_msg = Vertex()
@@ -188,7 +188,7 @@ class ExploreMaster(Node):
             return
         path_msg = Path()
         path_msg.header.stamp = self.get_clock().now().to_msg()
-        path_msg.header.frame_id = "odom"
+        path_msg.header.frame_id = "map"
 
         for i in range(len(self.end_points)):
             pose_msg = PoseStamped()
@@ -212,7 +212,7 @@ class ExploreMaster(Node):
             quaternion.w = np.cos(point[2] * 0.5)
 
             transform = TransformStamped()
-            transform.header.frame_id = "odom"  # Change to your desired parent frame
+            transform.header.frame_id = "map"  # Change to your desired parent frame
             transform.header.stamp = self.get_clock().now().to_msg()
             transform.child_frame_id = f"end_point_{i}"
             

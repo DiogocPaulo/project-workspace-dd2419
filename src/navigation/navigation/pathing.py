@@ -183,7 +183,7 @@ class Pathing(Node):
 
         map_msg = OccupancyGrid()
         map_msg.header.stamp = self.get_clock().now().to_msg()
-        map_msg.header.frame_id = "odom"
+        map_msg.header.frame_id = "map"
 
         map_msg.info.resolution = self.inflated_map.resolution
         map_msg.info.width = self.inflated_map.grid_width
@@ -213,7 +213,7 @@ class Pathing(Node):
 
         map_msg = OccupancyGrid()
         map_msg.header.stamp = self.get_clock().now().to_msg()
-        map_msg.header.frame_id = "odom"
+        map_msg.header.frame_id = "map"
 
         map_msg.info.resolution = self.inflated_map.resolution
         map_msg.info.width = self.inflated_map.grid_width
@@ -235,7 +235,7 @@ class Pathing(Node):
     def publish_temp_path(self, path):
         path_msg = Path()
         path_msg.header.stamp = self.get_clock().now().to_msg()
-        path_msg.header.frame_id = "odom"
+        path_msg.header.frame_id = "map"
 
         if path is not None:
             for point in path:
@@ -254,7 +254,7 @@ class Pathing(Node):
     def publish_path(self, path):
         path_msg = NavPath()
         path_msg.header.stamp = self.get_clock().now().to_msg()
-        path_msg.header.frame_id = "odom"
+        path_msg.header.frame_id = "map"
 
         if path is not None:
             for point in path:
@@ -289,7 +289,7 @@ class Pathing(Node):
         quaternion.w = np.cos(self.target_yaw * 0.5)
 
         transform_msg = TransformStamped()
-        transform_msg.header.frame_id = "odom"
+        transform_msg.header.frame_id = "map"
         transform_msg.header.stamp = self.get_clock().now().to_msg()
         transform_msg.child_frame_id = "end_point"
 
