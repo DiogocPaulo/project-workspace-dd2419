@@ -118,7 +118,7 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
             rotation_ = icp_rotation_quat * pre_rotation_quat * rotation_;
 
             // Store the current scan in the LidarScanStorage
-            if ((current_pose_.position - stored_scan->pose.position).norm() > 0.1 || std::abs(angular_velocity_) > 0.1) {
+            if (std::abs(angular_velocity_) < 0.1 && std::abs(linear_velocity_) < 0.01) { // (current_pose_.position - stored_scan->pose.position).norm() > 0.1 || 
                 //stored_scan->agePoints(10); // Age points in the storage
                 transformPoints(aligned_points, odom_to_map); // Transform back to map frame
                 scan_storage_.addScan(aligned_points, current_pose_);
@@ -128,7 +128,7 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
             publishPointCloud(stored_points);
             publishAllScans(map_to_odom);
 
-        } else {
+        } else if (std::abs(linear_velocity_) < 0.01) {
             RCLCPP_WARN(this->get_logger(), "No stored scan found for ICP.");
             // Store the current scan in the LidarScanStorage
             scan_storage_.addScan(points, current_pose_);

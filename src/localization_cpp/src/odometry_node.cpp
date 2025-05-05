@@ -101,7 +101,7 @@ void OdometryNode::updateOdometry() {
 
         // Correct the state based on IMU data
         if (std::abs(angular_velocity_imu_.z) > 0.1) {
-            ekf_.correct(-angular_velocity_imu_.z, elapsed_time); // <-- negative to match encoder data
+            //ekf_.correct(-angular_velocity_imu_.z, elapsed_time); // <-- negative to match encoder data
             RCLCPP_INFO(this->get_logger(), "Corrected State: x=%.2f, y=%.2f, theta=%.2f, v=%.2f, w=%.2f", state(0), state(1), state(2), state(3), state(4));
         }
 
