@@ -161,7 +161,7 @@ class CollectMaster(Node):
         ])
 
         find_closest_box = behaviours.FindClosestObject(
-            name="FindClosest_Object",
+            name="FindClosest_Box",
             find_box=True,
             output_key="closest_box",
         )
@@ -235,7 +235,7 @@ class CollectMaster(Node):
         drop_look_fallback = py_trees.composites.Selector(f"LOOK FALLBACK", memory=True)
         drop_look_fallback.add_child(drop_look)   
         drop_look_fallback.add_child(drop_sweep)
-        dropoff_routine.add_children([drop_look_fallback,drop_adjust,drop,check])
+        dropoff_routine.add_children([drop_look_fallback,drop_adjust,drop])
         retry_dropoff = py_trees.decorators.Retry(name="RetryDropoff", child=dropoff_routine, num_failures=2)
 
         drop_sequence = py_trees.composites.Sequence("DropSequence", memory=True)
