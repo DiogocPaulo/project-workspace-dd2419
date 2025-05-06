@@ -207,7 +207,7 @@ class Navigation(Node):
 
             left_wheel = linear_velocity - (base/2) * angular_velocity
             right_wheel = linear_velocity + (base/2) * angular_velocity
-        elif yaw_error > yaw_threshold:
+        elif abs(yaw_error) > yaw_threshold:
             angular_velocity = angular_control(
                 self.state,
                 self.target_yaw,
