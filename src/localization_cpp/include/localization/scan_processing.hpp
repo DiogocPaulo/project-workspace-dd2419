@@ -68,7 +68,7 @@ std::vector<Eigen::Vector2d> laserScanToPoints(const sensor_msgs::msg::LaserScan
         float range = scan->ranges[i];
         
         // Skip invalid ranges and out-of-bounds values
-        if (!std::isfinite(range) || range < MIN_RANGE) {
+        if (!std::isfinite(range) || range < MIN_RANGE || range > MAX_RANGE) {
             continue;
         }
         

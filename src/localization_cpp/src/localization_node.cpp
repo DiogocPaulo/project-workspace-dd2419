@@ -36,7 +36,7 @@ Node::Node() : rclcpp::Node("localization_node") {
 }
 
 void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) {
-    if (std::abs(angular_velocity_) > 0.3) {
+    if (std::abs(angular_velocity_) > 0.2) {
         RCLCPP_DEBUG(this->get_logger(), "Robot is rotating too fast, skipping scan processing.");
         return; // Skip processing if robot is not moving
     }
@@ -85,14 +85,14 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
 
         if (!stored_points.empty()) {
             /*
+            
+            */
+            // Align Principal Components before ICP
             Eigen::Matrix2d pre_rotation = computeRotationAlignment(points, stored_points);
             std::vector<Eigen::Vector2d> pre_aligned_points(points.size());
             for (size_t i = 0; i < points.size(); ++i) {
                 pre_aligned_points[i] = pre_rotation * points[i];
             }
-            */
-            // Align Principal Components before ICP
-            
 
             // Perform ICP to find transformation and get aligned points
             std::vector<Eigen::Vector2d> aligned_points;
@@ -104,7 +104,7 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
 
             auto start_time = std::chrono::high_resolution_clock::now();
             //icp_.computeICP2(points, icp_transform, aligned_points);
-            icp_.computeICP(points, icp_transform, aligned_points, fitness, inlier_rmse);
+            icp_.computeICP(pre_aligned_points, icp_transform, aligned_points, fitness, inlier_rmse);
             auto end_time = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
             RCLCPP_INFO(this->get_logger(), "ICP computation took %ld ms", duration);
@@ -121,13 +121,13 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
             }
 
             // Use ICP if fitness and RMSE is good enough
-            if (fitness > 0.8 || inlier_rmse < 0.1) {
+            if (fitness > 0.5 && inlier_rmse < 0.1) {
                 // Convert pre_rotation to theta (angle) for quaternion
-                //double pre_rotation_theta = std::atan2(pre_rotation(1, 0), pre_rotation(0, 0));
+                double pre_rotation_theta = std::atan2(pre_rotation(1, 0), pre_rotation(0, 0));
 
                 // Convert rotations to quaternions
                 tf2::Quaternion pre_rotation_quat, icp_rotation_quat;
-                //pre_rotation_quat.setRPY(0.0, 0.0, pre_rotation_theta);
+                pre_rotation_quat.setRPY(0.0, 0.0, pre_rotation_theta);
                 icp_rotation_quat.setRPY(0.0, 0.0, icp_rotation_theta);
 
                 // Update the current transform
@@ -136,8 +136,8 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
                 translation_[1] += icp_translation_y;
 
                 // Combine rotations: current_rotation = icp_rotation * pre_rotation * current_rotation
-                rotation_ = icp_rotation_quat * rotation_;
-                //rotation_ = icp_rotation_quat * pre_rotation_quat * rotation_;
+                //rotation_ = icp_rotation_quat * rotation_;
+                rotation_ = icp_rotation_quat * pre_rotation_quat * rotation_;
             }
 
             // Store the current scan in the LidarScanStorage
@@ -145,6 +145,7 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
                 //stored_scan->agePoints(10); // Age points in the storage
                 std::vector<Eigen::Vector2d> range_limited_alinged_points = limitPointsByRangeFromPose(aligned_points, current_pose_.position, 3);
                 scan_storage_.addScan(range_limited_alinged_points, current_pose_);
+                RCLCPP_INFO(this->get_logger(), "Stored new scan!");
             }
 
             // Publish the reference point cloud
