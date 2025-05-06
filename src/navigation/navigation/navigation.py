@@ -27,7 +27,7 @@ yaw_threshold = math.radians(3) # Stop yaw threshold
 min_velocity = 0.10             # Minimum velocity
 wheel_duty_min = 0.09           # Minimum wheel duty cycles
 wait_distance = 1.0             # Distance to travel before waiting
-wait_time = 2.0                 # Time to wait for localisation
+wait_time = rclpy.duration.Duration(2.0) # Time to wait for localisation
 
 def pure_pursuit_control(state, target_path, velocity, reverse=False, slow_approach=False):
     index, lookahead = target_path.search_target_index(state)
