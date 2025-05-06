@@ -20,7 +20,7 @@ class ArmCamera(Node):
     def __init__(self):
         super().__init__("arm_camera")
 
-        self.model = YOLO("runs/detect/train2/weights/best.pt", verbose=False)
+        self.model = YOLO("runs/detect/train7/weights/best.pt", verbose=False)
 
         self.srv = self.create_service(GetDetectedList, 'get_detected_list', self.get_detected_callback)
 
