@@ -1,9 +1,15 @@
 all: sync
 
+CLANG_BASE=--build-base build --install-base install
+BUILD_ARGS=--symlink-install ${CLANG_BASE} --cmake-args -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
 sync:
 	mkdir -p logs
 	rosdep install -i --from-path src --rosdistro jazzy -y --as-root pip:false
 	colcon build --symlink-install
+
+build:
+	colcon build ${BUILD_ARGS}
 
 network:
 	fastdds discovery -i 0 -t 192.168.128.104 -q 42100
