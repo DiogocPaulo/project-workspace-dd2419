@@ -279,7 +279,7 @@ class GoToSafePointClient(py_trees.behaviour.Behaviour):
                 request.x = self.safe_point[0]
                 request.y = self.safe_point[1]
                 request.yaw = self.safe_yaw
-                request.velocity = 0.20
+                request.velocity = 0.16
                 request.reverse = False
                 request.slow_approach = False
                 request.approaching_object = False
@@ -402,7 +402,7 @@ class GoToApproachPointClient(py_trees.behaviour.Behaviour):
                 request.x = self.approach_point[0]
                 request.y = self.approach_point[1]
                 request.yaw = self.approach_yaw
-                request.velocity = 0.16
+                request.velocity = 0.12
                 request.reverse = False
                 request.slow_approach = True
                 request.approaching_object = True

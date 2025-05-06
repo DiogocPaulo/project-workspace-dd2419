@@ -117,18 +117,47 @@ class CollectMaster(Node):
         ])
 
         # Pickup Routine
-        pickup_wait = py_trees.behaviours.TickCounter(
-            name="PickupWait",
-            duration=20,
-            completion_status=py_trees.common.Status.SUCCESS,
+        look = behaviours.Look(
+                name=f"LOOK",
+                x=0.2,
+                y=0.0,
+                t = "objects"
+            )
+
+        sweep = behaviours.Sweep(
+            name=f"SWEEP",
+            t = "objects"
         )
+
+        adjust = behaviours.Adjust(
+            name = f"ADJUST",
+            t = "objects"
+        )
+
+        pick = behaviours.Pick(
+            name = f"PICK",
+            t = "objects",
+            task = "PICKUP"
+        )
+
+        check = behaviours.Check(
+            name = f"CHECK",
+            t = "objects"
+        )
+
+        pickup_routine = py_trees.composites.Sequence(f"PICKUP ROUTINE", memory=True)
+        look_fallback = py_trees.composites.Selector(f"LOOK FALLBACK", memory=True)
+        look_fallback.add_child(look)   
+        look_fallback.add_child(sweep)
+        pickup_routine.add_children([look_fallback, adjust,pick,check])
+        retry_pickup = py_trees.decorators.Retry(name="RetryPickup", child=pickup_routine, num_failures=2)
 
         pickup_sequence = py_trees.composites.Sequence("PickupSequence", memory=True)
         pickup_sequence.add_children([
             find_closest_object,
             object_safe_point_sequence,
             object_approach_point_sequence,
-            pickup_wait,
+            retry_pickup,
         ])
 
         find_closest_box = behaviours.FindClosestObject(
@@ -179,18 +208,42 @@ class CollectMaster(Node):
         ])
 
         # Drop Routine
-        drop_wait = py_trees.behaviours.TickCounter(
-            name="DropWait",
-            duration=20,
-            completion_status=py_trees.common.Status.SUCCESS,
+        drop_look = behaviours.Look(
+                name=f"LOOK",
+                x=0.2,
+                y=0.0,
+                t = "boxes"
+            )
+
+        drop_sweep = behaviours.Sweep(
+            name=f"SWEEP",
+            t = "boxes"
         )
+
+        drop_adjust = behaviours.Adjust(
+            name = f"ADJUST",
+            t = "boxes"
+        )
+
+        drop = behaviours.Drop(
+            name = f"DROP",
+            t = "boxes",
+            task = "DROPOFF"
+        )
+
+        dropoff_routine = py_trees.composites.Sequence(f"DROPOFF ROUTINE", memory=True)
+        drop_look_fallback = py_trees.composites.Selector(f"LOOK FALLBACK", memory=True)
+        drop_look_fallback.add_child(drop_look)   
+        drop_look_fallback.add_child(drop_sweep)
+        dropoff_routine.add_children([drop_look_fallback,drop_adjust,drop,check])
+        retry_dropoff = py_trees.decorators.Retry(name="RetryDropoff", child=dropoff_routine, num_failures=2)
 
         drop_sequence = py_trees.composites.Sequence("DropSequence", memory=True)
         drop_sequence.add_children([
             find_closest_box,
             box_safe_point_sequence,
             box_approach_point_sequence,
-            drop_wait,
+            retry_dropoff,
         ])
 
         collection_sequence.add_children([
