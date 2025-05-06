@@ -519,7 +519,7 @@ class ExploreMaster(Node):
                 t = "objects"
             )
 
-            adjust = Adjust2(
+            adjust = Adjust(
                 name = f"ADJUST",
                 t = "objects",
                 task = "ADJUST"
@@ -828,6 +828,7 @@ class Adjust(py_trees.behaviour.Behaviour):
         self.clock = None
         self.stage = 0
         self.future = None
+        self.joint_future = None
 
         self.base = 12000
         self.v1 = 12000
@@ -846,7 +847,7 @@ class Adjust(py_trees.behaviour.Behaviour):
             self.node = kwargs.get("node")
         except Exception as e:
             self.logger.error(f"{self.name} - Setup failed: {e}")
-            return False
+            return False        
 
 
         self.camera_client = self.node.create_client(GetDetectedList, 'get_detected_list')
@@ -856,7 +857,9 @@ class Adjust(py_trees.behaviour.Behaviour):
         self.pos_subscriber = self.node.create_subscription(
             JointState, '/servo_pos_publisher', self.pos_callback, 10)
 
-        self.joint_publisher = self.node.create_publisher(Int16MultiArray, "/multi_servo_cmd_sub", 10)
+        self.joint_client = self.node.create_client(JointMove, 'MoveArm')
+        while not self.joint_client.wait_for_service(timeout_sec=1.0):
+            self.node.get_logger().info('Service not available, waiting...')
 
         self.clock = self.node.get_clock()
 
@@ -866,6 +869,7 @@ class Adjust(py_trees.behaviour.Behaviour):
     def initialise(self):
         self.stage = 0
         self.future = None
+        self.joint_future = None
 
     def pos_callback(self,msg):
         self.base = msg.position[5]
@@ -875,7 +879,7 @@ class Adjust(py_trees.behaviour.Behaviour):
 
     def update(self):
         if self.stage == 0:
-            # self.node.get_logger().info(f"Stage: 0")
+            self.node.get_logger().info(f"Stage: 0")
             request = GetDetectedList.Request()
 
             self.future = self.camera_client.call_async(request)
@@ -884,7 +888,7 @@ class Adjust(py_trees.behaviour.Behaviour):
             return py_trees.common.Status.RUNNING
 
         elif self.stage == 1:
-            # self.node.get_logger().info(f"Stage: 1")
+            self.node.get_logger().info(f"Stage: 1")
             if self.future.done():
                 response = self.future.result()
                 
@@ -931,23 +935,19 @@ class Adjust(py_trees.behaviour.Behaviour):
                 move_command.v1 = int(self.v1)
                 move_command.v2 = int(self.v2)
                 move_command.v3 = int(v3)
-                
-                msg = Int16MultiArray()
-                msg.layout = MultiArrayLayout(dim=[MultiArrayDimension(label="", size=12, stride=12)], data_offset=0)
-                move_time = 100
-                pose = [11000,12000,int(v3),int(self.v2),int(self.v1),int(base),move_time,move_time,move_time,move_time,move_time,move_time]
-                msg.data = pose
-                self.start_time = time.time()
-                self.joint_publisher.publish(msg)
+
+                self.joint_future = self.joint_client.call_async(move_command)
 
                 self.stage = 2
 
             return py_trees.common.Status.RUNNING
-
+        
+        
         elif self.stage == 2:
-            # self.node.get_logger().info(f"Stage: 2")
-            if time.time() - self.start_time >= 0.12:
+            self.node.get_logger().info(f"Stage: 2")
+            if self.joint_future.done():
                 self.stage = 0
+            
 
             return py_trees.common.Status.RUNNING
 
@@ -998,7 +998,7 @@ class Adjust2(py_trees.behaviour.Behaviour):
     def update(self):
         # Pick upp target
         if self.stage == 0:
-            self.node.get_logger().info(f"Stage: request")
+            # self.node.get_logger().info(f"Stage: request")
             try:
                 request = PickObject.Request()
 
@@ -1014,7 +1014,7 @@ class Adjust2(py_trees.behaviour.Behaviour):
 
                 self.future = self.pickup_client.call_async(request)
                 self.stage = 4
-                self.node.get_logger().info(f"{self.name} - Sent request to Pickup")
+                self.node.get_logger().info(f"{self.name} - Sent request to Adjust")
                 return py_trees.common.Status.RUNNING
             except Exception as e:
                 self.node.get_logger().error(f"{self.name} - Failed to send request: {e}")
@@ -1022,7 +1022,7 @@ class Adjust2(py_trees.behaviour.Behaviour):
 
 
         elif self.stage == 4:
-            self.node.get_logger().info(f"Stage: result")
+            # self.node.get_logger().info(f"Stage: adjusting")
             if self.future.done():
                 response = self.future.result()
                 if response.result == 0:

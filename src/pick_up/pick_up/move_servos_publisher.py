@@ -42,29 +42,20 @@ class MultiServoPublisher(Node):
         self.i = 0
 
 
-
         self.tfBuffer = tf2_ros.Buffer()
         self.listener = tf2_ros.TransformListener(self.tfBuffer,self)
         self.clock = self.get_clock()
-
-        self.pos_subscriber = self.create_subscription(
-            JointState, '/servo_pos_publisher', self.pos_callback, 10)
         
         self.service = self.create_service(PickObject, 'PickObject', self.task_callback)
 
         self.service_fine_tune = self.create_service(JointMove, 'MoveArm', self.joint_callback)
 
-        self.client_camera = self.create_client(GetDetectedList, 'get_detected_list')
-        while not self.client_camera.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info('Service not available, waiting...')
+        self.handle_camera = False
 
         self.detected_objects = []
         self.detected_boxes = []
         self.detected_threshhold = 0.05
         self.take_detected_flag = False
-
-
-        # self.publisher_marker = self.create_publisher(Marker, '/visualization_marker', 10)
 
 
 
@@ -261,17 +252,15 @@ class MultiServoPublisher(Node):
     def adjust_callback(self, request):
         self.get_logger().info(f'Received adjust request')
 
-        camera_request = GetDetectedList.Request()
-        self.future = self.client_camera.call_async(camera_request)
-        rclpy.spin_until_future_complete(self, self.future)
-        response = self.future.result()
-        if response is None:
-            self.get_logger().error('Camera service failed')
-            return 0
-        objects = response.objects
-        boxes = response.boxes
+        self.take_detected_flag = True
+        objects = self.detected_objects
+        boxes =self.detected_boxes
+        self.take_detected_flag = False
 
-        self.get_logger().info(f'Received camera detections')
+        self.get_logger().info(f'Objects:{len(objects)}')
+
+
+        # self.get_logger().info(f'Received camera detections')
 
         target = request.target
         closest_obj = None
@@ -310,22 +299,17 @@ class MultiServoPublisher(Node):
             
             msg = Int16MultiArray()
             msg.layout = MultiArrayLayout(dim=[MultiArrayDimension(label="", size=12, stride=12)], data_offset=0)
-            move_time = 100
+            move_time = 150
             pose = [11000,12000,v3,self.v2,self.v1,base,move_time,move_time,move_time,move_time,move_time,move_time]
             msg.data = pose
             self.publisher.publish(msg)
 
-            self.clock.sleep_for(rclpy.duration.Duration(seconds=0.1))
+            self.clock.sleep_for(rclpy.duration.Duration(seconds=0.3))
 
-            camera_request = GetDetectedList.Request()
-            self.future = self.client_camera.call_async(camera_request)
-            rclpy.spin_until_future_complete(self, self.future)
-            response = self.future.result()
-            if response is None:
-                self.get_logger().error('Camera service failed')
-                return 0
-            objects = response.objects
-            boxes = response.boxes
+            self.take_detected_flag = True
+            objects = self.detected_objects
+            boxes = self.detected_boxes
+            self.take_detected_flag = False
 
             if target == 'objects':
                 closest_obj = min(objects, key=lambda DetectedData: DetectedData.distance)
@@ -512,19 +496,14 @@ class MultiServoPublisher(Node):
         self.get_logger().info(f'Received move request request')
         msg = Int16MultiArray()
         msg.layout = MultiArrayLayout(dim=[MultiArrayDimension(label="", size=12, stride=12)], data_offset=0)
-        move_time = 1500 #arm speed (milliseconds)
-        move_time = 500
+        move_time = 150
         pose = [14000,12000,request.v3,request.v2,request.v1,request.base,move_time,move_time,move_time,move_time,move_time,move_time]
         msg.data = pose
         self.publisher.publish(msg)
 
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=2000))
+        response.result = 0
 
-    def pos_callback(self,msg):
-        self.base = msg.position[5]
-        self.v1 = msg.position[4]
-        self.v2 = msg.position[3]
-        self.v3 = msg.position[2]
+        return response
 
         
 

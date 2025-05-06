@@ -31,13 +31,13 @@ def generate_launch_description():
             package='pick_up',
             executable='talker',
             name='move_servos_publisher',
-            # output='screen',
+            output='screen',
         ),
         Node(
             package='pick_up',
             executable='listener',
             name='servo_pos_subscriber',
-            # output='screen',
+            output='screen',
         ),
         Node(
             package='micro_ros_agent',
