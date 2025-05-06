@@ -173,7 +173,7 @@ class ReachedWaypoint(py_trees.behaviour.Behaviour):
         if distance_error > self.distance_threshold:
             self.node.get_logger().info(f"{self.name} - Distance to waypoint is {distance_error:.2f}")
             return py_trees.common.Status.RUNNING
-        elif yaw_error > self.yaw_threshold:
+        elif abs(yaw_error) > self.yaw_threshold:
             self.node.get_logger().info(f"{self.name} - Yaw needs correction by {yaw_error:.2f}")
             return py_trees.common.Status.RUNNING
         else:
