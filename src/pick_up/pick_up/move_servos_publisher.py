@@ -3,7 +3,6 @@ from rclpy.node import Node
 from std_msgs.msg import Int16MultiArray, MultiArrayLayout, MultiArrayDimension
 
 from rclpy.action import ActionServer
-from geometry_msgs.msg import Point
 from tf2_ros import TransformException
 from tf2_geometry_msgs import do_transform_point
 
@@ -31,7 +30,7 @@ from project_interfaces.msg import ArmTaskMessage
 from rclpy.action import ActionClient
 
 from project_interfaces.msg import DetectedData, DetectedDataArray
-from geometry_msgs.msg import TransformStamped
+from geometry_msgs.msg import TransformStamped, Point
 
 
 class MultiServoPublisher(Node):
@@ -109,7 +108,7 @@ class MultiServoPublisher(Node):
 
 
         if v1_arm == -1:
-            self.get_logger().info(f'COULD NOT FIND KINEMATIC SOLUTION FOR POSITION: {position.point}')
+            self.get_logger().info(f'COULD NOT FIND KINEMATIC SOLUTION FOR POSITION: {position}')
             return 1
 
 

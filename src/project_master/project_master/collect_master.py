@@ -87,6 +87,8 @@ class CollectMaster(Node):
         object_reached_safe_point = behaviours.ReachedWaypoint(
             name="ReachedSafePoint_Object",
             input_key="object_safe_waypoint",
+            distance_threshold=self.distance_threshold,
+            yaw_threshold=self.yaw_threshold,
         )
         object_safe_point_sequence = py_trees.composites.Sequence(
             name="SafePointSequence_Object",
@@ -108,6 +110,8 @@ class CollectMaster(Node):
         object_reached_approach_point = behaviours.ReachedWaypoint(
             name="ReacheApproachPoint_Object",
             input_key="object_approach_waypoint",
+            distance_threshold=self.distance_threshold,
+            yaw_threshold=self.yaw_threshold,
         )
         object_approach_point_sequence = py_trees.composites.Sequence(
             name="ApproachPointSequence_Object",
@@ -178,6 +182,8 @@ class CollectMaster(Node):
         box_reached_safe_point = behaviours.ReachedWaypoint(
             name="ReachedSafePoint_Box",
             input_key="box_safe_waypoint",
+            distance_threshold=self.distance_threshold,
+            yaw_threshold=self.yaw_threshold,
         )
         box_safe_point_sequence = py_trees.composites.Sequence(
             name="SafePointSequence_Box",
@@ -199,6 +205,8 @@ class CollectMaster(Node):
         box_reached_approach_point = behaviours.ReachedWaypoint(
             name="ReacheApproachPoint_Box",
             input_key="box_approach_waypoint",
+            distance_threshold=self.distance_threshold,
+            yaw_threshold=self.yaw_threshold,
         )
         box_approach_point_sequence = py_trees.composites.Sequence(
             name="ApproachPointSequence_Box",

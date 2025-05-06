@@ -553,7 +553,7 @@ class Adjust(py_trees.behaviour.Behaviour):
         self.v3 = 12000
         self.off_base = 0.14
 
-        self.eps = 5
+        self.eps = 10
         self.step_size = 200
 
         if self.type == "boxes":
@@ -915,7 +915,7 @@ class Pick(py_trees.behaviour.Behaviour):
 
 
         elif self.stage == 1:
-            self.node.get_logger().info(f"Stage: 1")
+            #self.node.get_logger().info(f"Stage: 1")
             if time.time() - self.start_time >= 0.5:
                 self.stage = 2
 
@@ -923,7 +923,7 @@ class Pick(py_trees.behaviour.Behaviour):
 
         # Stage 2 estimates the position of the target given where the arm is pointing
         elif self.stage == 2:
-            self.node.get_logger().info(f"Stage: 2")
+            #self.node.get_logger().info(f"Stage: 2")
             l1 = 0.101
             l2 = 0.095
             base = math.radians((12000 - self.base) / 100)
@@ -951,7 +951,7 @@ class Pick(py_trees.behaviour.Behaviour):
 
         # Pick upp target
         elif self.stage == 3:
-            self.node.get_logger().info(f"Stage: 3")
+            #self.node.get_logger().info(f"Stage: 3")
             try:
                 request = PickObject.Request()
 
@@ -974,7 +974,7 @@ class Pick(py_trees.behaviour.Behaviour):
 
 
         elif self.stage == 4:
-            self.node.get_logger().info(f"Stage: 4")
+            #self.node.get_logger().info(f"Stage: 4")
             if self.future.done():
                 response = self.future.result()
                 if response.result == 0:
@@ -1040,7 +1040,7 @@ class Drop(py_trees.behaviour.Behaviour):
 
         # First two stages is to pass some time to allow the correct joint readings to be read
         if self.stage == 0:
-            self.node.get_logger().info(f"Stage: 0")
+            #self.node.get_logger().info(f"Stage: 0")
             self.start_time = time.time()
 
             self.stage = 1
@@ -1048,7 +1048,7 @@ class Drop(py_trees.behaviour.Behaviour):
 
 
         elif self.stage == 1:
-            self.node.get_logger().info(f"Stage: 1")
+            #self.node.get_logger().info(f"Stage: 1")
             if time.time() - self.start_time >= 0.5:
                 self.stage = 2
 
@@ -1056,7 +1056,7 @@ class Drop(py_trees.behaviour.Behaviour):
 
         # Stage 2 estimates the position of the target given where the arm is pointing
         elif self.stage == 2:
-            self.node.get_logger().info(f"Stage: 2")
+            #self.node.get_logger().info(f"Stage: 2")
             l1 = 0.101
             l2 = 0.095
             base = math.radians((12000 - self.base) / 100)
@@ -1084,7 +1084,7 @@ class Drop(py_trees.behaviour.Behaviour):
 
         # Pick upp target
         elif self.stage == 3:
-            self.node.get_logger().info(f"Stage: 3")
+            #self.node.get_logger().info(f"Stage: 3")
             try:
                 request = PickObject.Request()
 
@@ -1107,7 +1107,7 @@ class Drop(py_trees.behaviour.Behaviour):
 
 
         elif self.stage == 4:
-            self.node.get_logger().info(f"Stage: 4")
+            #self.node.get_logger().info(f"Stage: 4")
             if self.future.done():
                 response = self.future.result()
                 if response.result == 0:
