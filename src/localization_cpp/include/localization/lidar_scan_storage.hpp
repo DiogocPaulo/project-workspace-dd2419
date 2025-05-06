@@ -44,7 +44,7 @@ struct Scan {
 
     Scan(const std::vector<Eigen::Vector2d>& pts, const Pose2D& p, double sub_size)
         : pose(p), sub_cell_size(sub_size) {
-        points.reserve(1000); // Preallocate for efficiency
+        points.reserve(500); // Preallocate for efficiency
         addPoints(pts);
     }
 
@@ -52,7 +52,7 @@ struct Scan {
     void addPoints(const std::vector<Eigen::Vector2d>& new_points) {
         // Check available slots (max 1000 points)
         size_t current_count = points.size();
-        size_t max_points = 1000;
+        size_t max_points = 500;
         size_t available_slots = current_count < max_points ? max_points - current_count : 0;
 
         // Early exit if no slots available
@@ -155,34 +155,35 @@ public:
         return closest_scan;
     }
 
-    std::optional<Scan> getClosestScan2(const Pose2D& current_pose) const {
-        GridCell cell = poseToGridCell(current_pose);
-        auto it = scans_.find(cell);
-
-        if (it != scans_.end()) {
-            // Found exact cell match
-            return it->second;
-        }
-
-        // Search neighboring cells for closest pose
-        double min_dist_sq = std::numeric_limits<double>::max();
-        std::optional<Scan> closest_scan;
-
-        for (int dx = -1; dx <= 1; ++dx) {
-            for (int dy = -1; dy <= 1; ++dy) {
-                GridCell neighbor(cell.x + dx, cell.y + dy);
-                auto neighbor_it = scans_.find(neighbor);
-                if (neighbor_it != scans_.end()) {
-                    double dist_sq = (neighbor_it->second.pose.position - current_pose.position).squaredNorm();
-                    if (dist_sq < min_dist_sq) {
-                        min_dist_sq = dist_sq;
-                        closest_scan = neighbor_it->second;
-                    }
-                }
+    std::vector<Scan> getSurroundingScans(const Pose2D& current_pose) const {
+        GridCell target_cell = poseToGridCell(current_pose);
+        std::vector<Scan> surrounding_scans;
+    
+        // Define offsets for the 3x3 grid (current cell + 8 neighbors)
+        const int offsets[9][2] = {
+            {0, 0},   // Current cell
+            {-1, -1}, // Top-left
+            {-1, 0},  // Top
+            {-1, 1},  // Top-right
+            {0, -1},  // Left
+            {0, 1},   // Right
+            {1, -1},  // Bottom-left
+            {1, 0},   // Bottom
+            {1, 1}    // Bottom-right
+        };
+    
+        // Iterate through all possible neighboring cells
+        for (const auto& offset : offsets) {
+            GridCell neighbor_cell{target_cell.x + offset[0], target_cell.y + offset[1]};
+            
+            // Check if the neighbor cell exists in the scans_ map
+            auto it = scans_.find(neighbor_cell);
+            if (it != scans_.end()) {
+                surrounding_scans.push_back(it->second);
             }
         }
-
-        return closest_scan;
+    
+        return surrounding_scans;
     }
 
     std::vector<Scan> getAllScans() const {

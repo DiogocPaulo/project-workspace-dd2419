@@ -51,7 +51,7 @@ private:
     // Timed publishing of transforms
     void publishTransform();
     void publishPointCloud(const std::vector<Eigen::Vector2d>& points);
-    void publishAllScans(const geometry_msgs::msg::TransformStamped& map_to_odom);
+    void publishAllScans();
 
     // ROS Subscribers
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_sub_;
