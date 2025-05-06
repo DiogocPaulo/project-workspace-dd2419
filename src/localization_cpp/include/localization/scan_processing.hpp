@@ -100,7 +100,7 @@ std::vector<Eigen::Vector2d> laserScanToPoints(const sensor_msgs::msg::LaserScan
 // Limit points to those within a specified range from a given pose
 std::vector<Eigen::Vector2d> limitPointsByRangeFromPose(
     const std::vector<Eigen::Vector2d>& points,
-    const Pose2D& pose,
+    const Eigen::Vector2d& position,
     double max_range) {
     std::vector<Eigen::Vector2d> filtered_points;
     if (points.empty()) {
@@ -111,7 +111,7 @@ std::vector<Eigen::Vector2d> limitPointsByRangeFromPose(
 
     // Include points within max_range from pose.position
     for (const auto& point : points) {
-        double dist_sq = (point - pose.position).squaredNorm();
+        double dist_sq = (point - position).squaredNorm();
         if (dist_sq <= max_range * max_range) {
             filtered_points.emplace_back(point);
         }

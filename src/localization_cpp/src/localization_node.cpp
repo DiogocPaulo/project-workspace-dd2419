@@ -143,7 +143,7 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
             // Store the current scan in the LidarScanStorage
             if (std::abs(angular_velocity_) < 0.1 && std::abs(linear_velocity_) < 0.01) { // (current_pose_.position - stored_scan->pose.position).norm() > 0.1 || 
                 //stored_scan->agePoints(10); // Age points in the storage
-                std::vector<Eigen::Vector2d> range_limited_alinged_points = limitPointsByRangeFromPose(aligned_points, current_pose_, 2)
+                std::vector<Eigen::Vector2d> range_limited_alinged_points = limitPointsByRangeFromPose(aligned_points, current_pose_.position, 3);
                 scan_storage_.addScan(range_limited_alinged_points, current_pose_);
             }
 
@@ -154,7 +154,7 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
         } else if (std::abs(linear_velocity_) < 0.01) {
             RCLCPP_WARN(this->get_logger(), "No stored scan found for ICP.");
             // Store the current scan in the LidarScanStorage
-            std::vector<Eigen::Vector2d> range_limited_points = limitPointsByRangeFromPose(points, current_pose_, 2)
+            std::vector<Eigen::Vector2d> range_limited_points = limitPointsByRangeFromPose(points, current_pose_.position, 3);
             scan_storage_.addScan(range_limited_points, current_pose_);
         }
 
