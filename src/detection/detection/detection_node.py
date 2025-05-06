@@ -206,7 +206,7 @@ class ObjectDetectorNode(Node):
                 z_adj = adjusted_centroid[2]
                 y_adj = adjusted_centroid[1]  # Already accounts for half the box's height
 
-                self.get_logger().info(f"centroid:{centroid} and adjusted:{adjusted_centroid}")
+                self.get_logger().info(f"adjusted:{adjusted_centroid}")
 
                 obj = self.create_object(x_adj, z_adj, angle, Object.BOX, msg.header.stamp)
                 if obj is not None:
@@ -249,6 +249,8 @@ class ObjectDetectorNode(Node):
                 # Extract the transformed coordinates
                 x_transformed = point_out.point.x
                 y_transformed = point_out.point.y
+
+                self.get_logger().info(f"adjusted_x:{x_transformed} and adjusted_y:{y_transformed}")
 
                 # Check if within workspace
                 if self.workspace_map is not None:
