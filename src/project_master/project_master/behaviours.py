@@ -80,12 +80,12 @@ class ServiceClient(py_trees.behaviour.Behaviour):
             return py_trees.common.Status.RUNNING
 
 class ReachedEndPoint(py_trees.behaviour.Behaviour):
-    def __init__(self, name, x, y, yaw, distance_threshold=0.08, yaw_threshold=0.1):
+    def __init__(self, name, x, y, yaw, distance_threshold, yaw_threshold):
         super().__init__(name)
         self.current_point = (None, None)
         self.current_yaw = 0.0
         self.end_point = (x, y)
-        self.target_yaw = yaw
+        self.end_yaw = yaw
         self.distance_threshold = distance_threshold
         self.yaw_threshold = yaw_threshold
 
@@ -122,8 +122,8 @@ class ReachedEndPoint(py_trees.behaviour.Behaviour):
             self.current_point[1] - self.end_point[1]
         )
         yaw_error = math.atan2(
-            math.sin(self.target_yaw - self.current_yaw),
-            math.cos(self.target_yaw - self.current_yaw)
+            math.sin(self.end_yaw - self.current_yaw),
+            math.cos(self.end_yaw - self.current_yaw)
         )
 
         if distance_error > self.distance_threshold:
@@ -133,7 +133,7 @@ class ReachedEndPoint(py_trees.behaviour.Behaviour):
             self.node.get_logger().info(f"{self.name}: Correcting yaw by {yaw_error:.2f}")
             return py_trees.common.Status.RUNNING
         else:
-            self.node.get_logger().info(f"{self.name}: Reached waypoint ({self.end_point[0]:.2f}, {self.end_point[1]:.2f}) with yaw {self.current_yaw:.2f}")
+            self.node.get_logger().info(f"{self.name}: Reached waypoint ({self.end_point[0]:.2f}, {self.end_point[1]:.2f}) with yaw {self.current_yaw:.2f} (distance error: {distance_error:.2f}, yaw error: {yaw_error:.2f})")
             return py_trees.common.Status.SUCCESS
 
 class WaitBehavior(py_trees.behaviour.Behaviour):

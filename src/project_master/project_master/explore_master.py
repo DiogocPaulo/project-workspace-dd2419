@@ -146,8 +146,14 @@ class ExploreMaster(Node):
         self.waypoints_path_publisher = self.create_publisher(Path, "/waypoints_path", 10)
         self.end_points_broadcaster = TransformBroadcaster(self)
 
+        #Constants
         self.target_velocity = 0.16
         self.resolution = 0.05
+        self.distance_threshold = 0.08
+        self.yaw_threshold = math.radians(5)
+
+        #Variables
+
         self.map = Map(self.resolution)
         self.map.initialise_grid(self.workspace_vertices)
         self.map.inflate_grid(0.30)
@@ -253,6 +259,8 @@ class ExploreMaster(Node):
                 x=x,
                 y=y,
                 yaw=yaw,
+                distance_threshold=self.distance_threshold,
+                yaw_threshold=self.yaw_threshold,
             )
 
             end_point_sequence = py_trees.composites.Sequence(f"EndPointSequence_{i}", memory=False)
@@ -261,15 +269,9 @@ class ExploreMaster(Node):
                 reached_end_point,
             ])
 
-            wait = behaviours.WaitBehavior(
-                name=f"Wait_{i}",
-                duration=0.5
-            )
-
             end_point_check = py_trees.composites.Sequence(f"EndPointCheck_{i}", memory=True)
             end_point_check.add_children([
                 end_point_sequence,
-                wait,
             ])
 
             fallback = py_trees.behaviours.Success(name=f"SkipToNext_{i}")

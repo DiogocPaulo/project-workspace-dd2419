@@ -19,13 +19,15 @@ from navigation.robot_state import RobotState
 from navigation.target_path import TargetPath
 
 # Robot parameters
-base = 0.3                  # Wheelbase of the vehicle
-lookahead_gain = 0.1        # Look-ahead distance gain
-lookahead_min = 0.2        # Minimum look-ahead distance
-distance_threshold = 0.05   # Stop distance threshold
-yaw_threshold = 0.08        # Stop yaw threshold
-min_velocity = 0.10         # Minimum velocity
-wheel_duty_min = 0.09       # Minimum wheel duty cycles
+base = 0.3                      # Wheelbase of the vehicle
+lookahead_gain = 0.1            # Look-ahead distance gain
+lookahead_min = 0.2             # Minimum look-ahead distance
+distance_threshold = 0.05       # Stop distance threshold
+yaw_threshold = math.radians(3) # Stop yaw threshold
+min_velocity = 0.10             # Minimum velocity
+wheel_duty_min = 0.09           # Minimum wheel duty cycles
+wait_distance = 1.0             # Distance to travel before waiting
+wait_time = 2.0                 # Time to wait for localisation
 
 def pure_pursuit_control(state, target_path, velocity, reverse=False, slow_approach=False):
     index, lookahead = target_path.search_target_index(state)
@@ -97,11 +99,25 @@ class Navigation(Node):
         self.waiting_for_path = True
         self.reverse_travel = False
         self.inflated_map = None
+        self.distance_traveled_since_wait = 0.0
+        self.previous_x = 0.0
+        self.previous_y = 0.0
+        self.waiting = False
+        self.wait_start_time = None
+
 
         self.create_timer(0.05, self.control_loop)
 
     def odom_callback(self, msg: Odometry):
         self.state.update_state(msg)
+
+        if not self.waiting and not self.waiting_for_path:
+            current_x = msg.pose.pose.position.x
+            current_y = msg.pose.pose.position.y
+            distance_traveled = np.hypot(current_x - self.previous_x, current_y - self.previous_y)
+            self.distance_traveled_since_wait += distance_traveled
+            self.previous_x = current_x
+            self.previous_y = current_y
 
     def path_callback(self, msg: NavPath):
         if len(msg.path) > 0:
@@ -151,6 +167,25 @@ class Navigation(Node):
             self.get_logger().info("Waiting for path")
             self.publish_duty_cycles(0.0, 0.0)
             return
+
+        if not self.waiting and self.distance_traveled_since_wait >= wait_distance:
+            self.get_logger().info(f"Traveled {self.distance_traveled_since_wait:.2f} meters, stopping for {wait_time} seconds.")
+            self.publish_duty_cycles(0.0, 0.0)
+            self.waiting = True
+            self.wait_start_time = self.get_clock().now()
+            self.distance_traveled_since_wait = 0.0
+            return
+
+        if self.waiting:
+            elapsed_time = self.get_clock().now() - self.wait_start_time
+            if elapsed_time >= wait_time:
+                self.waiting = False
+                self.wait_start_time = None
+                self.previous_x = self.state.x
+                self.previous_y = self.state.y
+            else:
+                self.publish_duty_cycles(0.0, 0.0)
+                return
 
         distance_error = self.state.distance_to_state(
             self.target_path.x_points[-1],
