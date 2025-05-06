@@ -29,7 +29,7 @@ Node::Node() : rclcpp::Node("localization_node") {
     transform_z_ = 0.0;
 
     // Initialize LidarScanStorage and ICP
-    scan_storage_ = LidarScanStorage(0.8); // grid size
+    scan_storage_ = LidarScanStorage(2, 0.5); // Range for surrounding scans
     icp_ = ICP(0.3, 100); // 10 cm threshold, 50 iterations
 
     RCLCPP_INFO(this->get_logger(), "Localization node initialized.");
@@ -60,6 +60,9 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
         std::vector<Eigen::Vector2d> stored_points;
         std::vector<Scan> surrounding_scans = scan_storage_.getSurroundingScans(current_pose_);
 
+        /*
+        
+        */
         if (!surrounding_scans.empty()) {
             for (const Scan& scan : surrounding_scans) {
                 stored_points.insert(stored_points.end(), scan.points.begin(), scan.points.end());
@@ -71,6 +74,14 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
                 stored_points = stored_scan->points; // Or insert, depending on intent
             }
         }
+
+        /*
+        auto stored_scan = scan_storage_.getClosestScan(current_pose_);
+        if (stored_scan.has_value()) {
+            stored_points = stored_scan->points; // Or insert, depending on intent
+        }
+        */
+        
 
         if (!stored_points.empty()) {
             /*
@@ -88,11 +99,16 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
             Eigen::Matrix3d icp_transform;
             icp_.setTarget(stored_points);
 
+            double fitness;
+            double inlier_rmse;
+
             auto start_time = std::chrono::high_resolution_clock::now();
-            icp_.computeICP(points, icp_transform, aligned_points);
+            //icp_.computeICP2(points, icp_transform, aligned_points);
+            icp_.computeICP(points, icp_transform, aligned_points, fitness, inlier_rmse);
             auto end_time = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
             RCLCPP_INFO(this->get_logger(), "ICP computation took %ld ms", duration);
+            RCLCPP_INFO(this->get_logger(), "ICP results -> Fitness: %f and Inliner RMSE: %f", fitness, inlier_rmse);
 
             // Extract translation and rotation from ICP transform
             double icp_translation_x = icp_transform(0, 2);
@@ -104,27 +120,31 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
                 return;
             }
 
-            // Convert pre_rotation to theta (angle) for quaternion
-            //double pre_rotation_theta = std::atan2(pre_rotation(1, 0), pre_rotation(0, 0));
+            // Use ICP if fitness and RMSE is good enough
+            if (fitness > 0.8 || inlier_rmse < 0.1) {
+                // Convert pre_rotation to theta (angle) for quaternion
+                //double pre_rotation_theta = std::atan2(pre_rotation(1, 0), pre_rotation(0, 0));
 
-            // Convert rotations to quaternions
-            tf2::Quaternion pre_rotation_quat, icp_rotation_quat;
-            //pre_rotation_quat.setRPY(0.0, 0.0, pre_rotation_theta);
-            icp_rotation_quat.setRPY(0.0, 0.0, icp_rotation_theta);
+                // Convert rotations to quaternions
+                tf2::Quaternion pre_rotation_quat, icp_rotation_quat;
+                //pre_rotation_quat.setRPY(0.0, 0.0, pre_rotation_theta);
+                icp_rotation_quat.setRPY(0.0, 0.0, icp_rotation_theta);
 
-            // Update the current transform
-            // Combine translations
-            translation_[0] += icp_translation_x;
-            translation_[1] += icp_translation_y;
+                // Update the current transform
+                // Combine translations
+                translation_[0] += icp_translation_x;
+                translation_[1] += icp_translation_y;
 
-            // Combine rotations: current_rotation = icp_rotation * pre_rotation * current_rotation
-            rotation_ = icp_rotation_quat * rotation_;
-            //rotation_ = icp_rotation_quat * pre_rotation_quat * rotation_;
+                // Combine rotations: current_rotation = icp_rotation * pre_rotation * current_rotation
+                rotation_ = icp_rotation_quat * rotation_;
+                //rotation_ = icp_rotation_quat * pre_rotation_quat * rotation_;
+            }
 
             // Store the current scan in the LidarScanStorage
             if (std::abs(angular_velocity_) < 0.1 && std::abs(linear_velocity_) < 0.01) { // (current_pose_.position - stored_scan->pose.position).norm() > 0.1 || 
                 //stored_scan->agePoints(10); // Age points in the storage
-                scan_storage_.addScan(aligned_points, current_pose_);
+                std::vector<Eigen::Vector2d> range_limited_alinged_points = limitPointsByRangeFromPose(aligned_points, current_pose_, 2)
+                scan_storage_.addScan(range_limited_alinged_points, current_pose_);
             }
 
             // Publish the reference point cloud
@@ -134,7 +154,8 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
         } else if (std::abs(linear_velocity_) < 0.01) {
             RCLCPP_WARN(this->get_logger(), "No stored scan found for ICP.");
             // Store the current scan in the LidarScanStorage
-            scan_storage_.addScan(points, current_pose_);
+            std::vector<Eigen::Vector2d> range_limited_points = limitPointsByRangeFromPose(points, current_pose_, 2)
+            scan_storage_.addScan(range_limited_points, current_pose_);
         }
 
     } catch (tf2::TransformException& ex) {

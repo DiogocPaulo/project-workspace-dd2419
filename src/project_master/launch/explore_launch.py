@@ -44,7 +44,7 @@ def generate_launch_description():
             executable="detection_node",
             name="robot_detection",
             emulate_tty=True,
-            ros_arguments=["--log-level", "warn"]
+            ros_arguments=["--log-level", "info"]
         ),
         Node(
             package="detection",

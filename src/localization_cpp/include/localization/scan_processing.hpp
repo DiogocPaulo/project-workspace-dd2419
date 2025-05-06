@@ -16,7 +16,7 @@ namespace Localization {
 // Default distance threshold for segment splitting (in meters)
 constexpr double DEFAULT_SEGMENT_THRESHOLD = 0.1;
 constexpr double MIN_RANGE = 0.4;
-constexpr double MAX_RANGE = 3.0;
+constexpr double MAX_RANGE = 5.0;
 
 // Correct the coordinate of a point based on velocity and time
 Eigen::Vector2d correctCoordinate(const Eigen::Vector2d& point,
@@ -68,7 +68,7 @@ std::vector<Eigen::Vector2d> laserScanToPoints(const sensor_msgs::msg::LaserScan
         float range = scan->ranges[i];
         
         // Skip invalid ranges and out-of-bounds values
-        if (!std::isfinite(range) || range < MIN_RANGE || range > MAX_RANGE) {
+        if (!std::isfinite(range) || range < MIN_RANGE) {
             continue;
         }
         
@@ -95,6 +95,29 @@ std::vector<Eigen::Vector2d> laserScanToPoints(const sensor_msgs::msg::LaserScan
     }
     
     return points;
+}
+
+// Limit points to those within a specified range from a given pose
+std::vector<Eigen::Vector2d> limitPointsByRangeFromPose(
+    const std::vector<Eigen::Vector2d>& points,
+    const Pose2D& pose,
+    double max_range) {
+    std::vector<Eigen::Vector2d> filtered_points;
+    if (points.empty()) {
+        return filtered_points;
+    }
+
+    filtered_points.reserve(points.size());
+
+    // Include points within max_range from pose.position
+    for (const auto& point : points) {
+        double dist_sq = (point - pose.position).squaredNorm();
+        if (dist_sq <= max_range * max_range) {
+            filtered_points.emplace_back(point);
+        }
+    }
+
+    return filtered_points;
 }
 
 // Transform a set of 2D points using a given transform
