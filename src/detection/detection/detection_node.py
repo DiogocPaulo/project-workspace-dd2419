@@ -206,6 +206,8 @@ class ObjectDetectorNode(Node):
                 z_adj = adjusted_centroid[2]
                 y_adj = adjusted_centroid[1]  # Already accounts for half the box's height
 
+                self.get_logger().info(f"centroid:{centroid} and adjusted:{adjusted_centroid}")
+
                 obj = self.create_object(x_adj, z_adj, angle, Object.BOX, msg.header.stamp)
                 if obj is not None:
                     frame_objects.append(obj)
