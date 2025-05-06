@@ -12,13 +12,18 @@ run-setup:
 	ros2 launch project_master setup_launch.py | tee logs/setup.log
 
 run-localisation:
-	ros2 launch localisation localisation_launch.py | tee logs/localisation.log
+	# ros2 launch localisation localisation_launch.py  | tee logs/localisation.log
+	ros2 launch localization_cpp localization_launch.py  | tee logs/localisation.log
 
 run-joystick:
 	ros2 launch navigation joystick_launch.py | tee logs/joystick.log
 	
 run-explore:
+	rm -rf maps/map.csv
 	ros2 launch project_master explore_launch.py | tee logs/explore.log
+
+check-explore:
+	python3.12 src/project_master/project_master/explore_evaluation.py
 
 clean:
 	rm -rf build/ install/ package/ logs/

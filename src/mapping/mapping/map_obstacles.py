@@ -61,28 +61,26 @@ class MapObstacles(Node):
 
         try:
             lidar_transform = self.tf_buffer.lookup_transform(
-                "odom",
+                "map",
                 msg.header.frame_id,
                 rclpy.time.Time(seconds=0),
                 rclpy.duration.Duration(seconds=1.0)
             )
-            lidar_origin_x, lidar_origin_y = self.transform_point(0.0, 0.0, lidar_transform)
-        except TransformException as ex:
-            self.get_logger().warn(f"Could not transform lidar origin reading ({lidar_origin.point.x}, {lidar_origin.point.y}): {ex}")
+        except tf2_ros.TransformException as ex:
+            self.get_logger().warn(f"Could not find transform between lidar to map frames: {ex}")
             return
+
+        lidar_origin_x, lidar_origin_y = self.transform_point(0.0, 0.0, lidar_transform)
 
         angle = msg.angle_min
 
-        # Process laser scan readings
         for reading in msg.ranges:
             valid = not (math.isinf(reading) or math.isnan(reading))
-            if not valid:
-                reading = msg.range_max
+            distance = reading if valid else msg.range_max
 
-            point_x = reading * math.cos(angle)
-            point_y = reading * math.sin(angle)
-            distance = np.hypot(point_x, point_y)
             if distance > self.ignore_distance:
+                point_x = distance * math.cos(angle)
+                point_y = distance * math.sin(angle)
                 lidar_point_x, lidar_point_y = self.transform_point(point_x, point_y, lidar_transform)
                 self.obstacles_map.update_obstacles(valid, lidar_origin_x, lidar_origin_y, lidar_point_x, lidar_point_y)
 
@@ -111,7 +109,7 @@ class MapObstacles(Node):
             return
         map_msg = OccupancyGrid()
         map_msg.header.stamp = self.get_clock().now().to_msg()
-        map_msg.header.frame_id = "odom"
+        map_msg.header.frame_id = "map"
 
         map_msg.info.resolution = self.obstacles_map.resolution
         map_msg.info.width = self.obstacles_map.grid_width

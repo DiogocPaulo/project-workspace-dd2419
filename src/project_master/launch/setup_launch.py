@@ -19,7 +19,7 @@ def generate_launch_description():
     )
     lidar_launch_file = os.path.join(
         get_package_share_directory("robp_launch"), "launch", "lidar_launch.yaml"
-    )
+    ) 
     return LaunchDescription([
         IncludeLaunchDescription(
             launch_description_source=PythonLaunchDescriptionSource(phidgets_launch_file),

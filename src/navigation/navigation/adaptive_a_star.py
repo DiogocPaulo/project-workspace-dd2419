@@ -1,6 +1,8 @@
+import math
 import numpy as np
 import heapq
 import random
+import matplotlib.pyplot as plt
 
 class AdaptiveAStar:
     def __init__(self, grid, adaptive_h=None):
@@ -17,7 +19,7 @@ class AdaptiveAStar:
         # Default to Manhattan distance
         return abs(node[0] - end_node[0]) + abs(node[1] - end_node[1])
 
-    def get_neighbours(self, node, occupancy):
+    def get_neighbours(self, node):
         (y, x) = node  # Correct order: (row, column)
         neighbours = []
         costs = []
@@ -27,18 +29,18 @@ class AdaptiveAStar:
         for dy, dx, cost in directions:
             next_y, next_x = y + dy, x + dx
             if 0 <= next_y < self.rows and 0 <= next_x < self.columns:
-                if self.grid[next_y, next_x] < occupancy:
+                if self.grid[next_y, next_x] < 100:
                     # For diagonal movements, checks that both adjacent cells are free
                     if abs(dy) == 1 and abs(dx) == 1:
-                        if self.grid[y + dy, x] < occupancy and self.grid[y, x + dx] < occupancy:
+                        if self.grid[y + dy, x] < 100 and self.grid[y, x + dx] < 100:
                             neighbours.append((next_y, next_x))
-                            costs.append(cost)
+                            costs.append(cost if self.grid[next_y, next_x] < 75 else cost + 5)
                     else:
                         neighbours.append((next_y, next_x))
-                        costs.append(cost)
+                        costs.append(cost if self.grid[next_y, next_x] < 75 else cost + 5)
         return neighbours, costs
 
-    def plan_path(self, start_node, end_node, occupancy):
+    def plan_path(self, start_node, end_node):
         open_set = []
         heapq.heappush(open_set, (self.heuristic(start_node, end_node), 0, start_node))
         came_from = {}
@@ -62,7 +64,7 @@ class AdaptiveAStar:
                 return path
 
             closed_set.add(current)
-            neighbours, costs = self.get_neighbours(current, occupancy)
+            neighbours, costs = self.get_neighbours(current)
             for neighbour, cost in zip(neighbours, costs):
                 tentative_g = g_score[current] + cost
                 if neighbour in g_score and tentative_g >= g_score[neighbour]:
@@ -72,3 +74,4 @@ class AdaptiveAStar:
                 f_score = tentative_g + self.heuristic(neighbour, end_node)
                 heapq.heappush(open_set, (f_score, tentative_g, neighbour))
         return None
+

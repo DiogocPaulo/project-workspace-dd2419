@@ -27,13 +27,13 @@ class Map:
         x_list = [vertex[0] for vertex in workspace_vertices]
         y_list = [vertex[1] for vertex in workspace_vertices]
 
-        x_min = math.floor(min(x_list) / self.resolution) - 1
-        x_max = math.ceil(max(x_list) / self.resolution)
-        y_min = math.floor(min(y_list) / self.resolution) - 1
-        y_max = math.ceil(max(y_list) / self.resolution)
+        x_min = math.floor(min(x_list) / self.resolution) - 1.5
+        x_max = math.ceil(max(x_list) / self.resolution) + 0.5
+        y_min = math.floor(min(y_list) / self.resolution) - 1.5
+        y_max = math.ceil(max(y_list) / self.resolution) + 0.5
 
-        self.grid_width = x_max - x_min + 1
-        self.grid_height = y_max - y_min
+        self.grid_width = math.ceil(x_max - x_min)
+        self.grid_height = math.ceil(y_max - y_min) - 1
         
         self.origin_x = (x_min) * self.resolution
         self.origin_y = (y_min) * self.resolution
@@ -81,8 +81,8 @@ class Map:
             height = 0.25
 
         grid_x, grid_y = self.world_to_grid(x, y)
-        grid_half_width = self.distance_to_cells(width) / 2
-        grid_half_height = self.distance_to_cells(height) / 2
+        grid_half_width = math.ceil(self.distance_to_cells(width) / 2)
+        grid_half_height = math.ceil(self.distance_to_cells(height) / 2)
 
         if not (0 <= grid_x < self.grid_width and 0 <= grid_y < self.grid_height):
             # Grid coordinates out of bounds
@@ -100,6 +100,7 @@ class Map:
         ])
 
         if angle > 0.0:
+            angle = angle * float(math.pi / 180)
             cos_angle = np.cos(angle)
             sin_angle = np.sin(angle)
 
@@ -119,7 +120,8 @@ class Map:
         for j in range(min_y, max_y):
             for i in range(min_x, max_x):
                 if self.winding_number(i, j, object_vertices):
-                    self.grid[j, i] = 100
+                    if self.is_within_grid(i, j):
+                        self.grid[j, i] = 100
 
     def add_obstacle_point(self, x, y):
         grid_x, grid_y = self.world_to_grid(x, y)
@@ -152,13 +154,15 @@ class Map:
         start_x, start_y = self.world_to_grid(start_x, start_y)
         end_x, end_y = self.world_to_grid(end_x, end_y)
         cells = self.point_to_line(start_x, start_y, end_x, end_y)
+        if not cells:
+            return
         for cell in cells[:-1]:
             x, y = cell
-            if not self.is_within_workspace(x, y, world=False):
+            if not self.is_within_grid(x, y, world=False):
                 continue
             self.grid[y, x] = max(self.grid[y, x] - self.occupancy_decrease, 0)
         x, y = cells[-1]
-        if not self.is_within_grid(x, y, world=False):
+        if not self.is_within_workspace(x, y, world=False):
             return
         if valid:
             self.grid[y, x] = min(self.grid[y, x] + self.occupancy_increase, 100)
@@ -200,14 +204,15 @@ class Map:
             x, y = self.world_to_grid(x, y)
         return (0 <= x < self.grid_width and 0 <= y < self.grid_height)
 
-    def is_free(self, x, y, value_threshold):
+    def is_free(self, x, y, threshold, world=True):
         # Check if a grid cell is free based on a value threshold
         if self.grid is None:
             return False
-        grid_x, grid_y = self.world_to_grid(x, y)
-        if not (0 <= grid_x < self.grid_width and 0 <= grid_y < self.grid_height):
+        if world:
+            x, y = self.world_to_grid(x, y)
+        if not self.is_within_grid(x, y):
             return False
-        return self.grid[grid_y, grid_x] < value_threshold
+        return self.grid[y, x] < threshold
 
     def get_occupancy(self, x, y):
         # Check if a grid cell is free based on a value threshold
@@ -218,21 +223,60 @@ class Map:
             return 100
         return self.grid[grid_y, grid_x]
 
-    def are_adjacent_cells_free(self, x, y, adjacent_radius, free_threshold):
+    def are_adjacent_free(self, x, y, radius, threshold, world=True):
         if self.grid is None:
             return False
-        grid_x, grid_y = self.world_to_grid(x, y)
-        if not (0 <= grid_x < self.grid_width and 0 <= grid_y < self.grid_height):
+        if world:
+            x, y = self.world_to_grid(x, y)
+        if not self.is_within_grid(x, y):
             return False
-
-        for dy in range(-adjacent_radius, adjacent_radius + 1):
-            for dx in range(-adjacent_radius, adjacent_radius + 1):
-                nx, ny = grid_x + dx, grid_y + dy
-                if not (0 <= nx < self.grid_width and 0 <= ny < self.grid_height):
+        for dy in range(-radius, radius + 1):
+            for dx in range(-radius, radius + 1):
+                nx, ny = x + dx, y + dy
+                if not self.is_within_grid(nx, ny):
                     continue
-                if self.grid[ny, nx] >= free_threshold:
+                if not self.grid[ny, nx] < threshold:
                     return False
         return True
+
+    def get_safe_point(self, x, y, radius, threshold, world=True):
+        if self.grid is None:
+            return None
+        if world:
+            x, y = self.world_to_grid(x, y)
+        if not self.is_within_grid(x, y):
+            return None
+        search_radius = 0
+        while True:
+            search_radius += 1
+            for dy in range(-search_radius, search_radius + 1):
+                # Bottom edge
+                nx = x - search_radius
+                ny = y + dy
+                if self.are_adjacent_free(nx, ny, radius, threshold, world=False):
+                    sx, sy = self.grid_to_world(nx, ny)
+                    return (sx, sy)
+                # Top edge
+                nx = x + search_radius
+                ny = y + dy
+                if self.are_adjacent_free(nx, ny, radius, threshold, world=False):
+                    sx, sy = self.grid_to_world(nx, ny)
+                    return (sx, sy)
+            for dx in range(-search_radius, search_radius + 1):
+                # Left edge
+                nx = x + dx
+                ny = y - search_radius
+                if self.are_adjacent_free(nx, ny, radius, threshold, world=False):
+                    sx, sy = self.grid_to_world(nx, ny)
+                    return (sx, sy)
+                # Right edge
+                nx = x + dx
+                ny = y + search_radius
+                if self.are_adjacent_free(nx, ny, radius, threshold, world=False):
+                    sx, sy = self.grid_to_world(nx, ny)
+                    return (sx, sy)
+            if search_radius > 30:
+                return None
 
     def world_to_grid(self, x, y):
         # Convert world coordinates to grid indices
@@ -246,6 +290,11 @@ class Map:
         world_y = self.origin_y + (y + 0.5) * self.resolution
         return world_x, world_y
 
+    def round_world(self, x, y):
+        grid_x, grid_y = self.world_to_grid(x, y)
+        world_x, world_y = self.grid_to_world(grid_x, grid_y)
+        return world_x, world_y
+
     def distance_to_cells(self, distance):
         # Convert world distance to a number of grid cells
         return int(distance / self.resolution)
@@ -254,11 +303,11 @@ class Map:
         # Converts a number of grid cells to world distance
         return float(cells * self.resolution)
 
-    def inflate_grid(self, inflation_radius, percent=80):
+    def inflate_grid(self, inflation_radius, percent=75):
         if self.grid is None:
             return
 
-        occupied_mask = self.grid > 70
+        occupied_mask = self.grid > 75
 
         distance_map = distance_transform_edt(~occupied_mask, sampling=self.resolution)
 

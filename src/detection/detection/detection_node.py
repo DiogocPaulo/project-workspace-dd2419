@@ -36,11 +36,8 @@ class ObjectDetectorNode(Node):
             reliability=ReliabilityPolicy.BEST_EFFORT
         )
 
-        self.create_subscription(PointCloud2, '/camera/camera/depth/color/points', 
-                               self.cloud_callback, qos_profile)
-        self.create_subscription(WorkspaceVertices, "/workspace", 
-                               self.workspace_callback, 10)
-        # self.create_subscription(OccupancyGrid, "/obstacles_map", self.obstacles_map_callback, 10)
+        self.create_subscription(PointCloud2, '/camera/camera/depth/color/points', self.cloud_callback, qos_profile)
+        self.create_subscription(WorkspaceVertices, "/workspace",  self.workspace_callback, 10)
         
         # Publisher for raw detected objects
         self.raw_object_publisher = self.create_publisher(ObjectList, "/raw_detected_objects", 10)
@@ -53,7 +50,6 @@ class ObjectDetectorNode(Node):
         # Variables
         self.workspace_vertices = []
         self.workspace_map = None
-        self.obstacles_map = None
         self.raw_object_list = []
         self.message_counter = 0
 
@@ -69,20 +65,6 @@ class ObjectDetectorNode(Node):
         # Initialize map based on workspace perimeter
         self.workspace_map = Map(msg.grid_resolution)
         self.workspace_map.initialise_grid(self.workspace_vertices)
-
-    def obstacles_map_callback(self, msg: OccupancyGrid):
-        width = msg.info.width
-        height = msg.info.height
-        grid = np.array(msg.data, dtype=np.int8).reshape((height, width))
-
-        # Create map or update map grid
-        if self.obstacles_map is None:
-            resolution = msg.info.resolution
-            origin_x = msg.info.origin.position.x
-            origin_y = msg.info.origin.position.y
-            self.obstacles_map = Map(resolution, origin_x, origin_y, width, height, grid)
-        else:
-            self.obstacles_map.update_grid(grid)
 
     def cloud_callback(self, msg: PointCloud2):
         # Increment the message counter
@@ -131,7 +113,7 @@ class ObjectDetectorNode(Node):
 
         # Define HSV ranges for filtering color ranges
         lower_red, upper_red = np.array([2, 230, 95]), np.array([2, 240, 100])
-        lower_green1, upper_green1 = np.array([81, 100, 44]), np.array([84, 255, 105])
+        lower_green1, upper_green1 = np.array([81, 100, 44]), np.array([88, 255, 205])
         lower_green2, upper_green2 = np.array([73, 210, 90]), np.array([74, 240, 120])
         lower_blue, upper_blue = np.array([99, 254, 75]), np.array([99, 255, 80])
 
@@ -167,14 +149,14 @@ class ObjectDetectorNode(Node):
             green_ratio = len(cluster_points[green_mask]) / total_points
             blue_ratio = len(cluster_points[blue_mask]) / total_points
 
-            pure_red = pure_green = pure_blue = False
+            pure_red = pure_green = pure_blue = False 
 
             # Check if the cluster is predominantly red, green, or blue
             if red_ratio > 0.001 and green_ratio == 0.0 and blue_ratio == 0.0:
                 pure_red = True
             elif green_ratio > 0.001 and red_ratio == 0.0 and blue_ratio == 0.0:
                 pure_green = True
-            elif blue_ratio > 0.001 and red_ratio == 0.0 and green_ratio == 0.0:
+            elif blue_ratio > 0.001 and red_ratio == 0.0 and green_ratio >= 0.02:
                 pure_blue = True
 
             x, y, z = np.mean(cluster_points, axis=0)
@@ -184,13 +166,17 @@ class ObjectDetectorNode(Node):
                 object_type = self.classify_based_on_floor_contact(cluster_points)
                 if object_type == "sphere":
                     obj = self.create_object(x, z + 0.02, 0.0, Object.SPHERE, msg.header.stamp)
+                    if obj is not None:
+                        frame_objects.append(obj)
                 elif object_type == "cube":
                     obj = self.create_object(x, z + 0.02, 0.0, Object.CUBE, msg.header.stamp)
-                if obj:
-                    frame_objects.append(obj)
+                    if obj is not None:
+                        frame_objects.append(obj)
             elif self.is_plushie(cluster_points):
+                self.get_logger().info(f"red:{red_ratio}, blue:{blue_ratio}, green:{green_ratio} IM PLUSHIE")
                 obj = self.create_object(x + 0.01, z, 0.0, Object.PLUSHIE, msg.header.stamp)
-                if obj:
+                self.get_logger().info(f"OI: {obj}")
+                if obj is not None:
                     frame_objects.append(obj)
             elif self.is_box(cluster_points):
                 angle = self.estimate_box_orientation(cluster_points)
@@ -226,6 +212,7 @@ class ObjectDetectorNode(Node):
 
         # Publish the raw detected objects from this frame
         if frame_objects:
+            self.get_logger().info(f"frame:{frame_objects}")
             self.publish_raw_objects(frame_objects, msg.header.stamp)
 
     def create_object(self, x, y, angle, object_type, stamp):
@@ -238,33 +225,45 @@ class ObjectDetectorNode(Node):
         point_in.point.z = y
 
         try:
-            transform = self.tf_buffer.lookup_transform(
-                "odom",
-                point_in.header.frame_id,
-                point_in.header.stamp,
-                rclpy.duration.Duration(seconds=1.0)
-            )
+            tf_future = self.tf_buffer.wait_for_transform_async(
+            target_frame="map",
+            source_frame=point_in.header.frame_id,
+            time=stamp
+        )
             
-            # Transform the point to the map frame
-            point_out = do_transform_point(point_in, transform)
+            rclpy.spin_until_future_complete(self, tf_future, timeout_sec=1.0)
 
-            # Extract the transformed coordinates
-            x_transformed = point_out.point.x
-            y_transformed = point_out.point.y
+            if tf_future.done():
+                transform = self.tf_buffer.lookup_transform(
+                    "map",
+                    point_in.header.frame_id,
+                    point_in.header.stamp,
+                    rclpy.duration.Duration(seconds=1.0)
+                )
+                
+                # Transform the point to the map frame
+                point_out = do_transform_point(point_in, transform)
 
-            # Check if within workspace
-            if self.workspace_map is not None:
-                is_in = self.workspace_map.is_free(x_transformed, y_transformed, 50)
+                # Extract the transformed coordinates
+                x_transformed = point_out.point.x
+                y_transformed = point_out.point.y
+
+                # Check if within workspace
+                if self.workspace_map is not None:
+                    is_in = self.workspace_map.is_free(x_transformed, y_transformed, 75)
+                else:
+                    is_in = False
+
+                if is_in:
+                    object_msg = Object()
+                    object_msg.x = x_transformed
+                    object_msg.y = y_transformed
+                    object_msg.angle = angle
+                    object_msg.object_type = object_type
+                    return object_msg
             else:
-                is_in = False
-
-            if is_in:
-                object_msg = Object()
-                object_msg.x = x_transformed
-                object_msg.y = y_transformed
-                object_msg.angle = angle
-                object_msg.object_type = object_type
-                return object_msg
+                self.get_logger().error("Transform future not completed in time.")
+                return None
 
         except TransformException as e:
             self.get_logger().error(f"Failed coordinate transform: {e}")
@@ -272,7 +271,7 @@ class ObjectDetectorNode(Node):
 
     def publish_raw_objects(self, objects, stamp):
         object_list_msg = ObjectList()
-        object_list_msg.header.frame_id = "odom"
+        object_list_msg.header.frame_id = "map"
         object_list_msg.header.stamp = stamp
         object_list_msg.length = len(objects)
         object_list_msg.objects = objects

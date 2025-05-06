@@ -8,27 +8,28 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, HistoryPolicy, ReliabilityPolicy
 
 from robp_interfaces.msg import Encoders
-from nav_msgs.msg import Path, OccupancyGrid, Odometry
+from nav_msgs.msg import OccupancyGrid, Odometry
 from geometry_msgs.msg import PoseStamped
 from robp_interfaces.msg import DutyCycles
 from project_interfaces.srv import GoToPoint, Trigger
+from project_interfaces.msg import NavPoint, NavPath
 
 from mapping.map import Map
 from navigation.robot_state import RobotState
 from navigation.target_path import TargetPath
 
 # Robot parameters
-base = 0.3                  # Wheelbase of the vehicle
-lookahead_gain = 0.1        # Look-ahead distance gain
-lookahead_min = 0.3         # Minimum look-ahead distance
-distance_threshold = 0.15   # Stop distance threshold
-yaw_threshold = 0.2         # Stop yaw threshold
-target_velocity = 0.20      # Robot's target velocity
-turning_velocity = 0.15     # Turning velocity
-backing_velocity = -0.10
-wheel_duty_min = 0.09
+base = 0.3                      # Wheelbase of the vehicle
+lookahead_gain = 0.1            # Look-ahead distance gain
+lookahead_min = 0.2             # Minimum look-ahead distance
+distance_threshold = 0.05       # Stop distance threshold
+yaw_threshold = math.radians(3) # Stop yaw threshold
+min_velocity = 0.10             # Minimum velocity
+wheel_duty_min = 0.09           # Minimum wheel duty cycles
+wait_distance = 1.0             # Distance to travel before waiting
+wait_time = 2.0                 # Time to wait for localisation
 
-def pure_pursuit_control(state, target_path):
+def pure_pursuit_control(state, target_path, velocity, reverse=False, slow_approach=False):
     index, lookahead = target_path.search_target_index(state)
     
     if index is None:
@@ -42,31 +43,35 @@ def pure_pursuit_control(state, target_path):
         target_y = target_path.y_points[-1]
         index = len(target_path.x_points) - 1
 
-    alpha = math.atan2(target_y - state.y, target_x - state.x) - state.yaw
-    alpha = math.atan2(math.sin(alpha), math.cos(alpha))
+    if slow_approach:
+        distance_error = state.distance_to_state(target_path.x_points[-1], target_path.y_points[-1])
+        if distance_error <= 1.0:
+            velocity = max(min_velocity, velocity * (distance_error/1.0))
 
-    speed_factor = np.exp(-3 * np.power(alpha, 2))
-    linear_velocity = target_velocity * speed_factor
+    if reverse:
+        heading_error = math.atan2(target_y - state.y, target_x - state.x) - (state.yaw + math.pi)
+        velocity = -abs(velocity)
+    else:
+        heading_error = math.atan2(target_y - state.y, target_x - state.x) - state.yaw
+
+    alpha = math.atan2(math.sin(heading_error), math.cos(heading_error))
+
+    speed_factor = np.exp(-2 * np.power(alpha, 2))
+    linear_velocity = velocity * speed_factor
 
     kappa = 3.0 * np.arctan(alpha) / lookahead
-    angular_velocity = turning_velocity * kappa
+    angular_velocity = (abs(velocity) * 0.5) * kappa
 
-    return linear_velocity, angular_velocity, index
+    return linear_velocity, angular_velocity
 
-def calculate_angular_velocity(state, state_yaw, target_yaw):
-    state_yaw = (state_yaw + 180) % 360 - 180
-    target_yaw = (target_yaw + 180) % 360 - 180
+def angular_control(state, target_yaw, velocity):
+    heading_error = target_yaw - state.yaw
+    alpha = math.atan2(math.sin(heading_error), math.cos(heading_error))
 
-    error = target_yaw - state_yaw
-    if error > 180:
-        error -= 360
-    elif error < -180:
-        error += 360
+    kappa = 3.0 * np.arctan(alpha)
+    angular_velocity = (abs(velocity) * 0.5) * kappa
 
-    alpha = math.atan2(math.sin(error), math.cos(error))
-    kappa = 2.0 * math.sin(alpha)
-    omega = state.target_velocity * kappa
-    return omega, alpha
+    return angular_velocity
 
 class Navigation(Node):
 
@@ -80,42 +85,49 @@ class Navigation(Node):
         )
 
         self.create_subscription(Odometry, "/odom", self.odom_callback, qos_profile)
-        self.create_subscription(Path, "/custom_path", self.path_callback, qos_profile)
-        self.create_subscription(Path, "/odom_path", self.odom_path_callback, qos_profile)
+        self.create_subscription(NavPath, "/custom_path", self.path_callback, qos_profile)
         self.create_subscription(OccupancyGrid, "/inflated_map", self.inflated_map_callback, qos_profile)
         self.motor_publisher = self.create_publisher(DutyCycles, "/motor/duty_cycles", 10)
 
         # Navigation parameters
         self.state = RobotState()
         self.target_path = TargetPath(lookahead_gain, lookahead_min)
+        self.target_yaw = 0.0
+        self.target_velocity = 0.0
+        self.slow_approach = False
         self.previous_index = 0
         self.waiting_for_path = True
-        self.backing_up = False
+        self.reverse_travel = False
         self.inflated_map = None
+        self.distance_traveled_since_wait = 0.0
+        self.previous_x = 0.0
+        self.previous_y = 0.0
+        self.waiting = False
+        self.wait_start_time = None
+
 
         self.create_timer(0.05, self.control_loop)
 
     def odom_callback(self, msg: Odometry):
         self.state.update_state(msg)
 
-    def path_callback(self, msg: Path):
-        if self.backing_up:
-            return
-        if len(msg.poses) > 0:
-            self.waiting_for_path = False
-            self.target_path.update_path(msg)
-            self.get_logger().info(f"Recived new path with end point: ({msg.poses[-1].pose.position.x:.2f}, {msg.poses[-1].pose.position.y:.2f})")
-        else:
-            self.waiting_for_path = True
-            self.get_logger().warn("Recived empty path")
+        if not self.waiting and not self.waiting_for_path:
+            current_x = msg.pose.pose.position.x
+            current_y = msg.pose.pose.position.y
+            distance_traveled = np.hypot(current_x - self.previous_x, current_y - self.previous_y)
+            self.distance_traveled_since_wait += distance_traveled
+            self.previous_x = current_x
+            self.previous_y = current_y
 
-    def odom_path_callback(self, msg: Path):
-        if not self.backing_up or not self.waiting_for_path:
-            return
-        if len(msg.poses) > 0:
+    def path_callback(self, msg: NavPath):
+        if len(msg.path) > 0:
             self.waiting_for_path = False
-            self.target_path.update_path_in_reverse(msg)
-            self.get_logger().info(f"Reversing odom path for backing up")
+            self.target_yaw = msg.yaw
+            self.target_velocity = msg.velocity
+            self.reverse_travel = msg.reverse
+            self.slow_approach = msg.slow_approach
+            self.target_path.update_path(msg)
+            self.get_logger().info(f"Recived new path with end point: ({msg.path[-1].x:.2f}, {msg.path[-1].y:.2f})")
         else:
             self.waiting_for_path = True
             self.get_logger().warn("Recived empty path")
@@ -151,50 +163,71 @@ class Navigation(Node):
         self.motor_publisher.publish(duty_msg)
 
     def control_loop(self):
-        # in_inflated_region = self.inflated_map is not None and not self.inflated_map.is_free(self.state.x, self.state.y, 50)
-        # if in_inflated_region and not self.backing_up and self.waiting_for_path:
-        #     self.get_logger().info("Entering backing up process")
-        #     self.state.target_velocity = backing_velocity
-        #     self.backing_up = True
-        #     return
-        # elif not in_inflated_region and self.backing_up:
-        #     self.get_logger().info("Exiting backing up process")
-        #     self.state.target_velocity = target_velocity
-        #     self.backing_up = False
-        #
-        #     self.waiting_for_path = True
-        #     self.target_path.x_points = []
-        #     self.target_path.y_points = []
-        #     return
-
-        if not self.target_path.x_points or (self.waiting_for_path and not self.backing_up):
+        if not self.target_path.x_points or self.waiting_for_path:
             self.get_logger().info("Waiting for path")
             self.publish_duty_cycles(0.0, 0.0)
             return
 
-        linear_velocity, angular_velocity, self.previous_index = pure_pursuit_control(self.state, self.target_path)
+        if not self.waiting and self.distance_traveled_since_wait >= wait_distance:
+            self.get_logger().info(f"Traveled {self.distance_traveled_since_wait:.2f} meters, stopping for {wait_time} seconds.")
+            self.publish_duty_cycles(0.0, 0.0)
+            self.waiting = True
+            self.wait_start_time = self.get_clock().now()
+            self.distance_traveled_since_wait = 0.0
+            return
 
-        if self.previous_index >= (len(self.target_path.x_points) - 1):
-            distance = self.state.distance_to_state(self.target_path.x_points[-1], self.target_path.y_points[-1])
-            if distance <= distance_threshold and not self.waiting_for_path:
-                self.get_logger().info(f"Reached end of target path")
-                self.waiting_for_path = True
-                # if self.backing_up:
-                #     self.get_logger().info("Exiting backing up process")
-                #     self.state.target_velocity = target_velocity
-                #     self.backing_up = False
-
-                # Clear existing target path
-                self.target_path.x_points = []
-                self.target_path.y_points = []
+        if self.waiting:
+            elapsed_time = self.get_clock().now() - self.wait_start_time
+            if elapsed_time >= wait_time:
+                self.waiting = False
+                self.wait_start_time = None
+                self.previous_x = self.state.x
+                self.previous_y = self.state.y
+            else:
+                self.publish_duty_cycles(0.0, 0.0)
                 return
 
-        left_wheel = linear_velocity - (base/2) * angular_velocity
-        right_wheel = linear_velocity + (base/2) * angular_velocity
+        distance_error = self.state.distance_to_state(
+            self.target_path.x_points[-1],
+            self.target_path.y_points[-1],
+        )
+        yaw_error = math.atan2(
+            math.sin(self.target_yaw - self.state.yaw),
+            math.cos(self.target_yaw - self.state.yaw),
+        )
 
+        if distance_error > distance_threshold:
+            linear_velocity, angular_velocity = pure_pursuit_control(
+                self.state,
+                self.target_path,
+                self.target_velocity,
+                reverse=self.reverse_travel,
+                slow_approach=self.slow_approach,
+            )
+
+            left_wheel = linear_velocity - (base/2) * angular_velocity
+            right_wheel = linear_velocity + (base/2) * angular_velocity
+        elif yaw_error > yaw_threshold:
+            angular_velocity = angular_control(
+                self.state,
+                self.target_yaw,
+                self.target_velocity,
+            )
+
+            left_wheel = 0.0 - (base/2) * angular_velocity
+            right_wheel = 0.0 + (base/2) * angular_velocity
+        else:
+            self.get_logger().info(f"Reached end of target path")
+            self.waiting_for_path = True
+
+            # Clear existing target path
+            self.target_path.x_points = []
+            self.target_path.y_points = []
+            return
+
+        # Clamp left and right wheel duty cycles
         left_wheel = np.copysign(np.maximum(np.abs(left_wheel), wheel_duty_min), left_wheel)
         right_wheel = np.copysign(np.maximum(np.abs(right_wheel), wheel_duty_min), right_wheel)
-
         self.get_logger().info(f"Velocity: {self.state.velocity:.3f}, Left: {left_wheel:.3f}, Right: {right_wheel:.3f}")
 
         self.publish_duty_cycles(left_wheel, right_wheel)

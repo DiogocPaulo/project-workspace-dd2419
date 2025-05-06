@@ -1,0 +1,87 @@
+Phase 1: Core Data Structures and Basic Utilities
+
+    LaserScan Structure/Class:
+        Implement the structure to hold the raw laser scan data (ranges, angles - if you choose to store them explicitly, timestamp).
+        Write a basic function to potentially convert the ranges and angles into Cartesian coordinates (x, y) relative to the sensor. This will be useful for visualization and later calculations.
+
+    Keypoint Structure/Class:
+        Define the structure to hold the keypoint information (index, position). You can leave orientation and score for later when you implement the FALKO detector.
+
+    Descriptor Structure/Class:
+        Implement the structure to hold the descriptor data (data, keypoint_index). For BSC, data will eventually be a binary vector.
+
+    Basic Geometry/Utility Functions:
+        Create helper functions for common geometric operations that will be needed later. This might include:
+            Calculating the distance between two points.
+            Calculating the angle between two vectors.
+            Potentially functions to work with polar coordinates (range and angle).
+
+Reasoning for Phase 1: These are the fundamental data containers that will be used throughout the rest of the implementation. Getting these right first will make it easier to build upon them.
+
+Phase 2: Keypoint Detection
+
+    FALKOKeypointDetector Class:
+        Implement the detect method. This is a core part and will involve:
+            Analyzing the range data for significant changes (discontinuities or high curvature).
+            Implementing the adaptive thresholding mechanism as described in the paper.
+            Estimating the dominant orientation of the detected keypoints. This might involve analyzing the local structure around the keypoint.
+        Start with a simplified version if the adaptive thresholding seems complex initially, and refine it as you go.
+
+    OrthogonalCornerDetector Class (Optional):
+        If you plan to implement this as well, you can do it in parallel or after the FALKO detector. The logic for finding orthogonal corners will be different.
+
+Reasoning for Phase 2: Keypoint detection is the first major processing step. Without reliable keypoints, the subsequent descriptor generation and matching won't be effective.
+
+Phase 3: Descriptor Generation
+
+    BinaryShapeContextDescriptor Class:
+        Implement the describe method. This will involve:
+            Defining the local neighborhood around a keypoint.
+            Dividing this neighborhood into angular sectors.
+            Determining the presence or absence of laser points within each sector to create the binary descriptor.
+
+    CumulativeGaussianHistogramDescriptor Class (Optional):
+        If you plan to implement this, do it after the BSC descriptor. The logic for creating the histogram will be different.
+
+Reasoning for Phase 3: Once you can reliably detect keypoints, you need to describe the local environment around them in a unique and robust way.
+
+Phase 4: Feature Combination and Extraction
+
+    Feature Structure/Class:
+        Ensure this structure correctly holds a Keypoint and a Descriptor.
+
+    FeatureExtractor Class:
+        Implement the extract method to orchestrate the keypoint detection and descriptor generation. You'll need to instantiate your chosen keypoint detector and descriptor generator within this class.
+
+Reasoning for Phase 4: This step combines the detected keypoints and their descriptions into a single feature representation, which is the fundamental unit for matching and localization.
+
+Phase 5: Feature Matching
+
+    FeatureMatcher Class:
+        Implement the match method. For BSC descriptors, you'll likely use the Hamming distance to compare them. The matching process might involve finding the nearest neighbors between the two sets of descriptors.
+
+Reasoning for Phase 5: This is where you start comparing features from different laser scans (or a scan and a map) to find correspondences.
+
+Phase 6: Map Representation and Localization
+
+    Map Class:
+        Implement the structure to store the map features. You'll need a way to add new features to the map.
+
+    Localizer Class:
+        Implement the localize method. This will involve:
+            Using the FeatureExtractor to get features from the current laser scan.
+            Using the FeatureMatcher to find matches between the current features and the map features.
+            Implementing a method to estimate the robot's pose based on these matches (e.g., using RANSAC to filter outliers and then calculating a transformation).
+
+    PoseEstimate Structure/Class:
+        Ensure this structure correctly holds the estimated position and orientation.
+
+Reasoning for Phase 6: This is where you put everything together to achieve the final goal of robot localization.
+
+Important Considerations During Implementation:
+
+    Refer to the Paper Frequently: The paper contains crucial details about the algorithms, parameters, and mathematical formulas.
+    Start Simple: Don't try to implement everything perfectly at once. Start with basic versions of the algorithms and gradually add complexity and refinements as you understand them better.
+    Visualization: Visualizing the laser scans, detected keypoints, and matched features will be extremely helpful for debugging and understanding the algorithm's behavior.
+    Testing: Test each component thoroughly as you implement it. Use synthetic or real laser scan data to verify that the keypoint detector and descriptor generator are working as expected.
+    Parameter Tuning: The performance of the FALKO-BSC algorithm will likely depend on various parameters (e.g., thresholds in the FALKO detector, the number of sectors in BSC). Be prepared to experiment with these parameters.

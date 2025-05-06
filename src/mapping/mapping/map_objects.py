@@ -56,7 +56,6 @@ class MapObjects(Node):
         if not np.array_equal(current_object_list, self.previous_object_list):
             self.objects_map.empty_grid()
             for object_type, x, y, angle in current_object_list:
-                self.get_logger().info(f"Object Type {str(object_type)}")
                 self.objects_map.add_object(str(object_type), x, y, angle)
             self.publish_objects_map()
 
@@ -67,7 +66,7 @@ class MapObjects(Node):
             return
         map_msg = OccupancyGrid()
         map_msg.header.stamp = self.get_clock().now().to_msg()
-        map_msg.header.frame_id = "odom"
+        map_msg.header.frame_id = "map"
 
         map_msg.info.resolution = self.objects_map.resolution
         map_msg.info.width = self.objects_map.grid_width

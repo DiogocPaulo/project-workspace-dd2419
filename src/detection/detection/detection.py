@@ -42,7 +42,7 @@ class ExamineImage(Node):
 
         self.create_subscription(PointCloud2, '/camera/camera/depth/color/points', self.cloud_callback, qos_profile)
         self.create_subscription(WorkspaceVertices, "/workspace", self.workspace_callback, 10)
-        # self.create_subscription(OccupancyGrid, "/obstacles_map", self.obstacles_map_callback, 10)
+        self.create_subscription(OccupancyGrid, "/obstacles_map", self.obstacles_map_callback, 10)
 
         # Publishers for detected objects as a list
         self.object_list_publisher = self.create_publisher(ObjectList, "/detected_objects", 10)
@@ -114,7 +114,7 @@ class ExamineImage(Node):
             self.get_logger().info(f"Adding object from file: {object_type} at ({x:.2f}, {y:.2f})")
 
         object_list_msg = ObjectList()
-        object_list_msg.header.frame_id = "odom"
+        object_list_msg.header.frame_id = "map"
         object_list_msg.header.stamp = self.get_clock().now().to_msg()
         object_list_msg.length = len(self.object_list)
         object_list_msg.objects = self.object_list
@@ -410,7 +410,7 @@ class ExamineImage(Node):
 
         ratio = num_middle_layer_points / num_highest_layer_points
 
-        self.get_logger().info(f"ratio: {ratio}")
+        #self.get_logger().info(f"ratio: {ratio}")
 
         # Classification based on the ratio
         if 1 < ratio <= 6.5:  # Cube: ratio is approximately 1
@@ -484,7 +484,7 @@ class ExamineImage(Node):
 
         try:
             transform = self.tf_buffer.lookup_transform(
-                "odom",  # Target frame
+                "map",  # Target frame
                 point_in.header.frame_id,  # Source frame
                 point_in.header.stamp,
                 rclpy.duration.Duration(seconds=1.0)  # Timeout
@@ -514,7 +514,7 @@ class ExamineImage(Node):
                 self.initial_object_list.append(initial_object_msg)
 
                 initial_list_msg = ObjectList()
-                initial_list_msg.header.frame_id = "odom"
+                initial_list_msg.header.frame_id = "map"
                 initial_list_msg.header.stamp = stamp
                 initial_list_msg.length = len(self.initial_object_list)
                 initial_list_msg.objects = self.initial_object_list
@@ -533,11 +533,11 @@ class ExamineImage(Node):
                         break
 
                 if self.obstacles_map is not None:
-                    free_from_obstacles = self.obstacles_map.are_adjacent_cells_free(x_transformed, y_transformed, 1, 75)
+                    free_from_obstacles = self.obstacles_map.are_adjacent_free(x_transformed, y_transformed, 1, 75)
                 else:
                     free_from_obstacles = True
 
-                self.get_logger().info(f"initial:{self.initial_object_list}")
+                #self.get_logger().info(f"initial:{self.initial_object_list}")
 
                 # If not a duplicate, add the new object to the list
                 if not is_duplicate and free_from_obstacles:
@@ -551,18 +551,18 @@ class ExamineImage(Node):
                     self.object_list.append(object_msg)
 
                     object_list_msg = ObjectList()
-                    object_list_msg.header.frame_id = "odom"
+                    object_list_msg.header.frame_id = "map"
                     object_list_msg.header.stamp = stamp
                     object_list_msg.length = len(self.object_list)
                     object_list_msg.objects = self.object_list
                     self.object_list_publisher.publish(object_list_msg)
 
-                    self.get_logger().info(f"Published new object list now includes: {object_type} at ({x_transformed:.2f}, {y_transformed:.2f})")
+                    #self.get_logger().info(f"Published new object list now includes: {object_type} at ({x_transformed:.2f}, {y_transformed:.2f})")
 
                  # Confidence-based correction
                 CONFIDENCE_RADIUS = 0.06 # 5cm
                 MIN_CONSISTENT = 2        # Need at least 2 consistent observations
-                self.get_logger().info(f"obstacles:{self.object_list}")
+                #self.get_logger().info(f"obstacles:{self.object_list}")
                 
                 # Find all objects in this area
                 nearby = []
@@ -598,7 +598,7 @@ class ExamineImage(Node):
 
                         # Re-publish the corrected object list
                         object_list_msg = ObjectList()
-                        object_list_msg.header.frame_id = "odom"
+                        object_list_msg.header.frame_id = "map"
                         object_list_msg.header.stamp = stamp
                         object_list_msg.length = len(self.object_list)
                         object_list_msg.objects = self.object_list
@@ -613,7 +613,7 @@ class ExamineImage(Node):
 
     def publish_object_list(self):
         object_list_msg = ObjectList()
-        object_list_msg.header.frame_id = "odom"
+        object_list_msg.header.frame_id = "map"
         object_list_msg.header.stamp = self.get_clock().now().to_msg()
         object_list_msg.length = len(self.object_list)
         object_list_msg.objects = self.object_list
@@ -661,7 +661,7 @@ class ExamineImage(Node):
 
         for i, object_msg in enumerate(self.object_list):
             transform = TransformStamped()
-            transform.header.frame_id = "odom"  # Change to your desired parent frame
+            transform.header.frame_id = "map"  # Change to your desired parent frame
             transform.header.stamp = self.get_clock().now().to_msg()
             transform.child_frame_id = f"{object_msg.object_type}_{i}"
             
