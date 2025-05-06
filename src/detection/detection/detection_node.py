@@ -180,7 +180,33 @@ class ObjectDetectorNode(Node):
                     frame_objects.append(obj)
             elif self.is_box(cluster_points):
                 angle = self.estimate_box_orientation(cluster_points)
-                obj = self.create_object(x, z + 0.08, angle, Object.BOX, msg.header.stamp)
+                centroid = np.mean(cluster_points, axis=0)  
+                direction = np.array([centroid[0], centroid[1], centroid[2]])
+
+                direction_magnitude = np.linalg.norm(direction)
+                if direction_magnitude > 0:
+                    direction_unit = direction / direction_magnitude
+                else:
+                    direction_unit = np.zeros_like(direction)
+
+                # Determine offset based on angle (half of hidden dimension)
+                if angle == 0:
+                    offset = 0.08  # Half of 16cm width (hidden dimension)
+                elif angle == 90:
+                    offset = 0.12  # Half of 24cm length (hidden dimension)
+                else:
+                    offset = 0.0
+
+                # Adjust centroid by moving along the line of sight
+                adjustment = offset * direction_unit
+                adjusted_centroid = centroid + adjustment
+
+                # Extract adjusted coordinates (x, z are horizontal; y is vertical)
+                x_adj = adjusted_centroid[0]
+                z_adj = adjusted_centroid[2]
+                y_adj = adjusted_centroid[1]  # Already accounts for half the box's height
+
+                obj = self.create_object(x_adj, z_adj, angle, Object.BOX, msg.header.stamp)
                 if obj is not None:
                     frame_objects.append(obj)
 
