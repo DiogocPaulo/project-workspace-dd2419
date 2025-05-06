@@ -1,5 +1,6 @@
 std_msgs/Header header   # Includes frame_id and timestamp
 geometry_msgs/Point point  # 3D coordinates (x, y, z)
 string description  # Additional information
+string target # What to pickup
 ---
 int8 result  # 0 = success, 1 = IK failure, 2 = object not picked up

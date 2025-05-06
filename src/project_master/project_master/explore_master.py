@@ -30,6 +30,7 @@ from project_interfaces.srv import PickObject
 
 from project_master import behaviours
 
+
 class ServiceClient(py_trees.behaviour.Behaviour):
     def __init__(self, name, service_type, service_name, **kwargs):
         super().__init__(name)
@@ -302,7 +303,7 @@ class ExploreMaster(Node):
         self.show_waypoints = False
         self.end_points = generate_waypoints(self.map, self.workspace_vertices, 0.35, 1.05)
 
-        self.objects, self.boxes = self.process_map_file("maps/Map_test.txt")
+        self.objects, self.boxes = self.process_map_file("maps/Map.txt")
 
         root = self.create_exploration_tree()
         self.tree = py_trees_ros.trees.BehaviourTree(root=root)
@@ -518,9 +519,10 @@ class ExploreMaster(Node):
                 t = "objects"
             )
 
-            adjust = Adjust(
+            adjust = Adjust2(
                 name = f"ADJUST",
-                t = "objects"
+                t = "objects",
+                task = "ADJUST"
             )
 
             pick = Pick(
@@ -546,8 +548,7 @@ class ExploreMaster(Node):
             pickup_routine = py_trees.composites.Sequence(f"PICKUP ROUTINE", memory=True)
             look_fallback = py_trees.composites.Selector(f"LOOK FALLBACK", memory=True)
             look_fallback.add_child(look)   
-            look_fallback.add_child(sweep)
-            pickup_routine.add_children([look_fallback, adjust,pick])
+            pickup_routine.add_children([look_fallback,adjust,pick])
             retry_pickup = py_trees.decorators.Retry(name="RetryPickup", child=pickup_routine, num_failures=2)
 
             exploration_sequence.add_child(retry_pickup)
@@ -950,6 +951,89 @@ class Adjust(py_trees.behaviour.Behaviour):
 
             return py_trees.common.Status.RUNNING
 
+
+class Adjust2(py_trees.behaviour.Behaviour):
+    """
+    A behaviour that determines the next end point and navigates to it.
+    """
+    def __init__(self, name, t, task, **kwargs):
+        super().__init__(name)
+        self.type = t
+        self.node = None
+        self.request_args = kwargs
+        self.clock = None
+        self.stage = 0
+        self.future = None
+        self.x = None
+        self.y = None
+        self.task = task
+
+        self.base = 12000
+        self.v1 = 12000
+        self.v2 = 12000
+        self.v3 = 12000
+        self.off_base = 0.14
+
+
+    def setup(self, **kwargs):
+        try:
+            self.node = kwargs.get("node")
+        except Exception as e:
+            self.node.get_logger.error(f"{self.name} - Setup failed: {e}")
+            return False
+
+        self.clock = self.node.get_clock()
+
+        self.pickup_client = self.node.create_client(PickObject, 'PickObject')
+        while not self.pickup_client.wait_for_service(timeout_sec=1.0):
+            self.node.get_logger().info('Service not available, waiting...')
+
+
+        return True
+
+    def initialise(self):
+        self.stage = 0
+        self.future = None
+
+    def update(self):
+        # Pick upp target
+        if self.stage == 0:
+            self.node.get_logger().info(f"Stage: request")
+            try:
+                request = PickObject.Request()
+
+                request.header = Header()
+                request.header.stamp = self.node.get_clock().now().to_msg()
+                request.header.frame_id = "arm_base"
+                request.point = GeometryPoint()
+                request.point.x = 0.0
+                request.point.y = 0.0
+                request.point.z = 0.0
+                request.description = "ADJUST"
+                request.target = self.type
+
+                self.future = self.pickup_client.call_async(request)
+                self.stage = 4
+                self.node.get_logger().info(f"{self.name} - Sent request to Pickup")
+                return py_trees.common.Status.RUNNING
+            except Exception as e:
+                self.node.get_logger().error(f"{self.name} - Failed to send request: {e}")
+                return py_trees.common.Status.FAILURE
+
+
+        elif self.stage == 4:
+            self.node.get_logger().info(f"Stage: result")
+            if self.future.done():
+                response = self.future.result()
+                if response.result == 0:
+                    return py_trees.common.Status.SUCCESS
+                else:
+                    return py_trees.common.Status.FAILURE
+
+            return py_trees.common.Status.RUNNING
+
+        
+
 class Sweep(py_trees.behaviour.Behaviour):
     """
     A behaviour that determines the next end point and navigates to it.
@@ -1028,7 +1112,7 @@ class Sweep(py_trees.behaviour.Behaviour):
             return py_trees.common.Status.RUNNING
 
         elif self.stage == 1:
-            self.node.get_logger().info(f"Stage: 1")
+            #self.node.get_logger().info(f"Stage: 1")
             # self.node.get_logger().info(f"Stage: 2")
             if time.time() - self.start_time >= self.wait:
                 self.stage = 2
@@ -1036,7 +1120,7 @@ class Sweep(py_trees.behaviour.Behaviour):
             return py_trees.common.Status.RUNNING
 
         elif self.stage == 2:
-            self.node.get_logger().info(f"Stage: 2")
+            #self.node.get_logger().info(f"Stage: 2")
             request = GetDetectedList.Request()
 
             self.future = self.camera_client.call_async(request)
@@ -1046,7 +1130,7 @@ class Sweep(py_trees.behaviour.Behaviour):
             return py_trees.common.Status.RUNNING
 
         elif self.stage == 3:
-            self.node.get_logger().info(f"Stage: 3 ")
+            #self.node.get_logger().info(f"Stage: 3 ")
             if self.future.done():
                 response = self.future.result()
                 
@@ -1254,6 +1338,7 @@ class Pick(py_trees.behaviour.Behaviour):
                 request.point.y = self.y
                 request.point.z = -0.15
                 request.description = self.task
+                request.target = "non"
 
                 self.future = self.pickup_client.call_async(request)
                 self.stage = 4
@@ -1387,6 +1472,7 @@ class Drop(py_trees.behaviour.Behaviour):
                 request.point.y = self.y
                 request.point.z = 0.0
                 request.description = self.task
+                request.target = "non"
 
                 self.future = self.pickup_client.call_async(request)
                 self.stage = 4

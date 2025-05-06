@@ -24,7 +24,7 @@ from tf2_ros import TransformBroadcaster
 from visualization_msgs.msg import Marker
 from visualization_msgs.msg import MarkerArray
 
-from project_interfaces.srv import PickObject, JointMove
+from project_interfaces.srv import PickObject, JointMove, GetDetectedList
 from project_interfaces.msg import ArmTaskMessage
 
 from rclpy.action import ActionClient
@@ -46,10 +46,17 @@ class MultiServoPublisher(Node):
         self.tfBuffer = tf2_ros.Buffer()
         self.listener = tf2_ros.TransformListener(self.tfBuffer,self)
         self.clock = self.get_clock()
+
+        self.pos_subscriber = self.create_subscription(
+            JointState, '/servo_pos_publisher', self.pos_callback, 10)
         
         self.service = self.create_service(PickObject, 'PickObject', self.task_callback)
 
         self.service_fine_tune = self.create_service(JointMove, 'MoveArm', self.joint_callback)
+
+        self.client_camera = self.create_client(GetDetectedList, 'get_detected_list')
+        while not self.client_camera.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Service not available, waiting...')
 
         self.detected_objects = []
         self.detected_boxes = []
@@ -57,7 +64,7 @@ class MultiServoPublisher(Node):
         self.take_detected_flag = False
 
 
-        self.publisher_marker = self.create_publisher(Marker, '/visualization_marker', 10)
+        # self.publisher_marker = self.create_publisher(Marker, '/visualization_marker', 10)
 
 
 
@@ -66,10 +73,10 @@ class MultiServoPublisher(Node):
         self.l3 = 0.16
         self.off_base = 0.068
 
-        self.base = 0.0
-        self.v1 = 0.0
-        self.v2 = 0.0
-        self.v3 = 0.0
+        self.base = 12000
+        self.v1 = 12000
+        self.v2 = 12000
+        self.v3 = 12000
 
     def task_callback(self,request,response):
         if request.description == "PICKUP":
@@ -80,6 +87,8 @@ class MultiServoPublisher(Node):
             response.result = self.look_callback(request)
         elif request.description == "RETURN":
             response.result = self.return_callback(request)
+        elif request.description == "ADJUST":
+            response.result = self.adjust_callback(request)
         else:
             response.result = 2
             return response
@@ -246,6 +255,82 @@ class MultiServoPublisher(Node):
         pose = [14000,12000,12000,12000,12000,12000,move_time,move_time,move_time,move_time,move_time,move_time]
         msg.data = pose
         self.publisher.publish(msg)
+    
+        return 0
+    
+    def adjust_callback(self, request):
+        self.get_logger().info(f'Received adjust request')
+
+        camera_request = GetDetectedList.Request()
+        self.future = self.client_camera.call_async(camera_request)
+        rclpy.spin_until_future_complete(self, self.future)
+        response = self.future.result()
+        if response is None:
+            self.get_logger().error('Camera service failed')
+            return 0
+        objects = response.objects
+        boxes = response.boxes
+
+        self.get_logger().info(f'Received camera detections')
+
+        target = request.target
+        closest_obj = None
+        if target == 'objects':
+            closest_obj = min(objects, key=lambda DetectedData: DetectedData.distance)
+        elif target == 'boxes':
+            closest_obj = min(boxes, key=lambda DetectedData: DetectedData.distance)
+
+        step_size = 50
+        eps = 5
+
+        base = self.base
+        v3 = self.v3
+
+        while closest_obj.distance > eps:
+            if closest_obj.distance < 30:
+                step_size = 10
+            #difference in x-axis
+            if(closest_obj.diff_x > 0):
+                base += step_size
+            elif(closest_obj.diff_x < 0):
+                base -= step_size
+
+            #difference in y-axis
+            if(closest_obj.diff_y > 0):
+                v3 += step_size
+            elif(closest_obj.diff_y < 0):
+                v3 -= step_size
+
+            if not (base < 23900 and base > 100):
+                base = self.base
+
+            if  not (v3 < 20900 and v3 > 3100):
+                v3 = self.v3
+
+            
+            msg = Int16MultiArray()
+            msg.layout = MultiArrayLayout(dim=[MultiArrayDimension(label="", size=12, stride=12)], data_offset=0)
+            move_time = 100
+            pose = [11000,12000,v3,self.v2,self.v1,base,move_time,move_time,move_time,move_time,move_time,move_time]
+            msg.data = pose
+            self.publisher.publish(msg)
+
+            self.clock.sleep_for(rclpy.duration.Duration(seconds=0.1))
+
+            camera_request = GetDetectedList.Request()
+            self.future = self.client_camera.call_async(camera_request)
+            rclpy.spin_until_future_complete(self, self.future)
+            response = self.future.result()
+            if response is None:
+                self.get_logger().error('Camera service failed')
+                return 0
+            objects = response.objects
+            boxes = response.boxes
+
+            if target == 'objects':
+                closest_obj = min(objects, key=lambda DetectedData: DetectedData.distance)
+            elif target == 'boxes':
+                closest_obj = min(boxes, key=lambda DetectedData: DetectedData.distance)
     
         return 0
 
@@ -435,6 +520,12 @@ class MultiServoPublisher(Node):
 
         self.clock.sleep_for(rclpy.duration.Duration(seconds=2000))
 
+    def pos_callback(self,msg):
+        self.base = msg.position[5]
+        self.v1 = msg.position[4]
+        self.v2 = msg.position[3]
+        self.v3 = msg.position[2]
+
         
 
 
@@ -442,7 +533,11 @@ def main():
     rclpy.init()
     node = MultiServoPublisher()
     try:
-        rclpy.spin(node)
+        from rclpy.executors import MultiThreadedExecutor
+
+        executor = MultiThreadedExecutor()
+        executor.add_node(node)
+        executor.spin()
     except KeyboardInterrupt:
         pass
 
