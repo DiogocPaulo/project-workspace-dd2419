@@ -34,10 +34,12 @@ class CollectMaster(Node):
         self.workspace_publisher = self.create_publisher(WorkspaceVertices, "/workspace", 10)
 
         # Constants
+        self.distance_threshold = 0.08
+        self.yaw_threshold = math.radians(5)
         self.resolution = 0.05
+        workspace_file = "workspaces/small_workspace.tsv"
 
         # Variables
-        workspace_file = "workspaces/small_workspace.tsv"
         self.workspace_vertices = self.read_workspace(workspace_file, skip_header=True)
 
         root = self.create_collection_tree()
@@ -190,7 +192,7 @@ class CollectMaster(Node):
         box_approach_point_client = behaviours.GoToApproachPointClient(
             name="ApproachPointClient_Box",
             service_name="/pathing_end_point",
-            approach_offset=0.40,
+            approach_offset=0.35,
             input_key="closest_box",
             output_key="box_approach_waypoint",
         )

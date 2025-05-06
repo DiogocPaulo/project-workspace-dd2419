@@ -106,7 +106,7 @@ class FindClosestObject(py_trees.behaviour.Behaviour):
         return py_trees.common.Status.SUCCESS
 
 class ReachedWaypoint(py_trees.behaviour.Behaviour):
-    def __init__(self, name, input_key, distance_threshold=0.1, yaw_threshold=0.1):
+    def __init__(self, name, input_key, distance_threshold, yaw_threshold):
         super().__init__(name)
         self.waypoint_key = input_key
         self.distance_threshold = distance_threshold
