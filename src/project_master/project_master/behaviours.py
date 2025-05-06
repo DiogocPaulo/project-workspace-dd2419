@@ -584,6 +584,8 @@ class Adjust(py_trees.behaviour.Behaviour):
     def initialise(self):
         self.stage = 0
         self.future = None
+        self.eps = 5
+        self.step_size = 200
 
     def pos_callback(self,msg):
         self.base = msg.position[5]
