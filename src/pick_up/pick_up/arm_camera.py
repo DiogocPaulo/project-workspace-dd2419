@@ -51,7 +51,7 @@ class ArmCamera(Node):
         results = self.model(cv_image, verbose=False)
 
         
-        class_names = ['Box','objects']
+        class_names = ['Box','objects','plushie']
 
 
         found_objects = False
@@ -92,7 +92,7 @@ class ArmCamera(Node):
             entity.distance = int(self.compute_distance(center_x,center_y,center_x_screen,center_y_screen))
             entity.timestamp=msg.header.stamp
 
-            if entity.label == 'objects':
+            if entity.label == 'objects' or entity.label == 'plushie':
                 if not found_objects:
                     self.detected_objects = []
                     found_objects = True

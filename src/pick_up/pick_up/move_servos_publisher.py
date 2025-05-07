@@ -494,14 +494,12 @@ class MultiServoPublisher(Node):
 
     def joint_callback(self,request,response):
         self.get_logger().info(f'Received move request request')
-        msg = Int16MultiArray()
-        msg.layout = MultiArrayLayout(dim=[MultiArrayDimension(label="", size=12, stride=12)], data_offset=0)
-        move_time = 150
-        pose = [14000,12000,request.v3,request.v2,request.v1,request.base,move_time,move_time,move_time,move_time,move_time,move_time]
-        msg.data = pose
+        msg = request.input
         self.publisher.publish(msg)
 
         response.result = 0
+
+        #self.clock.sleep_for(rclpy.duration.Duration(seconds=0.06))
 
         return response
 
@@ -512,11 +510,7 @@ def main():
     rclpy.init()
     node = MultiServoPublisher()
     try:
-        from rclpy.executors import MultiThreadedExecutor
-
-        executor = MultiThreadedExecutor()
-        executor.add_node(node)
-        executor.spin()
+        rclpy.spin(node)
     except KeyboardInterrupt:
         pass
 

@@ -556,11 +556,11 @@ class Adjust(py_trees.behaviour.Behaviour):
         self.v3 = 12000
         self.off_base = 0.14
 
-        self.eps =15
+        self.eps =20
         self.step_size = 500
 
         if self.type == "boxes":
-            self.eps = 15
+            self.eps = 40
 
     def setup(self, **kwargs):
         try:
@@ -591,6 +591,7 @@ class Adjust(py_trees.behaviour.Behaviour):
         self.future = None
         self.joint_future = None
         self.step_size = 500
+        self.eps = 15
 
     def pos_callback(self,msg):
         self.base = msg.position[5]
@@ -885,6 +886,15 @@ class Pick(py_trees.behaviour.Behaviour):
         self.v3 = 12000
         self.off_base = 0.14
 
+        self.object_position_key = "object_position"
+
+
+        self.blackboard = self.attach_blackboard_client(name=name)
+        self.blackboard.register_key(
+            key=self.object_position_key,
+            access=py_trees.common.Access.WRITE
+        )
+
 
     def setup(self, **kwargs):
         try:
@@ -992,6 +1002,8 @@ class Pick(py_trees.behaviour.Behaviour):
                 if response.result == 0:
                     return py_trees.common.Status.SUCCESS
                 else:
+                    object_position = (self.x,self.y)
+                    self.blackboard.set(self.object_position_key,object_position)
                     return py_trees.common.Status.FAILURE
 
             return py_trees.common.Status.RUNNING
@@ -1018,6 +1030,9 @@ class Drop(py_trees.behaviour.Behaviour):
         self.v3 = 12000
         self.off_base = 0.14
 
+        self.emergancy_distance = 0.35  
+        self.emergancy_flag = False
+
 
     def setup(self, **kwargs):
         try:
@@ -1041,6 +1056,7 @@ class Drop(py_trees.behaviour.Behaviour):
     def initialise(self):
         self.stage = 0
         self.future = None
+        self.emergancy_flag = False
 
     def pos_callback(self,msg):
         self.base = msg.position[5]
@@ -1084,6 +1100,9 @@ class Drop(py_trees.behaviour.Behaviour):
 
             distance_z = 0 - self.off_base
 
+            if self.emergancy_flag:
+                distance = self.emergancy_distance
+
             distance_y = math.sin(-base)*distance
             distance_x = math.cos(base)*distance
 
@@ -1125,6 +1144,12 @@ class Drop(py_trees.behaviour.Behaviour):
                 if response.result == 0:
                     return py_trees.common.Status.SUCCESS
                 else:
-                    return py_trees.common.Status.FAILURE
+                    if not self.emergancy_flag:
+                        self.emergancy_flag = True
+                        self.stage = 2
+                    else:
+                        return py_trees.common.Status.FAILURE
+                # else:
+                #     return py_trees.common.Status.FAILURE
 
             return py_trees.common.Status.RUNNING
