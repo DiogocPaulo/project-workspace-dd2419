@@ -264,8 +264,12 @@ class Pathing(Node):
                 point_msg.y = y
                 path_msg.path.append(point_msg)
             point_msg = NavPoint()
-            point_msg.x = self.end_point[0]
-            point_msg.y = self.end_point[1]
+            if self.backing:
+                point_msg.x = self.safe_point[0]
+                point_msg.y = self.safe_point[1]
+            else:
+                point_msg.x = self.end_point[0]
+                point_msg.y = self.end_point[1]
             path_msg.path.append(point_msg)
         else:
             path_msg.path = []
@@ -293,8 +297,12 @@ class Pathing(Node):
         transform_msg.header.stamp = self.get_clock().now().to_msg()
         transform_msg.child_frame_id = "end_point"
 
-        transform_msg.transform.translation.x = self.end_point[0]
-        transform_msg.transform.translation.y = self.end_point[1]
+        if self.backing:
+            transform_msg.transform.translation.x = self.safe_point[0]
+            transform_msg.transform.translation.y = self.safe_point[1]
+        else:
+            transform_msg.transform.translation.x = self.end_point[0]
+            transform_msg.transform.translation.y = self.end_point[1]
         transform_msg.transform.translation.z = 0.0
 
         transform_msg.transform.rotation.x = quaternion.x
