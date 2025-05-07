@@ -8,8 +8,6 @@ bags/
 map.csv
 ros_bag_images/
 rosbag*/
-runs/
-
 
 # Based on github ROS gitignore
 devel/
