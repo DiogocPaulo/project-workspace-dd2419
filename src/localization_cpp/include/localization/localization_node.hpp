@@ -15,9 +15,10 @@
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 
-// Math and Linear Algebra includes#include <sensor_msgs/msg/point_cloud2.hpp>  // PointCloud2 message
+// Math and Linear Algebra includes #include <sensor_msgs/msg/point_cloud2.hpp>  // PointCloud2 message
 #include <Eigen/Dense>
 #include <cmath>
+#include <unordered_set>
 
 // C++ Standard and Memory management includes
 #include <array>
@@ -53,6 +54,9 @@ private:
     void publishPointCloud(const std::vector<Eigen::Vector2d>& points);
     void publishAllScans();
 
+    // Utility functions
+    void performChainAlignment(const std::vector<Scan>& scans);
+
     // ROS Subscribers
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_sub_;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
@@ -82,6 +86,7 @@ private:
     Pose2D current_pose_;
     double linear_velocity_;
     double angular_velocity_;
+    std::unordered_set<int> corrected_scan_ids_;
     
     // Publisher for the point cloud
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr cloud_pub_;

@@ -30,7 +30,7 @@ Node::Node() : rclcpp::Node("localization_node") {
 
     // Initialize LidarScanStorage and ICP
     scan_storage_ = LidarScanStorage(2, 0.5); // Range for surrounding scans
-    icp_ = ICP(0.3, 100); // 10 cm threshold, 50 iterations
+    icp_ = ICP(0.2, 100); // 10 cm threshold, 50 iterations
 
     RCLCPP_INFO(this->get_logger(), "Localization node initialized.");
 }
@@ -58,7 +58,26 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
 
         // Get surrounding scans
         std::vector<Eigen::Vector2d> stored_points;
+
+        // Get surrounding scans sorted by ID (oldest first)
         std::vector<Scan> surrounding_scans = scan_storage_.getSurroundingScans(current_pose_);
+        std::sort(surrounding_scans.begin(), surrounding_scans.end(), 
+            [](const Scan& a, const Scan& b) { return a.id < b.id; });
+
+        // Perform chain alignment if we have enough scans
+        if (surrounding_scans.size() > 1) {
+            // Find newest and oldest scans (assuming scans are sorted by ID)
+            Scan& newest_scan = surrounding_scans.back();
+            Scan& oldest_scan = surrounding_scans.front();
+
+            // Only attempt alignment if there's significant drift potential
+            if ((newest_scan.id - oldest_scan.id) > 10) {
+                std::vector<Scan> all_scans = scan_storage_.getAllScans();
+                std::sort(all_scans.begin(), all_scans.end(), 
+                    [](const Scan& a, const Scan& b) { return a.id < b.id; });
+                performChainAlignment(all_scans);
+            }
+        }
 
         /*
         
@@ -85,14 +104,13 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
 
         if (!stored_points.empty()) {
             /*
-            
-            */
             // Align Principal Components before ICP
             Eigen::Matrix2d pre_rotation = computeRotationAlignment(points, stored_points);
             std::vector<Eigen::Vector2d> pre_aligned_points(points.size());
             for (size_t i = 0; i < points.size(); ++i) {
                 pre_aligned_points[i] = pre_rotation * points[i];
             }
+            */
 
             // Perform ICP to find transformation and get aligned points
             std::vector<Eigen::Vector2d> aligned_points;
@@ -104,7 +122,7 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
 
             auto start_time = std::chrono::high_resolution_clock::now();
             //icp_.computeICP2(points, icp_transform, aligned_points);
-            icp_.computeICP(pre_aligned_points, icp_transform, aligned_points, fitness, inlier_rmse);
+            icp_.computeICP(points, icp_transform, aligned_points, fitness, inlier_rmse);
             auto end_time = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
             RCLCPP_INFO(this->get_logger(), "ICP computation took %ld ms", duration);
@@ -123,11 +141,11 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
             // Use ICP if fitness and RMSE is good enough
             if (fitness > 0.5 && inlier_rmse < 0.1) {
                 // Convert pre_rotation to theta (angle) for quaternion
-                double pre_rotation_theta = std::atan2(pre_rotation(1, 0), pre_rotation(0, 0));
+                //double pre_rotation_theta = std::atan2(pre_rotation(1, 0), pre_rotation(0, 0));
 
                 // Convert rotations to quaternions
                 tf2::Quaternion pre_rotation_quat, icp_rotation_quat;
-                pre_rotation_quat.setRPY(0.0, 0.0, pre_rotation_theta);
+                //pre_rotation_quat.setRPY(0.0, 0.0, pre_rotation_theta);
                 icp_rotation_quat.setRPY(0.0, 0.0, icp_rotation_theta);
 
                 // Update the current transform
@@ -136,14 +154,14 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
                 translation_[1] += icp_translation_y;
 
                 // Combine rotations: current_rotation = icp_rotation * pre_rotation * current_rotation
-                //rotation_ = icp_rotation_quat * rotation_;
-                rotation_ = icp_rotation_quat * pre_rotation_quat * rotation_;
+                rotation_ = icp_rotation_quat * rotation_;
+                //rotation_ = icp_rotation_quat * pre_rotation_quat * rotation_;
             }
 
             // Store the current scan in the LidarScanStorage
             if (std::abs(angular_velocity_) < 0.1 && std::abs(linear_velocity_) < 0.01) { // (current_pose_.position - stored_scan->pose.position).norm() > 0.1 || 
                 //stored_scan->agePoints(10); // Age points in the storage
-                std::vector<Eigen::Vector2d> range_limited_alinged_points = limitPointsByRangeFromPose(aligned_points, current_pose_.position, 3);
+                std::vector<Eigen::Vector2d> range_limited_alinged_points = limitPointsByRangeFromPose(aligned_points, current_pose_.position, 4);
                 scan_storage_.addScan(range_limited_alinged_points, current_pose_);
                 RCLCPP_INFO(this->get_logger(), "Stored new scan!");
             }
@@ -155,13 +173,124 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
         } else if (std::abs(linear_velocity_) < 0.01) {
             RCLCPP_WARN(this->get_logger(), "No stored scan found for ICP.");
             // Store the current scan in the LidarScanStorage
-            std::vector<Eigen::Vector2d> range_limited_points = limitPointsByRangeFromPose(points, current_pose_.position, 3);
+            std::vector<Eigen::Vector2d> range_limited_points = limitPointsByRangeFromPose(points, current_pose_.position, 4);
             scan_storage_.addScan(range_limited_points, current_pose_);
         }
 
     } catch (tf2::TransformException& ex) {
         RCLCPP_WARN(this->get_logger(), "Could not transform %s to map: %s", msg->header.frame_id.c_str(), ex.what());
         return; // Skip processing if transform is unavailable
+    }
+}
+
+// New function to perform chain-based alignment
+void Node::performChainAlignment(const std::vector<Scan>& scans) {
+    if (scans.size() < 2) return;
+
+    // Find newest and oldest scans (assuming scans are sorted by ID)
+    const Scan& newest_scan = scans.back();
+    const Scan& oldest_scan = scans.front();
+
+    // Skip if newest scan was already corrected
+    if (corrected_scan_ids_.count(newest_scan.id)) {
+        RCLCPP_DEBUG(get_logger(), "Scan %d already corrected - skipping chain alignment", newest_scan.id);
+        return;
+    }
+
+    // Only attempt alignment if there's significant drift potential
+    if ((newest_scan.id - oldest_scan.id) < 10) return;
+
+    RCLCPP_WARN(this->get_logger(), 
+        "Performing chain correction (ID %d → %d) to reduce accumulated drift", 
+        newest_scan.id, oldest_scan.id);
+
+    /* ====== STEP 1: Align newest to oldest ====== */
+    Eigen::Matrix3d base_transform;
+    std::vector<Eigen::Vector2d> aligned_points;
+    double fitness, inlier_rmse;
+    
+    icp_.setTarget(oldest_scan.points);
+    icp_.computeICP(newest_scan.points, base_transform, aligned_points, fitness, inlier_rmse);
+
+    if (inlier_rmse >= 0.1) {
+        RCLCPP_WARN(get_logger(), "Initial alignment failed (RMSE: %.3f)", inlier_rmse);
+        return;
+    }
+
+    /* ====== STEP 2: Propagate correction backward ====== */
+    Eigen::Matrix3d cumulative_transform = base_transform;
+    std::vector<Eigen::Matrix3d> transforms;
+    std::vector<int> scans_to_correct;
+
+    for (auto it = scans.rbegin() + 1; it != scans.rend() - 1; ++it) {
+        // Skip already corrected scans in the chain
+        if (corrected_scan_ids_.count(it->id)) {
+            RCLCPP_DEBUG(get_logger(), "Skipping already corrected scan ID %d", it->id);
+            continue;
+        }
+
+        // Apply transform to current scan
+        std::vector<Eigen::Vector2d> transformed_points;
+        for (const auto& pt : it->points) {
+            Eigen::Vector3d homog_pt(pt.x(), pt.y(), 1.0);
+            homog_pt = cumulative_transform * homog_pt;
+            transformed_points.emplace_back(homog_pt.x(), homog_pt.y());
+        }
+
+        // Align to next older scan
+        Eigen::Matrix3d incremental_transform;
+        icp_.setTarget((it + 1)->points);
+        icp_.computeICP(transformed_points, incremental_transform, 
+                       transformed_points, fitness, inlier_rmse);
+
+        if (inlier_rmse >= 0.1) {
+            RCLCPP_WARN(get_logger(), "Chain alignment failed at ID %d (RMSE: %.3f)", it->id, inlier_rmse);
+            break;
+        }
+
+        cumulative_transform = incremental_transform * cumulative_transform;
+        transforms.push_back(cumulative_transform);
+        scans_to_correct.push_back(it->id);
+    }
+
+    /* ====== STEP 3: Apply corrections ====== */
+    if (!transforms.empty()) {
+        size_t transform_idx = 0;
+        
+        // Apply transforms forward through the chain
+        for (auto it = scans.begin() + 1; it != scans.end() - 1; ++it) {
+            // Only correct scans that were processed in step 2
+            if (std::find(scans_to_correct.begin(), scans_to_correct.end(), it->id) == scans_to_correct.end()) {
+                continue;
+            }
+
+            if (transform_idx >= transforms.size()) break;
+            
+            const auto& transform = transforms[transforms.size() - 1 - transform_idx++];
+            
+            // Transform points
+            std::vector<Eigen::Vector2d> corrected_points;
+            for (const auto& pt : it->points) {
+                Eigen::Vector3d homog_pt(pt.x(), pt.y(), 1.0);
+                homog_pt = transform * homog_pt;
+                corrected_points.emplace_back(homog_pt.x(), homog_pt.y());
+            }
+            
+            // Update pose
+            Pose2D corrected_pose = it->pose;
+            Eigen::Vector3d homog_pos(it->pose.position.x(), it->pose.position.y(), 1.0);
+            homog_pos = transform * homog_pos;
+            corrected_pose.position.x() = homog_pos.x();
+            corrected_pose.position.y() = homog_pos.y();
+            corrected_pose.theta += std::atan2(transform(1,0), transform(0,0));
+            
+            // Update storage and mark as corrected
+            scan_storage_.updateScan(it->id, corrected_points, corrected_pose);
+            corrected_scan_ids_.insert(it->id);
+        }
+
+        RCLCPP_INFO(get_logger(), "Chain corrected %zu scans. Final RMSE: %.3f", 
+                   scans_to_correct.size(), inlier_rmse);
     }
 }
 

@@ -107,10 +107,11 @@ def shortest_edges_midpoints(vertices):
 
 def generate_waypoints(map: Map, workspace_vertices, outer_offset, inner_offset):
     outer_vertices = offset_outer_vertices(workspace_vertices, outer_offset)
-    #outer_vertices.reverse()
+    outer_vertices.reverse()
     inner_vertices = offset_inner_vertices(workspace_vertices, inner_offset)
     inner_midpoints, final_heading = shortest_edges_midpoints(inner_vertices)
-    offset_vertices = outer_vertices[:-1] + inner_midpoints
+    #offset_vertices = outer_vertices[:-1] + inner_midpoints
+    offset_vertices = outer_vertices + inner_midpoints
     waypoints = []
     num_vertices = len(offset_vertices)
     for i in range(num_vertices - 1):

@@ -16,7 +16,7 @@ namespace Localization {
 // Default distance threshold for segment splitting (in meters)
 constexpr double DEFAULT_SEGMENT_THRESHOLD = 0.1;
 constexpr double MIN_RANGE = 0.4;
-constexpr double MAX_RANGE = 5.0;
+constexpr double MAX_RANGE = 4.0;
 
 // Correct the coordinate of a point based on velocity and time
 Eigen::Vector2d correctCoordinate(const Eigen::Vector2d& point,
