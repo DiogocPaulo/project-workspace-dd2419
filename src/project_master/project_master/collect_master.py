@@ -123,39 +123,42 @@ class CollectMaster(Node):
         ])
 
         # Pickup Routine
-        look = behaviours.Look(
-                name=f"LOOK",
-                x=0.2,
-                y=0.0,
-                t = "objects"
-            )
-
-        sweep = behaviours.Sweep(
-            name=f"SWEEP",
+        object_look = behaviours.Look(
+            name=f"Look_Object",
+            x=0.2,
+            y=0.0,
             t = "objects"
         )
-
-        adjust = behaviours.Adjust(
-            name = f"ADJUST",
+        object_sweep = behaviours.Sweep(
+            name=f"Sweep_Object",
             t = "objects"
         )
-
-        pick = behaviours.Pick(
-            name = f"PICK",
+        object_adjust = behaviours.Adjust(
+            name = f"Adjust_Object",
+            t = "objects"
+        )
+        pickup = behaviours.Pick(
+            name = f"Pickup",
             t = "objects",
             task = "PICKUP"
         )
-
-        check = behaviours.Check(
-            name = f"CHECK",
+        object_check = behaviours.Check(
+            name = f"Check_Object",
             t = "objects"
         )
 
-        pickup_routine = py_trees.composites.Sequence(f"PICKUP ROUTINE", memory=True)
-        look_fallback = py_trees.composites.Selector(f"LOOK FALLBACK", memory=True)
-        look_fallback.add_child(look)   
-        look_fallback.add_child(sweep)
-        pickup_routine.add_children([look_fallback, adjust,pick,check])
+        object_look_fallback = py_trees.composites.Selector(f"LookFallback_Object", memory=True)
+        object_look_fallback.add_children([
+            object_look,
+            object_sweep,
+        ])
+        pickup_routine = py_trees.composites.Sequence(f"PickupRoutine", memory=True)
+        pickup_routine.add_children([
+            object_look_fallback,
+            object_adjust,
+            pickup,
+            object_check,
+        ])
         retry_pickup = py_trees.decorators.Retry(name="RetryPickup", child=pickup_routine, num_failures=2)
 
         pickup_sequence = py_trees.composites.Sequence("PickupSequence", memory=True)
@@ -218,42 +221,45 @@ class CollectMaster(Node):
         ])
 
         # Drop Routine
-        drop_look = behaviours.Look(
-                name=f"LOOK",
-                x=0.2,
-                y=0.0,
-                t = "boxes"
-            )
-
-        drop_sweep = behaviours.Sweep(
-            name=f"SWEEP",
+        box_look = behaviours.Look(
+            name=f"Look_Box",
+            x=0.2,
+            y=0.0,
             t = "boxes"
         )
-
-        drop_adjust = behaviours.Adjust(
-            name = f"ADJUST",
+        box_sweep = behaviours.Sweep(
+            name=f"Sweep_Box",
             t = "boxes"
         )
-
+        box_adjust = behaviours.Adjust(
+            name = f"Adjust_Box",
+            t = "boxes"
+        )
         drop = behaviours.Drop(
-            name = f"DROP",
+            name = f"Drop",
             t = "boxes",
             task = "DROPOFF"
         )
 
-        dropoff_routine = py_trees.composites.Sequence(f"DROPOFF ROUTINE", memory=True)
-        drop_look_fallback = py_trees.composites.Selector(f"LOOK FALLBACK", memory=True)
-        drop_look_fallback.add_child(drop_look)   
-        drop_look_fallback.add_child(drop_sweep)
-        dropoff_routine.add_children([drop_look_fallback,drop_adjust,drop])
-        retry_dropoff = py_trees.decorators.Retry(name="RetryDropoff", child=dropoff_routine, num_failures=2)
+        box_look_fallback = py_trees.composites.Selector(f"LookFallback_Box", memory=True)
+        box_look_fallback.add_children([
+            box_look,
+            box_sweep,
+        ])
+        drop_routine = py_trees.composites.Sequence(f"DropRoutine", memory=True)
+        drop_routine.add_children([
+            box_look_fallback,
+            box_adjust,
+            drop
+        ])
+        retry_drop = py_trees.decorators.Retry(name="RetryDrop", child=drop_routine, num_failures=2)
 
         drop_sequence = py_trees.composites.Sequence("DropSequence", memory=True)
         drop_sequence.add_children([
             find_closest_box,
             box_safe_point_sequence,
             box_approach_point_sequence,
-            retry_dropoff,
+            retry_drop,
         ])
 
         collection_sequence.add_children([
