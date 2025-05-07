@@ -246,9 +246,10 @@ class GoToSafePointClient(py_trees.behaviour.Behaviour):
         else:
             self.inflated_map.update_grid(grid)
 
-    def calculate_safe_point(self, point):
-        x, y = point
-        self.safe_point = self.inflated_map.get_safe_point(x, y, 3, 75)
+    def calculate_safe_point(self, start_point, object_point):
+        start_x, start_y = start_point
+        object_x, object_y = object_point
+        self.safe_point = self.inflated_map.get_best_safe_point(start_x, start_y, object_x, object_y, 3, 75)
         if self.safe_point is None:
             self.safe_point = (0.0, 0.0)
         self.safe_yaw = np.arctan2(y - self.safe_point[1], x - self.safe_point[0])
@@ -269,9 +270,9 @@ class GoToSafePointClient(py_trees.behaviour.Behaviour):
             return py_trees.common.Status.INVALID
 
         if self.safe_point is None:
-            self.calculate_safe_point(object_point)
+            self.calculate_safe_point(self.current_point, object_point)
         if not self.inflated_map.is_free(self.safe_point[0], self.safe_point[1], 75):
-            self.calculate_safe_point(object_point)
+            self.calculate_safe_point(self.current_point, object_point)
 
         if not self.sent_request:
             try:

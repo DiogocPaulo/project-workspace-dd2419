@@ -239,44 +239,100 @@ class Map:
                     return False
         return True
 
-    def get_safe_point(self, x, y, radius, threshold, world=True):
+    def get_best_safe_point(self, robot_x, robot_y, x, y, radius, threshold, max_search_radius=15, world=True):
+        if self.grid is None:
+            return None
+        if world:
+            x, y = self.world_to_grid(x, y)
+            robot_x, robot_y = self.world_to_grid(robot_x, robot_y)
+        if not self.is_within_grid(x, y) or not self.is_within_grid(robot_x, robot_y):
+            return None
+        
+        potential_safe_points = []
+        for search_radius in range(1, max_search_radius + 1):
+            for dy in range(-search_radius, search_radius + 1):
+                # Bottom edge
+                nx = x - search_radius
+                ny = y + dy
+                if self.are_adjacent_free(nx, ny, radius, threshold, world=False):
+                    potential_safe_points.append((nx, ny))
+                # Top edge
+                nx = x + search_radius
+                ny = y + dy
+                if self.are_adjacent_free(nx, ny, radius, threshold, world=False):
+                    potential_safe_points.append((nx, ny))
+            for dx in range(-search_radius, search_radius + 1):
+                # Left edge
+                nx = x + dx
+                ny = y - search_radius
+                if self.are_adjacent_free(nx, ny, radius, threshold, world=False):
+                    potential_safe_points.append((nx, ny))
+                # Right edge
+                nx = x + dx
+                ny = y + search_radius
+                if self.are_adjacent_free(nx, ny, radius, threshold, world=False):
+                    potential_safe_points.append((nx, ny))
+
+        best_safe_point = None
+        min_cost = float("inf")
+        for safe_point in potential_safe_points:
+            centre_distance = np.hypot(safe_point[0] - x, safe_point[1] - y)
+            robot_distance = np.hypot(safe_point[0] - robot_x, safe_point[1] - robot_y)
+            cost = (1 * robot_distance) + (2 * centre_distance)
+            if cost < min_cost:
+                min_cost = cost
+                best_safe_point = safe_point
+        if best_safe_point is not None:
+            sx, sy = self.grid_to_world(best_safe_point[0], best_safe_point[1])
+            return (sx, sy)
+
+        return None
+
+    def get_closest_safe_point(self, x, y, radius, threshold, max_search_radius=30, world=True):
         if self.grid is None:
             return None
         if world:
             x, y = self.world_to_grid(x, y)
         if not self.is_within_grid(x, y):
             return None
-        search_radius = 0
-        while True:
-            search_radius += 1
+
+        closest_safe_point = None
+        min_distance = float("inf")
+        for search_radius in range(1, max_search_radius + 1):
+            potential_safe_points = []
             for dy in range(-search_radius, search_radius + 1):
                 # Bottom edge
                 nx = x - search_radius
                 ny = y + dy
                 if self.are_adjacent_free(nx, ny, radius, threshold, world=False):
-                    sx, sy = self.grid_to_world(nx, ny)
-                    return (sx, sy)
+                    potential_safe_points.append((nx, ny))
                 # Top edge
                 nx = x + search_radius
                 ny = y + dy
                 if self.are_adjacent_free(nx, ny, radius, threshold, world=False):
-                    sx, sy = self.grid_to_world(nx, ny)
-                    return (sx, sy)
+                    potential_safe_points.append((nx, ny))
             for dx in range(-search_radius, search_radius + 1):
                 # Left edge
                 nx = x + dx
                 ny = y - search_radius
                 if self.are_adjacent_free(nx, ny, radius, threshold, world=False):
-                    sx, sy = self.grid_to_world(nx, ny)
-                    return (sx, sy)
+                    potential_safe_points.append((nx, ny))
                 # Right edge
                 nx = x + dx
                 ny = y + search_radius
                 if self.are_adjacent_free(nx, ny, radius, threshold, world=False):
-                    sx, sy = self.grid_to_world(nx, ny)
-                    return (sx, sy)
-            if search_radius > 30:
-                return None
+                    potential_safe_points.append((nx, ny))
+
+            for safe_point in potential_safe_points:
+                distance = np.hypot(safe_point[0] - x, safe_point[1] - y)
+                if distance < min_distance:
+                    min_distance = distance
+                    closest_safe_point = safe_point
+            if closest_safe_point is not None:
+                sx, sy = self.grid_to_world(closest_safe_point[0], closest_safe_point[1])
+                return (sx, sy)
+
+        return None
 
     def world_to_grid(self, x, y):
         # Convert world coordinates to grid indices
@@ -317,3 +373,4 @@ class Map:
         inflated_grid[occupied_mask] = np.maximum(inflated_grid[occupied_mask], self.grid[occupied_mask])
 
         self.grid = inflated_grid.astype(self.grid.dtype)
+
