@@ -103,7 +103,7 @@ class CollectMaster(Node):
         object_approach_point_client = behaviours.GoToApproachPointClient(
             name="ApproachPointClient_Object",
             service_name="/pathing_end_point",
-            approach_offset=0.20,
+            approach_offset=0.15,
             input_key="closest_object",
             output_key="object_approach_waypoint",
         )

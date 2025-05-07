@@ -829,6 +829,7 @@ class Adjust(py_trees.behaviour.Behaviour):
         self.stage = 0
         self.future = None
         self.joint_future = None
+        self.joint_client = None
 
         self.base = 12000
         self.v1 = 12000
@@ -836,8 +837,8 @@ class Adjust(py_trees.behaviour.Behaviour):
         self.v3 = 12000
         self.off_base = 0.14
 
-        self.eps = 5
-        self.step_size = 200
+        self.eps =15
+        self.step_size = 500
 
         if self.type == "boxes":
             self.eps = 15
@@ -859,7 +860,7 @@ class Adjust(py_trees.behaviour.Behaviour):
 
         self.joint_client = self.node.create_client(JointMove, 'MoveArm')
         while not self.joint_client.wait_for_service(timeout_sec=1.0):
-            self.node.get_logger().info('Service not available, waiting...')
+            self.node.get_logger().info('Joint move service not available, waiting...')
 
         self.clock = self.node.get_clock()
 
@@ -870,6 +871,7 @@ class Adjust(py_trees.behaviour.Behaviour):
         self.stage = 0
         self.future = None
         self.joint_future = None
+        self.step_size = 500
 
     def pos_callback(self,msg):
         self.base = msg.position[5]
@@ -879,7 +881,7 @@ class Adjust(py_trees.behaviour.Behaviour):
 
     def update(self):
         if self.stage == 0:
-            self.node.get_logger().info(f"Stage: 0")
+            # self.node.get_logger().info(f"Stage: 0")
             request = GetDetectedList.Request()
 
             self.future = self.camera_client.call_async(request)
@@ -888,7 +890,7 @@ class Adjust(py_trees.behaviour.Behaviour):
             return py_trees.common.Status.RUNNING
 
         elif self.stage == 1:
-            self.node.get_logger().info(f"Stage: 1")
+            # self.node.get_logger().info(f"Stage: 1")
             if self.future.done():
                 response = self.future.result()
                 
@@ -910,8 +912,13 @@ class Adjust(py_trees.behaviour.Behaviour):
                 base = self.base
                 v3 = self.v3
 
-                if closest_obj.distance < 10:
-                    self.step_size = 100
+                if closest_obj.distance < 100:
+                    self.step_size = 200
+                if closest_obj.distance < 30:
+                    self.step_size = 100    
+                if closest_obj.distance < 20:
+                    self.step_size = 50
+
                 #difference in x-axis
                 if(closest_obj.diff_x > 0):
                     base += self.step_size
@@ -930,11 +937,17 @@ class Adjust(py_trees.behaviour.Behaviour):
                 if  not (v3 < 20900 and v3 > 3100):
                     v3 = self.v3
 
+                msg = Int16MultiArray()
+                msg.layout = MultiArrayLayout(dim=[MultiArrayDimension(label="", size=12, stride=12)], data_offset=0)
+                move_time = 100
+                pose = [11000,12000,int(v3),int(self.v2),int(self.v1),int(base),move_time,move_time,move_time,move_time,move_time,move_time]
+                msg.data = pose
+                self.start_time = time.time()
+
                 move_command = JointMove.Request()
-                move_command.base = int(base)
-                move_command.v1 = int(self.v1)
-                move_command.v2 = int(self.v2)
-                move_command.v3 = int(v3)
+                move_command.input = msg
+
+                self.node.get_logger().info(f"Sending move command")
 
                 self.joint_future = self.joint_client.call_async(move_command)
 
@@ -944,7 +957,7 @@ class Adjust(py_trees.behaviour.Behaviour):
         
         
         elif self.stage == 2:
-            self.node.get_logger().info(f"Stage: 2")
+            # self.node.get_logger().info(f"Stage: 2")
             if self.joint_future.done():
                 self.stage = 0
             
