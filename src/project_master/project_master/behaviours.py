@@ -354,7 +354,7 @@ class GoToRepositionPointClient(py_trees.behaviour.Behaviour):
         self.client = self.node.create_client(GoToPoint, self.service_name)
         self.node.create_subscription(Odometry, "/odom", self.odom_callback, qos_profile)
         self.tf_buffer = Buffer()
-        self.tf_listener = TransformListener(self.node.tf_buffer, self.node, spin_thread=True)
+        self.tf_listener = TransformListener(self.tf_buffer, self.node, spin_thread=True)
         return True
 
     def initialise(self):
@@ -415,7 +415,7 @@ class GoToRepositionPointClient(py_trees.behaviour.Behaviour):
         try:
             object_point = self.blackboard.get(self.object_point_key)
         except Exception as e:
-            self.logger.error(f"{self.name} - Error reading blackboard: {e}")
+            self.node.get_logger.error(f"{self.name} - Error reading blackboard: {e}")
             return py_trees.common.Status.INVALID
         try:
             arm_transform = self.tf_buffer.lookup_transform(
@@ -425,7 +425,7 @@ class GoToRepositionPointClient(py_trees.behaviour.Behaviour):
                 rclpy.duration.Duration(seconds=1.0)
             )
         except tf2_ros.TransformException as ex:
-            self.get_logger().warn(f"Could not find transform between arm base to map frames: {ex}")
+            self.node.get_logger().warn(f"Could not find transform between arm base to map frames: {ex}")
             return
 
         if self.approach_point is None:
@@ -1343,8 +1343,8 @@ class Return(py_trees.behaviour.Behaviour):
                 request.header.stamp = self.node.get_clock().now().to_msg()
                 request.header.frame_id = "arm_base"
                 request.point = GeometryPoint()
-                request.point.x = self.x
-                request.point.y = self.y
+                request.point.x = 0.0
+                request.point.y = 0.0
                 request.point.z = 0.0
                 request.description = self.task
 

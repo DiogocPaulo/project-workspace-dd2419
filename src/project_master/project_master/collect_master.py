@@ -151,6 +151,11 @@ class CollectMaster(Node):
             t = "objects",
             task = "RETURN"
         )
+        box_arm_return = behaviours.Return(
+            name = f"Return",
+            t = "objects",
+            task = "RETURN"
+        )
 
         object_look_fallback = py_trees.composites.Selector(f"LookFallback_Object", memory=True)
         object_look_fallback.add_children([
@@ -159,6 +164,7 @@ class CollectMaster(Node):
         ])
         pickup_routine = py_trees.composites.Sequence(f"PickupRoutine", memory=True)
         pickup_routine.add_children([
+            arm_return,
             object_look_fallback,
             object_adjust,
             pickup,
@@ -169,7 +175,6 @@ class CollectMaster(Node):
         return_after_failed_pickup_fallback = py_trees.composites.Selector("ReturnAfterFailedPickupFallback", memory=True)
         return_after_failed_pickup_fallback.add_children([
             retry_pickup,
-            arm_return
         ])
 
         # Object Arm Point
@@ -243,11 +248,11 @@ class CollectMaster(Node):
         reposition_return_after_failed_pickup_fallback = py_trees.composites.Selector("ReturnAfterFailedPickupFallback", memory=True)
         reposition_return_after_failed_pickup_fallback.add_children([
             reposition_retry_pickup,
-            reposition_arm_return
         ])
     
         reposition_and_pickup = py_trees.composites.Sequence("RepositionAndPickup", memory=True)
         reposition_and_pickup.add_children([
+            reposition_arm_return,
             object_reposition_point_sequence,
             reposition_return_after_failed_pickup_fallback,
         ])
@@ -355,6 +360,7 @@ class CollectMaster(Node):
 
         drop_sequence = py_trees.composites.Sequence("DropSequence", memory=True)
         drop_sequence.add_children([
+            box_arm_return,
             find_closest_box,
             box_safe_point_sequence,
             box_approach_point_sequence,

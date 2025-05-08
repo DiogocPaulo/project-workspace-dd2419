@@ -15,22 +15,6 @@ def generate_launch_description():
         IncludeLaunchDescription(
             launch_description_source=AnyLaunchDescriptionSource(frames_launch_file),
         ),
-        # Node(
-        #     package="tf2_ros",
-        #     executable="static_transform_publisher",
-        #     arguments=[
-        #         "--x", "0",
-        #         "--y", "0",
-        #         "--z", "0",
-        #         "--qx", "0",
-        #         "--qy", "0",
-        #         "--qz", "0",
-        #         "--qw", "1",
-        #         "--frame-id", "map",
-        #         "--child-frame-id", "odom"
-        #     ],
-        #     output="screen",
-        # ),
         Node(
             package="tf2_ros",
             executable="static_transform_publisher",
@@ -44,6 +28,22 @@ def generate_launch_description():
                 "--qw", "1",
                 "--frame-id", "base_link",
                 "--child-frame-id", "lidar_link"
+            ],
+            output="screen",
+        ),
+        Node(
+            package="tf2_ros",
+            executable="static_transform_publisher",
+            arguments=[
+                "--x", "-0.04",
+                "--y", "-0.085",
+                "--z", "0.15",
+                "--qx", "0",
+                "--qy", "0",
+                "--qz", "0",
+                "--qw", "1",
+                "--frame-id", "base_link",
+                "--child-frame-id", "arm_base"
             ],
             output="screen",
         ),
