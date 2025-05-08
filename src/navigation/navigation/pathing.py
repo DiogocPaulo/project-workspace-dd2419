@@ -146,7 +146,7 @@ class Pathing(Node):
         inflated_grid = np.max(stacked_grids, axis=0)
         self.inflated_map.update_grid(inflated_grid)
 
-        if grid_intersection(self.path_grid, self.inflated_map.grid):
+        if grid_intersection(self.path_grid, self.inflated_map.grid) and not self.approaching_object:
             self.calculate_astar_path()
         else:
             self.get_logger().info("Current path is still valid")
