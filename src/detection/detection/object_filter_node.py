@@ -53,99 +53,105 @@ class ObjectFilterNode(Node):
 
     def raw_objects_callback(self, msg: ObjectList):
         for raw_obj in msg.objects:
-            self.initial_object_list.append(raw_obj)
-
-            # Check if the new object is a duplicate based on proximity
-            is_duplicate = False
-            for i, obj in enumerate(self.initial_object_list[:-1]):
-                distance = np.sqrt((raw_obj.x - obj.x)**2 + (raw_obj.y - obj.y)**2)
-                if raw_obj.object_type == "box" or obj.object_type == "box":
-                    if distance < 0.24:    #f the object is within 1 cm of an existing object
-                        is_duplicate = True
-                        break
-                elif distance < 0.06:   # If the object is within 1 cm of an existing object
-                    is_duplicate = True
-                    break
-
             if self.obstacles_map is not None:
                 free_from_obstacles = self.obstacles_map.are_adjacent_free(raw_obj.x, raw_obj.y, 1, 75)
             else:
                 free_from_obstacles = True
 
-            self.get_logger().info(f"initial:{self.initial_object_list} and free:{free_from_obstacles}")
+            if free_from_obstacles == True:
+                self.initial_object_list.append(raw_obj)
 
-            # If not a duplicate, add the new object to the list
-            if not is_duplicate and free_from_obstacles:
-                # Create new object message
-                object_msg = Object()
-                object_msg.x = raw_obj.x
-                object_msg.y = raw_obj.y
-                object_msg.angle = raw_obj.angle
-                object_msg.object_type = raw_obj.object_type
+                # Check if the new object is a duplicate based on proximity
+                is_duplicate = False
+                for i, obj in enumerate(self.initial_object_list[:-1]):
+                    distance = np.sqrt((raw_obj.x - obj.x)**2 + (raw_obj.y - obj.y)**2)
+                    if raw_obj.object_type == "box" or obj.object_type == "box":
+                        if distance < 0.24:    #f the object is within 1 cm of an existing object
+                            is_duplicate = True
+                            break
+                    elif distance < 0.06:   # If the object is within 1 cm of an existing object
+                        is_duplicate = True
+                        break
 
-                self.object_list.append(object_msg)
+                
 
-                object_list_msg = ObjectList()
-                object_list_msg.header.frame_id = "map"
-                object_list_msg.header.stamp = msg.header.stamp
-                object_list_msg.length = len(self.object_list)
-                object_list_msg.objects = self.object_list
-                self.object_list_publisher.publish(object_list_msg)
+                self.get_logger().info(f"initial:{self.initial_object_list} and free:{free_from_obstacles}")
 
-                self.get_logger().info(f"Published new object list now includes: {raw_obj.object_type} at ({raw_obj.x:.2f}, {raw_obj.y:.2f})")
+                # If not a duplicate, add the new object to the list
+                if not is_duplicate:
+                    # Create new object message
+                    object_msg = Object()
+                    object_msg.x = raw_obj.x
+                    object_msg.y = raw_obj.y
+                    object_msg.angle = raw_obj.angle
+                    object_msg.object_type = raw_obj.object_type
 
-                # Confidence-based correction
-            CONFIDENCE_RADIUS = 0.06 # 5cm
-            MIN_CONSISTENT = 2        # Need at least 2 consistent observations
-            self.get_logger().info(f"obstacles:{self.object_list}")
-            
-            # Find all objects in this area
-            nearby = []
-            for obj in self.initial_object_list:
-                dist = np.sqrt((raw_obj.x - obj.x)**2 + (raw_obj.y - obj.y)**2)
-                if raw_obj.object_type == "box" or obj.object_type == "box":
-                    if dist <= 0.24:
-                        nearby.append(obj)
-                elif dist <= CONFIDENCE_RADIUS: # If the object is within 1 cm of an existing object
-                    nearby.append(obj)
-            
-            # Count object types in this area
-            type_counts = {}
-            for obj in nearby:
-                type_counts[obj.object_type] = type_counts.get(obj.object_type, 0) + 1
-            
-            # Find most common type if we have enough consistent observations
-            if len(nearby) >= MIN_CONSISTENT:
-                mean_x = np.mean([obj.x for obj in nearby])
-                mean_y = np.mean([obj.y for obj in nearby])
-                most_common, count = max(type_counts.items(), key=lambda x: x[1])
-                if count >= MIN_CONSISTENT:
-                    for i, obj in enumerate(self.object_list):
-                        # Check if this object is in the nearby area
-                        for nearby_obj in nearby:
-                            dist = np.sqrt((obj.x - nearby_obj.x)**2 + (obj.y - nearby_obj.y)**2)
-                            if obj.object_type == "box":
-                                if dist <= 0.24:
-                                    self.object_list[i].object_type = "box"
-                                    break
-                            elif dist <= CONFIDENCE_RADIUS:
-                                self.object_list[i].x = mean_x
-                                self.object_list[i].y = mean_y
-                                # Update the type in the main object list
-                                self.object_list[i].object_type = most_common
-                                break
+                    self.object_list.append(object_msg)
 
-                    # Re-publish the corrected object list
                     object_list_msg = ObjectList()
                     object_list_msg.header.frame_id = "map"
                     object_list_msg.header.stamp = msg.header.stamp
                     object_list_msg.length = len(self.object_list)
                     object_list_msg.objects = self.object_list
                     self.object_list_publisher.publish(object_list_msg)
-                    
-                    self.get_logger().info(f"final:{self.object_list}")
-                    #self.get_logger().info(f"Corrected object at ({raw_obj.x:.2f}, {raw_obj.y:.2f}) to {most_common}")
-            
+
+                    self.get_logger().info(f"Published new object list now includes: {raw_obj.object_type} at ({raw_obj.x:.2f}, {raw_obj.y:.2f})")
+
+                    # Confidence-based correction
+                CONFIDENCE_RADIUS = 0.06 # 5cm
+                MIN_CONSISTENT = 2        # Need at least 2 consistent observations
+                self.get_logger().info(f"obstacles:{self.object_list}")
+                
+                # Find all objects in this area
+                nearby = []
+                for obj in self.initial_object_list:
+                    dist = np.sqrt((raw_obj.x - obj.x)**2 + (raw_obj.y - obj.y)**2)
+                    if raw_obj.object_type == "box" or obj.object_type == "box":
+                        if dist <= 0.24:
+                            nearby.append(obj)
+                    elif dist <= CONFIDENCE_RADIUS: # If the object is within 1 cm of an existing object
+                        nearby.append(obj)
+                
+                # Count object types in this area
+                type_counts = {}
+                for obj in nearby:
+                    type_counts[obj.object_type] = type_counts.get(obj.object_type, 0) + 1
+                
+                # Find most common type if we have enough consistent observations
+                if len(nearby) >= MIN_CONSISTENT:
+                    mean_x = np.mean([obj.x for obj in nearby])
+                    mean_y = np.mean([obj.y for obj in nearby])
+                    most_common, count = max(type_counts.items(), key=lambda x: x[1])
+                    if count >= MIN_CONSISTENT:
+                        for i, obj in enumerate(self.object_list):
+                            # Check if this object is in the nearby area
+                            for nearby_obj in nearby:
+                                dist = np.sqrt((obj.x - nearby_obj.x)**2 + (obj.y - nearby_obj.y)**2)
+                                if obj.object_type == "box":
+                                    if dist <= 0.24:
+                                        self.object_list[i].object_type = "box"
+                                        break
+                                elif dist <= CONFIDENCE_RADIUS:
+                                    self.object_list[i].x = mean_x
+                                    self.object_list[i].y = mean_y
+                                    # Update the type in the main object list
+                                    self.object_list[i].object_type = most_common
+                                    break
+
+                        # Re-publish the corrected object list
+                        object_list_msg = ObjectList()
+                        object_list_msg.header.frame_id = "map"
+                        object_list_msg.header.stamp = msg.header.stamp
+                        object_list_msg.length = len(self.object_list)
+                        object_list_msg.objects = self.object_list
+                        self.object_list_publisher.publish(object_list_msg)
+                        
+                        self.get_logger().info(f"final:{self.object_list}")
+                        #self.get_logger().info(f"Corrected object at ({raw_obj.x:.2f}, {raw_obj.y:.2f}) to {most_common}")
+            else:
+                self.get_logger().info("I AM AN OBSTACLE")
+
+
     def check_duplicates(self):
         duplicates_removed = 0
         n = len(self.object_list)

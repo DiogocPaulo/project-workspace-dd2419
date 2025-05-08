@@ -250,8 +250,6 @@ class ObjectDetectorNode(Node):
                 x_transformed = point_out.point.x
                 y_transformed = point_out.point.y
 
-                self.get_logger().info(f"adjusted_x:{x_transformed} and adjusted_y:{y_transformed}")
-
                 # Check if within workspace
                 if self.workspace_map is not None:
                     is_in = self.workspace_map.is_free(x_transformed, y_transformed, 75)
@@ -259,6 +257,8 @@ class ObjectDetectorNode(Node):
                     is_in = False
 
                 if is_in:
+                    if object_type == "box" or object_type == "plushie":
+                        self.get_logger().info(f"adjusted_x:{x_transformed} and adjusted_y:{y_transformed}")
                     object_msg = Object()
                     object_msg.x = x_transformed
                     object_msg.y = y_transformed
