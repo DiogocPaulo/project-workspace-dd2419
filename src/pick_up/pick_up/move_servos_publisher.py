@@ -48,7 +48,10 @@ class MultiServoPublisher(Node):
         
         self.service = self.create_service(PickObject, 'PickObject', self.task_callback)
 
-        self.service_fine_tune = self.create_service(JointMove, 'MoveArm', self.joint_callback)
+        self.service_fine_tune = self.create_service(JointMove, 'MoveArm', self.adjust_callback)
+
+        self.pos_subscriber = self.create_subscription(
+            JointState, '/servo_pos_publisher', self.pos_callback, 10)
 
         self.handle_camera = False
 
@@ -78,8 +81,6 @@ class MultiServoPublisher(Node):
             response.result = self.look_callback(request)
         elif request.description == "RETURN":
             response.result = self.return_callback(request)
-        elif request.description == "ADJUST":
-            response.result = self.adjust_callback(request)
         else:
             response.result = 2
             return response
@@ -492,16 +493,98 @@ class MultiServoPublisher(Node):
         self.publisher_marker.publish(marker)
         self.get_logger().info("Publishing object marker")
 
-    def joint_callback(self,request,response):
-        self.get_logger().info(f'Received move request request')
-        msg = request.input
+
+
+
+
+
+
+
+
+
+
+
+    def adjust_callback(self,request,response):
+        self.get_logger().info("Recieved Adjust request")
+        objects = request.objects
+        boxes = request.boxes
+        target = request.target
+
+        closest_obj = None
+        if target == 'objects':
+            closest_obj = min(objects, key=lambda DetectedData: DetectedData.distance)
+        elif target == 'boxes':
+            closest_obj = min(boxes, key=lambda DetectedData: DetectedData.distance)
+
+        if target == 'objects':
+            eps = 15
+        else:
+            eps = 30
+
+        #Check if within threshhold:
+        if closest_obj.distance <= eps:
+            self.get_logger().info("Adjusting complete")
+            response.result = 0
+            return response
+
+        step_size = 800
+        move_time = 400
+
+        if closest_obj.distance < 100:
+            step_size = 300
+            move_time = 150
+        if closest_obj.distance < 30:
+            step_size = 100
+            move_time = 100 
+        if closest_obj.distance < 10:
+            step_size = 50
+            move_time = 25
+
+        base = self.base
+        v3 = self.v3
+
+
+        if(closest_obj.diff_x > 0):
+            base += step_size
+        elif(closest_obj.diff_x < 0):
+            base -= step_size
+
+        #difference in y-axis
+        if(closest_obj.diff_y > 0):
+            v3 += step_size
+        elif(closest_obj.diff_y < 0):
+            v3 -= step_size
+
+        if not (base < 23900 and base > 100):
+            base = self.base
+
+        if  not (v3 < 20900 and v3 > 3100):
+            v3 = self.v3
+
+        msg = Int16MultiArray()
+        msg.layout = MultiArrayLayout(dim=[MultiArrayDimension(label="", size=12, stride=12)], data_offset=0)
+        pose = [11000,12000,int(v3),int(self.v2),int(self.v1),int(base),move_time,move_time,move_time,move_time,move_time,move_time]
+        msg.data = pose
+
         self.publisher.publish(msg)
 
-        response.result = 0
+        time = (move_time/1000)
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=time))
 
-        #self.clock.sleep_for(rclpy.duration.Duration(seconds=0.06))
-
+        response.result = 1
         return response
+
+
+    def pos_callback(self,msg):
+        self.base = msg.position[5]
+        self.v1 = msg.position[4]
+        self.v2 = msg.position[3]
+        self.v3 = msg.position[2]
+
+        
+
+        
+
 
         
 
