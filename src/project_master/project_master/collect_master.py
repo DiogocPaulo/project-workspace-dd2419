@@ -37,7 +37,7 @@ class CollectMaster(Node):
         self.distance_threshold = 0.08
         self.yaw_threshold = math.radians(5)
         self.resolution = 0.05
-        workspace_file = "workspaces/small_workspace.tsv"
+        workspace_file = "workspaces/angled_workspace.tsv"
 
         # Variables
         self.workspace_vertices = self.read_workspace(workspace_file, skip_header=True)
@@ -54,7 +54,7 @@ class CollectMaster(Node):
     def publish_workspace(self):
         workspace_msg = WorkspaceVertices()
         workspace_msg.header.stamp = self.get_clock().now().to_msg()
-        workspace_msg.header.frame_id = "odom"
+        workspace_msg.header.frame_id = "map"
 
         for vertex in self.workspace_vertices:
             vertex_msg = Vertex()
