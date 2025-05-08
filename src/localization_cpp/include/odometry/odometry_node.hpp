@@ -13,6 +13,8 @@
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
 
 // Math includes
 #include <cmath>
@@ -51,6 +53,10 @@ private:
     // Transform broadcaster
     std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
 
+    // Buffer for transform lookup
+    std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
+    std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+
     // Parameters
     double ticks_per_revolution_ = 48 * 64;
     double wheel_radius_ = 0.04921;
@@ -75,6 +81,9 @@ private:
 
     // Path storage
     nav_msgs::msg::Path odom_path_;
+
+    // Store latest odom to map transform
+    geometry_msgs::msg::TransformStamped odom_to_map_;
 };
 
 } // namespace Localization

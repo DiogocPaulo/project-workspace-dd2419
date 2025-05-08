@@ -5,10 +5,10 @@ namespace Localization {
 OdometryNode::OdometryNode() : Node("odometry"), then_time_(this->get_clock()->now()) {
     // Initialize subscribers
     encoder_sub_ = this->create_subscription<robp_interfaces::msg::Encoders>(
-        "/motor/encoders", 10,
+        "/motor/encoders", rclcpp::SensorDataQoS().keep_last(1),
         std::bind(&OdometryNode::encoderCallback, this, std::placeholders::_1));
     imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
-        "/imu/data_raw", 10,
+        "/imu/data_raw", rclcpp::SensorDataQoS().keep_last(1),
         std::bind(&OdometryNode::imuCallback, this, std::placeholders::_1));
 
     // Initialize publishers
@@ -23,11 +23,27 @@ OdometryNode::OdometryNode() : Node("odometry"), then_time_(this->get_clock()->n
     // Initialize transform broadcaster
     tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
 
+    // Initialize transform buffer and listener
+    tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
+    tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+
     // Initialize path header
     odom_path_.header.frame_id = "odom";
 
     // Initialize EKF instance
     ekf_ = EKF();
+
+    // Initialize odom to map to 0
+    // Set translation to zero
+    odom_to_map_.transform.translation.x = 0.0;
+    odom_to_map_.transform.translation.y = 0.0;
+    odom_to_map_.transform.translation.z = 0.0;
+
+    // Set rotation to identity quaternion (no rotation)
+    odom_to_map_.transform.rotation.x = 0.0;
+    odom_to_map_.transform.rotation.y = 0.0;
+    odom_to_map_.transform.rotation.z = 0.0;
+    odom_to_map_.transform.rotation.w = 1.0;
 
     RCLCPP_INFO(this->get_logger(), "OdometryNode initialized.");
 }
@@ -100,14 +116,16 @@ void OdometryNode::updateOdometry() {
         //RCLCPP_INFO(this->get_logger(), "Encoder vs IMU angular velocity: %.2f vs %.2f", angular_velocity, -angular_velocity_imu_.z);
 
         // Correct the state based on IMU data
-        ekf_.correct(-angular_velocity_imu_.z, elapsed_time); // <-- negative to match encoder data
+        if (std::abs(angular_velocity_imu_.z) > 0.1) {
+            //ekf_.correct(-angular_velocity_imu_.z, elapsed_time); // <-- negative to match encoder data
+            //RCLCPP_INFO(this->get_logger(), "Corrected State: x=%.2f, y=%.2f, theta=%.2f, v=%.2f, w=%.2f", state(0), state(1), state(2), state(3), state(4));
+        }
 
         // Reset IMU data received flag
         imu_data_received_ = false;
 
         // For debugging purposes print the corrected state
         state = ekf_.getState();
-        RCLCPP_INFO(this->get_logger(), "Corrected State: x=%.2f, y=%.2f, theta=%.2f, v=%.2f, w=%.2f", state(0), state(1), state(2), state(3), state(4));
     }
 
     // Publish the updated odometry based on the current state
@@ -116,19 +134,34 @@ void OdometryNode::updateOdometry() {
 
 
 void OdometryNode::publishOdometry(const rclcpp::Time& current_time) {
-    // Get the current state from the EKF (x, y, theta, v, w)
+    // Get current EKF state
     Eigen::VectorXd state = ekf_.getState();
     double x = state(0);
     double y = state(1);
     double theta = state(2);
-    double v = state(3);  // Linear velocity
-    double w = state(4);  // Angular velocity
+    double v = state(3);
+    double w = state(4);
 
-    // Create quaternion from orientation
-    tf2::Quaternion quaternion;
-    quaternion.setRPY(0.0, 0.0, theta);
+    // Create base_link pose in odom frame
+    tf2::Quaternion q;
+    q.setRPY(0.0, 0.0, theta);
+    geometry_msgs::msg::PoseStamped pose_odom;
+    pose_odom.header.stamp = current_time;
+    pose_odom.header.frame_id = "odom";
+    pose_odom.pose.position.x = x;
+    pose_odom.pose.position.y = y;
+    pose_odom.pose.position.z = 0.0;
+    pose_odom.pose.orientation = tf2::toMsg(q);
 
-    // Publish odometry transform
+    geometry_msgs::msg::PoseStamped pose_in_map;
+
+    // Try to transform to map frame
+    if (tf_buffer_->canTransform("map", "odom", tf2::TimePointZero, std::chrono::milliseconds(100))) {
+        odom_to_map_ = tf_buffer_->lookupTransform("map", "odom", tf2::TimePointZero);
+    }
+    tf2::doTransform(pose_odom, pose_in_map, odom_to_map_);
+
+    // Publish tf: odom -> base_link
     geometry_msgs::msg::TransformStamped transform_msg;
     transform_msg.header.stamp = current_time;
     transform_msg.header.frame_id = "odom";
@@ -136,34 +169,28 @@ void OdometryNode::publishOdometry(const rclcpp::Time& current_time) {
     transform_msg.transform.translation.x = x;
     transform_msg.transform.translation.y = y;
     transform_msg.transform.translation.z = 0.0;
-    transform_msg.transform.rotation = tf2::toMsg(quaternion);
+    transform_msg.transform.rotation = tf2::toMsg(q);
     tf_broadcaster_->sendTransform(transform_msg);
 
-    // Publish odometry message
+    // Publish odometry in map frame
     nav_msgs::msg::Odometry odometry_msg;
     odometry_msg.header.stamp = current_time;
-    odometry_msg.header.frame_id = "odom";
+    odometry_msg.header.frame_id = "map";  // Important: use map frame
     odometry_msg.child_frame_id = "base_link";
-    odometry_msg.pose.pose.position.x = x;
-    odometry_msg.pose.pose.position.y = y;
-    odometry_msg.pose.pose.position.z = 0.0;
-    odometry_msg.pose.pose.orientation = tf2::toMsg(quaternion);
+    odometry_msg.pose.pose = pose_in_map.pose;
     odometry_msg.twist.twist.linear.x = v;
-    odometry_msg.twist.twist.linear.y = 0.0;
     odometry_msg.twist.twist.angular.z = w;
     odom_pub_->publish(odometry_msg);
 
-    // Publish odometry path
+    // Publish path in map frame
     odom_path_.header.stamp = current_time;
-    geometry_msgs::msg::PoseStamped pose;
-    pose.header = odom_path_.header;
-    pose.pose.position.x = x;
-    pose.pose.position.y = y;
-    pose.pose.position.z = 0.01; // Slightly above ground for visualization
-    pose.pose.orientation = tf2::toMsg(quaternion);
-    odom_path_.poses.push_back(pose);
+    odom_path_.header.frame_id = "map";
+    geometry_msgs::msg::PoseStamped path_pose = pose_in_map;
+    path_pose.pose.position.z = 0.01;  // Slightly above ground for RViz
+    odom_path_.poses.push_back(path_pose);
     path_pub_->publish(odom_path_);
 }
+
 
 } // namespace Localization
 

@@ -27,73 +27,18 @@ public:
         target_cloud_->EstimateNormals(open3d::geometry::KDTreeSearchParamHybrid(threshold_, 30));
     }
 
-    // Perform ICP and return transformation
-    Eigen::Matrix3d computeTransform(const std::vector<Eigen::Vector2d>& source_pts) {
-        if (target_pts_.empty()) {
-            std::cerr << "Target not set for ICP!" << std::endl;
-            return Eigen::Matrix3d::Identity();
-        }
-
-        // Convert source to Open3D PointCloud (reuse preallocated memory if possible)
-        auto source_cloud = std::make_shared<open3d::geometry::PointCloud>();
-        source_cloud->points_.reserve(source_pts.size());
-        for (const auto& p : source_pts) {
-            source_cloud->points_.emplace_back(p.x(), p.y(), 0.0);
-        }
-
-        // Run ICP
-        auto result = open3d::pipelines::registration::RegistrationICP(
-            *source_cloud, *target_cloud_, threshold_, Eigen::Matrix4d::Identity(),
-            open3d::pipelines::registration::TransformationEstimationPointToPoint(),
-            criteria_
-        );
-
-        // Extract 2D transform efficiently
-        Eigen::Matrix3d transform = Eigen::Matrix3d::Identity();
-        transform.block<2, 2>(0, 0) = result.transformation_.block<2, 2>(0, 0);
-        transform.block<2, 1>(0, 2) = result.transformation_.block<2, 1>(0, 3);
-
-        return transform;
-    }
-
-    // Get aligned points (optional, avoids redundant transform computation)
-    std::vector<Eigen::Vector2d> getAlignedPoints(const std::vector<Eigen::Vector2d>& source_pts) {
-        if (target_pts_.empty()) {
-            std::cerr << "Target not set for ICP!" << std::endl;
-            return source_pts;
-        }
-
-        // Reuse computeTransform’s logic but apply transform to points
-        auto source_cloud = std::make_shared<open3d::geometry::PointCloud>();
-        source_cloud->points_.reserve(source_pts.size());
-        for (const auto& p : source_pts) {
-            source_cloud->points_.emplace_back(p.x(), p.y(), 0.0);
-        }
-
-        auto result = open3d::pipelines::registration::RegistrationICP(
-            *source_cloud, *target_cloud_, threshold_, Eigen::Matrix4d::Identity(),
-            open3d::pipelines::registration::TransformationEstimationPointToPoint(),
-            criteria_
-        );
-
-        source_cloud->Transform(result.transformation_);
-        std::vector<Eigen::Vector2d> aligned_pts;
-        aligned_pts.reserve(source_cloud->points_.size());
-        for (const auto& p : source_cloud->points_) {
-            aligned_pts.emplace_back(p.x(), p.y());
-        }
-
-        return aligned_pts;
-    }
-
-    // Combined method: Get transform and aligned points in one call
+    // Combined method: Get transform, aligned points, fitness, RMSE, and correspondences
     void computeICP(const std::vector<Eigen::Vector2d>& source_pts,
                     Eigen::Matrix3d& transform,
-                    std::vector<Eigen::Vector2d>& aligned_pts) {
+                    std::vector<Eigen::Vector2d>& aligned_pts,
+                    double& fitness,
+                    double& inlier_rmse) {
         if (target_pts_.empty()) {
             std::cerr << "Target not set for ICP!" << std::endl;
             transform = Eigen::Matrix3d::Identity();
             aligned_pts = source_pts;
+            fitness = 0.0;
+            inlier_rmse = 0.0;
             return;
         }
 
@@ -112,6 +57,9 @@ public:
         // Extract transform
         transform.block<2, 2>(0, 0) = result.transformation_.block<2, 2>(0, 0);
         transform.block<2, 1>(0, 2) = result.transformation_.block<2, 1>(0, 3);
+        transform(2, 0) = 0.0;
+        transform(2, 1) = 0.0;
+        transform(2, 2) = 1.0;
 
         // Apply transform and extract aligned points
         source_cloud->Transform(result.transformation_);
@@ -120,6 +68,10 @@ public:
         for (const auto& p : source_cloud->points_) {
             aligned_pts.emplace_back(p.x(), p.y());
         }
+
+        // Extract requested ICP metrics
+        fitness = result.fitness_;
+        inlier_rmse = result.inlier_rmse_;
     }
 
 private:
