@@ -69,9 +69,9 @@ class ArmCamera(Node):
             x1, y1, x2, y2 = map(int, result.xyxy[0])
             confidence = float(result.conf[0])
 
-            if confidence < CONFIDENCE_THRESHOLD:
-                continue 
-                
+            # if confidence < CONFIDENCE_THRESHOLD:
+            #     continue 
+
             class_idx = int(result.cls[0])
 
             label = class_names[class_idx] if class_idx < len(class_names) else "Unknown"
@@ -80,7 +80,8 @@ class ArmCamera(Node):
             cv2.rectangle(cv_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
             # Draw label text
-            cv2.putText(cv_image, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+            label_text = f"{label} {confidence*100:.1f}%"  # e.g., "Box 92.5%"
+            cv2.putText(cv_image, label_text, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
             # Calculate center of the box
             center_x = (x1 + x2) // 2
