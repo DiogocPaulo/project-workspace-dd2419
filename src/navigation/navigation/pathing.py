@@ -45,7 +45,7 @@ class Pathing(Node):
         self.create_subscription(Odometry, "/odom", self.odom_callback, qos_profile)
         self.create_subscription(OccupancyGrid, "/workspace_map", self.workspace_map_callback, qos_profile)
         self.create_subscription(OccupancyGrid, "/objects_map", self.objects_map_callback, qos_profile)
-        self.create_subscription(OccupancyGrid, "/obstacles_map", self.obstacles_map_callback, qos_profile)
+        # self.create_subscription(OccupancyGrid, "/obstacles_map", self.obstacles_map_callback, qos_profile)
         self.path_publisher = self.create_publisher(NavPath, "/custom_path", 10)
         self.temp_path_publisher = self.create_publisher(Path, "/temp_path", 10)
         self.path_map_publisher = self.create_publisher(OccupancyGrid, "/path_map", 10)
@@ -56,7 +56,7 @@ class Pathing(Node):
         # Constants
         self.adaptive_h = {}
         self.workspace_inflation_radius = 0.30
-        self.objects_inflation_radius = 0.35
+        self.objects_inflation_radius = 0.40
         self.obstacles_inflation_radius = 0.35
 
         # Variables
@@ -183,7 +183,7 @@ class Pathing(Node):
 
         map_msg = OccupancyGrid()
         map_msg.header.stamp = self.get_clock().now().to_msg()
-        map_msg.header.frame_id = "map"
+        map_msg.header.frame_id = "odom"
 
         map_msg.info.resolution = self.inflated_map.resolution
         map_msg.info.width = self.inflated_map.grid_width
@@ -213,7 +213,7 @@ class Pathing(Node):
 
         map_msg = OccupancyGrid()
         map_msg.header.stamp = self.get_clock().now().to_msg()
-        map_msg.header.frame_id = "map"
+        map_msg.header.frame_id = "odom"
 
         map_msg.info.resolution = self.inflated_map.resolution
         map_msg.info.width = self.inflated_map.grid_width
@@ -235,7 +235,7 @@ class Pathing(Node):
     def publish_temp_path(self, path):
         path_msg = Path()
         path_msg.header.stamp = self.get_clock().now().to_msg()
-        path_msg.header.frame_id = "map"
+        path_msg.header.frame_id = "odom"
 
         if path is not None:
             for point in path:
@@ -254,7 +254,7 @@ class Pathing(Node):
     def publish_path(self, path):
         path_msg = NavPath()
         path_msg.header.stamp = self.get_clock().now().to_msg()
-        path_msg.header.frame_id = "map"
+        path_msg.header.frame_id = "odom"
 
         if path is not None:
             for point in path:
@@ -264,8 +264,12 @@ class Pathing(Node):
                 point_msg.y = y
                 path_msg.path.append(point_msg)
             point_msg = NavPoint()
-            point_msg.x = self.end_point[0]
-            point_msg.y = self.end_point[1]
+            if self.backing:
+                point_msg.x = self.safe_point[0]
+                point_msg.y = self.safe_point[1]
+            else:
+                point_msg.x = self.end_point[0]
+                point_msg.y = self.end_point[1]
             path_msg.path.append(point_msg)
         else:
             path_msg.path = []
@@ -289,12 +293,16 @@ class Pathing(Node):
         quaternion.w = np.cos(self.target_yaw * 0.5)
 
         transform_msg = TransformStamped()
-        transform_msg.header.frame_id = "map"
+        transform_msg.header.frame_id = "odom"
         transform_msg.header.stamp = self.get_clock().now().to_msg()
         transform_msg.child_frame_id = "end_point"
 
-        transform_msg.transform.translation.x = self.end_point[0]
-        transform_msg.transform.translation.y = self.end_point[1]
+        if self.backing:
+            transform_msg.transform.translation.x = self.safe_point[0]
+            transform_msg.transform.translation.y = self.safe_point[1]
+        else:
+            transform_msg.transform.translation.x = self.end_point[0]
+            transform_msg.transform.translation.y = self.end_point[1]
         transform_msg.transform.translation.z = 0.0
 
         transform_msg.transform.rotation.x = quaternion.x
@@ -323,7 +331,7 @@ class Pathing(Node):
         if not self.approaching_object and not self.backing and not self.inflated_map.is_free(self.start_point[0], self.start_point[1], 75):
             self.get_logger().info("Entering reverse travel mode")
             self.backing = True
-            self.safe_point = self.inflated_map.get_safe_point(self.start_point[0], self.start_point[1], 6, 75)
+            self.safe_point = self.inflated_map.get_closest_safe_point(self.start_point[0], self.start_point[1], 5, 75)
             if self.safe_point is None:
                 self.safe_point = (0.0, 0.0)
 
