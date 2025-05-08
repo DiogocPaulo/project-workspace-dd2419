@@ -146,6 +146,11 @@ class CollectMaster(Node):
             name = f"Check_Object",
             t = "objects"
         )
+        arm_return = behaviours.Return(
+            name = f"Return",
+            t = "objects",
+            task = "RETURN"
+        )
 
         object_look_fallback = py_trees.composites.Selector(f"LookFallback_Object", memory=True)
         object_look_fallback.add_children([
@@ -161,12 +166,18 @@ class CollectMaster(Node):
         ])
         retry_pickup = py_trees.decorators.Retry(name="RetryPickup", child=pickup_routine, num_failures=2)
 
+        return_after_failed_pickup_fallback = py_trees.composites.Selector("ReturnAfterFailedPickupFallback", memory=True)
+        return_after_failed_pickup_fallback.add_children([
+            retry_pickup,
+            arm_return
+        ])
+
         pickup_sequence = py_trees.composites.Sequence("PickupSequence", memory=True)
         pickup_sequence.add_children([
             find_closest_object,
             object_safe_point_sequence,
             object_approach_point_sequence,
-            retry_pickup,
+            return_after_failed_pickup_fallback,
         ])
 
         find_closest_box = behaviours.FindClosestObject(

@@ -1153,3 +1153,69 @@ class Drop(py_trees.behaviour.Behaviour):
                 #     return py_trees.common.Status.FAILURE
 
             return py_trees.common.Status.RUNNING
+
+class Return(py_trees.behaviour.Behaviour):
+    """
+    A behaviour that determines the next end point and navigates to it.
+    """
+    def __init__(self, name, t, task, **kwargs):
+        super().__init__(name)
+        self.type = t
+        self.node = None
+        self.request_args = kwargs
+        self.stage = 0
+        self.future = None
+        self.task = task
+
+
+    def setup(self, **kwargs):
+        try:
+            self.node = kwargs.get("node")
+        except Exception as e:
+            self.node.get_logger.error(f"{self.name} - Setup failed: {e}")
+            return False
+
+        self.pickup_client = self.node.create_client(PickObject, 'PickObject')
+        while not self.pickup_client.wait_for_service(timeout_sec=1.0):
+            self.node.get_logger().info('Service not available, waiting...')
+
+
+        return True
+
+    def initialise(self):
+        self.stage = 0
+        self.future = None
+
+
+    def update(self):
+        elif self.stage == 0:
+            try:
+                request = PickObject.Request()
+
+                request.header = Header()
+                request.header.stamp = self.node.get_clock().now().to_msg()
+                request.header.frame_id = "arm_base"
+                request.point = GeometryPoint()
+                request.point.x = self.x
+                request.point.y = self.y
+                request.point.z = 0.0
+                request.description = self.task
+
+                self.future = self.pickup_client.call_async(request)
+                self.stage = 1
+                self.node.get_logger().info(f"{self.name} - Sent request to Return")
+                return py_trees.common.Status.RUNNING
+            except Exception as e:
+                self.node.get_logger().error(f"{self.name} - Failed to send request: {e}")
+                return py_trees.common.Status.FAILURE
+
+
+        elif self.stage == 1:
+            if self.future.done():
+                response = self.future.result()
+                if response.result == 0:
+                    return py_trees.common.Status.SUCCESS
+                else:
+                    return py_trees.common.Status.FAILURE
+
+            return py_trees.common.Status.RUNNING
