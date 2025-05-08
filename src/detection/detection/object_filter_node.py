@@ -65,7 +65,7 @@ class ObjectFilterNode(Node):
                 is_duplicate = False
                 for i, obj in enumerate(self.initial_object_list[:-1]):
                     distance = np.sqrt((raw_obj.x - obj.x)**2 + (raw_obj.y - obj.y)**2)
-                    if raw_obj.object_type == "box" or obj.object_type == "box":
+                    if obj.object_type == "box":
                         if distance < 0.24:    #f the object is within 1 cm of an existing object
                             is_duplicate = True
                             break
@@ -174,7 +174,7 @@ class ObjectFilterNode(Node):
 
                 # Determine threshold based on types
                 if obj1.object_type == "box" or obj2.object_type == "box":
-                    threshold = 0.18  # Boxes need 18cm
+                    threshold = 0.24  # Boxes need 18cm
                 elif obj1.object_type == obj2.object_type: 
                     threshold = 0.15
                 else:

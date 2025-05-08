@@ -180,35 +180,7 @@ class ObjectDetectorNode(Node):
                     frame_objects.append(obj)
             elif self.is_box(cluster_points):
                 angle = self.estimate_box_orientation(cluster_points)
-                centroid = np.mean(cluster_points, axis=0)  
-                direction = np.array([centroid[0], centroid[1], centroid[2]])
-
-                direction_magnitude = np.linalg.norm(direction)
-                if direction_magnitude > 0:
-                    direction_unit = direction / direction_magnitude
-                else:
-                    direction_unit = np.zeros_like(direction)
-
-                # Determine offset based on angle (half of hidden dimension)
-                if angle == 0:
-                    offset = 0.08  # Half of 16cm width (hidden dimension)
-                elif angle == 90:
-                    offset = 0.12  # Half of 24cm length (hidden dimension)
-                else:
-                    offset = 0.0
-
-                # Adjust centroid by moving along the line of sight
-                adjustment = offset * direction_unit
-                adjusted_centroid = centroid + adjustment
-
-                # Extract adjusted coordinates (x, z are horizontal; y is vertical)
-                x_adj = adjusted_centroid[0]
-                z_adj = adjusted_centroid[2]
-                y_adj = adjusted_centroid[1]  # Already accounts for half the box's height
-
-                self.get_logger().info(f"adjusted:{adjusted_centroid}")
-
-                obj = self.create_object(x_adj, z_adj, angle, Object.BOX, msg.header.stamp)
+                obj = self.create_object(x, z, angle, Object.BOX, msg.header.stamp)
                 if obj is not None:
                     frame_objects.append(obj)
 
@@ -242,13 +214,41 @@ class ObjectDetectorNode(Node):
                     point_in.header.stamp,
                     rclpy.duration.Duration(seconds=1.0)
                 )
-                
+
                 # Transform the point to the map frame
                 point_out = do_transform_point(point_in, transform)
 
                 # Extract the transformed coordinates
                 x_transformed = point_out.point.x
                 y_transformed = point_out.point.y
+
+                if object_type == "box":
+                    direction = np.array([x_transformed, y_transformed])
+
+                    direction_magnitude = np.linalg.norm(direction)
+                    if direction_magnitude > 0:
+                        direction_unit = direction / direction_magnitude
+                    else:
+                        direction_unit = np.zeros_like(direction)
+
+                    # Determine offset based on angle (half of hidden dimension)
+                    if angle == 0:
+                        offset = 0.08  # Half of 16cm width (hidden dimension)
+                    elif angle == 90:
+                        offset = 0.12  # Half of 24cm length (hidden dimension)
+                    else:
+                        offset = 0.0
+
+                    # Adjust centroid by moving along the line of sight
+                    adjustment = offset * direction_unit
+                    adjusted_centroid = [x_transformed, y_transformed] + adjustment
+
+                    # Extract adjusted coordinates (x, z are horizontal; y is vertical)
+                    x_adj = adjusted_centroid[0]
+                    y_adj = adjusted_centroid[1]
+
+                    self.get_logger().info(f"before:{direction} adjusted:{adjusted_centroid}")
+
 
                 # Check if within workspace
                 if self.workspace_map is not None:
