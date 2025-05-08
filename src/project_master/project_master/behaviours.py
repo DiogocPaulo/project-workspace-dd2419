@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import time
 import math
 import numpy as np
 
@@ -15,12 +16,17 @@ from nav_msgs.msg import Path, Odometry, OccupancyGrid
 from project_interfaces.msg import Vertex, WorkspaceVertices, Object, ObjectList
 from mapping.map import Map
 
+import tf2_ros
+from tf2_ros.buffer import Buffer
+from tf2_ros.transform_listener import TransformListener
+import tf2_geometry_msgs
+
 from std_msgs.msg import Int16MultiArray, MultiArrayLayout, MultiArrayDimension
 from sensor_msgs.msg import JointState
 from builtin_interfaces.msg import Duration
-import time
 from std_msgs.msg import Header
 from geometry_msgs.msg import Point as GeometryPoint
+from geometry_msgs.msg import PointStamped, TransformStamped, Pose, Quaternion, Vector3
 
 from project_master import behaviours
 
@@ -284,6 +290,159 @@ class GoToSafePointClient(py_trees.behaviour.Behaviour):
                 request.reverse = False
                 request.slow_approach = False
                 request.approaching_object = False
+
+                self.future = self.client.call_async(request)
+                self.sent_request = True
+                self.node.get_logger().info(f"{self.name} - Sent request to {self.service_name}")
+                return py_trees.common.Status.RUNNING
+            except Exception as e:
+                self.node.get_logger().error(f"{self.name} - Failed to send request: {e}")
+                return py_trees.common.Status.FAILURE
+
+        if self.future.done():
+            try:
+                response = self.future.result()
+                if response.success:
+                    self.node.get_logger().info(f"{self.name} - Service call response: {response.success}, {response.message}")
+                    return py_trees.common.Status.SUCCESS
+                else:
+                    self.node.get_logger().info(f"{self.name} - Service call response: {response.success}, {response.message}")
+                    return py_trees.common.Status.FAILURE
+            except Exception as e:
+                self.node.get_logger().error(f"{self.name} - Service call failed with exception: {e}")
+                return py_trees.common.Status.FAILURE
+        else:
+            return py_trees.common.Status.RUNNING
+
+class GoToRepositionPointClient(py_trees.behaviour.Behaviour):
+    def __init__(self, name, service_name, approach_offset, input_key, output_key):
+        super().__init__(name)
+        self.service_name = service_name
+        self.approach_offset = approach_offset
+        self.object_point_key = input_key
+        self.waypoint_key = output_key
+        self.current_point = (0.0, 0.0)
+        self.current_yaw = 0.0
+        self.approach_point = None
+        self.approach_yaw = 0.0
+        self.client = None
+        self.future = None
+        self.sent_request = False
+        self.blackboard = self.attach_blackboard_client(name=name)
+        self.blackboard.register_key(
+            key=self.object_point_key,
+            access=py_trees.common.Access.READ
+        )
+        self.blackboard.register_key(
+            key=self.waypoint_key,
+            access=py_trees.common.Access.WRITE
+        )
+
+    def setup(self, **kwargs):
+        try:
+            self.node = kwargs.get("node")
+        except Exception as e:
+            self.logger.error(f"{self.name} - Setup failed: {e}")
+            return False
+
+        qos_profile = QoSProfile(
+            depth=1,
+            history=HistoryPolicy.KEEP_LAST,
+            reliability=ReliabilityPolicy.BEST_EFFORT
+        )
+
+        self.client = self.node.create_client(GoToPoint, self.service_name)
+        self.node.create_subscription(Odometry, "/odom", self.odom_callback, qos_profile)
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self, spin_thread=True)
+        return True
+
+    def initialise(self):
+        self.approach_point = None
+        self.approach_yaw = 0.0
+        self.sent_request = False
+        self.future = None
+
+    def odom_callback(self, msg: Odometry):
+        self.current_point = (msg.pose.pose.position.x, msg.pose.pose.position.y)
+        q = msg.pose.pose.orientation
+        siny_cosp = 2 * (q.w * q.z + q.x * q.y)
+        cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z)
+        self.current_yaw = np.arctan2(siny_cosp, cosy_cosp)
+
+    def calculate_approach_point(self, start_point, end_point, offset):
+        start_x, start_y = start_point
+        end_x, end_y = end_point
+
+        line_length = np.hypot(start_x - end_x, start_y - end_y)
+        if offset > line_length:
+            self.logger.error(f"{self.name} - Offset distance greater than line length to object")
+            return py_trees.common.Status.FAILURE
+        if line_length == 0:
+            self.logger.error(f"{self.name} - Distance to object is zero")
+            return py_trees.common.Status.FAILURE
+
+        norm_x = (start_x - end_x) / line_length
+        norm_y = (start_y - end_y) / line_length
+        self.approach_point = (end_x + norm_x * offset, end_y + norm_y * offset)
+        self.approach_yaw = np.arctan2(
+            end_y - self.approach_point[1],
+            end_x - self.approach_point[0]
+        )
+        waypoint = (self.approach_point[0], self.approach_point[1], self.approach_yaw)
+        self.blackboard.set(self.waypoint_key, waypoint, overwrite=True)
+
+    def transform_point(self, x, y, transform_msg: TransformStamped):
+        point_msg = PointStamped()
+        point_msg.header.frame_id = transform_msg.header.frame_id
+        point_msg.header.stamp = transform_msg.header.stamp
+        point_msg.point.x = x
+        point_msg.point.y = y
+        point_msg.point.z = 0.0
+
+        transformed_point_msg = tf2_geometry_msgs.do_transform_point(
+            point_msg, transform_msg
+        )
+
+        transformed_x = transformed_point_msg.point.x
+        transformed_y = transformed_point_msg.point.y
+        return transformed_x, transformed_y
+
+    def update(self):
+        if not self.client.service_is_ready():
+            self.node.get_logger().info(f"{self.name} - Waiting for service {self.service_name} ...")
+            return py_trees.common.Status.RUNNING
+        try:
+            object_point = self.blackboard.get(self.object_point_key)
+        except Exception as e:
+            self.logger.error(f"{self.name} - Error reading blackboard: {e}")
+            return py_trees.common.Status.INVALID
+        try:
+            arm_transform = self.tf_buffer.lookup_transform(
+                "map",
+                "arm_base",
+                rclpy.time.Time(seconds=0),
+                rclpy.duration.Duration(seconds=1.0)
+            )
+        except tf2_ros.TransformException as ex:
+            self.get_logger().warn(f"Could not find transform between arm base to map frames: {ex}")
+            return
+
+        if self.approach_point is None:
+            new_object_x, new_object_y = self.transform_point(object_point[0], object_point[1], arm_transform)
+            object_point = (new_object_x, new_object_y)
+            self.calculate_approach_point(self.current_point, object_point, self.approach_offset)
+
+        if not self.sent_request:
+            try:
+                request = GoToPoint.Request()
+                request.x = self.approach_point[0]
+                request.y = self.approach_point[1]
+                request.yaw = self.approach_yaw
+                request.velocity = 0.12
+                request.reverse = False
+                request.slow_approach = True
+                request.approaching_object = True
 
                 self.future = self.client.call_async(request)
                 self.sent_request = True
@@ -810,7 +969,7 @@ class Check(py_trees.behaviour.Behaviour):
         self.stage = 0
         self.future = None
         self.counter = 0
-        self.counter_max = 10
+        self.counter_max = 5
 
 
     def setup(self, **kwargs):
@@ -937,7 +1096,6 @@ class Pick(py_trees.behaviour.Behaviour):
 
 
         elif self.stage == 1:
-            #self.node.get_logger().info(f"Stage: 1")
             if time.time() - self.start_time >= 0.5:
                 self.stage = 2
 
@@ -945,7 +1103,6 @@ class Pick(py_trees.behaviour.Behaviour):
 
         # Stage 2 estimates the position of the target given where the arm is pointing
         elif self.stage == 2:
-            #self.node.get_logger().info(f"Stage: 2")
             l1 = 0.101
             l2 = 0.095
             base = math.radians((12000 - self.base) / 100)
@@ -973,7 +1130,6 @@ class Pick(py_trees.behaviour.Behaviour):
 
         # Pick upp target
         elif self.stage == 3:
-            #self.node.get_logger().info(f"Stage: 3")
             try:
                 request = PickObject.Request()
 
@@ -996,7 +1152,6 @@ class Pick(py_trees.behaviour.Behaviour):
 
 
         elif self.stage == 4:
-            #self.node.get_logger().info(f"Stage: 4")
             if self.future.done():
                 response = self.future.result()
                 if response.result == 0:
@@ -1068,7 +1223,6 @@ class Drop(py_trees.behaviour.Behaviour):
 
         # First two stages is to pass some time to allow the correct joint readings to be read
         if self.stage == 0:
-            #self.node.get_logger().info(f"Stage: 0")
             self.start_time = time.time()
 
             self.stage = 1
@@ -1076,7 +1230,6 @@ class Drop(py_trees.behaviour.Behaviour):
 
 
         elif self.stage == 1:
-            #self.node.get_logger().info(f"Stage: 1")
             if time.time() - self.start_time >= 0.5:
                 self.stage = 2
 
@@ -1084,7 +1237,6 @@ class Drop(py_trees.behaviour.Behaviour):
 
         # Stage 2 estimates the position of the target given where the arm is pointing
         elif self.stage == 2:
-            #self.node.get_logger().info(f"Stage: 2")
             l1 = 0.101
             l2 = 0.095
             base = math.radians((12000 - self.base) / 100)
@@ -1115,7 +1267,6 @@ class Drop(py_trees.behaviour.Behaviour):
 
         # Pick upp target
         elif self.stage == 3:
-            #self.node.get_logger().info(f"Stage: 3")
             try:
                 request = PickObject.Request()
 
@@ -1138,7 +1289,6 @@ class Drop(py_trees.behaviour.Behaviour):
 
 
         elif self.stage == 4:
-            #self.node.get_logger().info(f"Stage: 4")
             if self.future.done():
                 response = self.future.result()
                 if response.result == 0:
@@ -1149,8 +1299,6 @@ class Drop(py_trees.behaviour.Behaviour):
                         self.stage = 2
                     else:
                         return py_trees.common.Status.FAILURE
-                # else:
-                #     return py_trees.common.Status.FAILURE
 
             return py_trees.common.Status.RUNNING
 
@@ -1186,9 +1334,8 @@ class Return(py_trees.behaviour.Behaviour):
         self.stage = 0
         self.future = None
 
-
     def update(self):
-        elif self.stage == 0:
+        if self.stage == 0:
             try:
                 request = PickObject.Request()
 

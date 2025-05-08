@@ -103,7 +103,7 @@ class CollectMaster(Node):
         object_approach_point_client = behaviours.GoToApproachPointClient(
             name="ApproachPointClient_Object",
             service_name="/pathing_end_point",
-            approach_offset=0.15,
+            approach_offset=0.20,
             input_key="closest_object",
             output_key="object_approach_waypoint",
         )
@@ -172,12 +172,100 @@ class CollectMaster(Node):
             arm_return
         ])
 
+        # Object Arm Point
+        object_reposition_point_client = behaviours.GoToRepositionPointClient(
+            name="RepositionPointClient_Object",
+            service_name="/pathing_end_point",
+            approach_offset=0.20,
+            input_key="object_position",
+            output_key="object_reposition_waypoint",
+        )
+        object_reached_reposition_point = behaviours.ReachedWaypoint(
+            name="ReachedRepositionPoint_Object",
+            input_key="object_reposition_waypoint",
+            distance_threshold=self.distance_threshold,
+            yaw_threshold=self.yaw_threshold,
+        )
+        object_reposition_point_sequence = py_trees.composites.Sequence(
+            name="RepositionPointSequence_Object",
+            memory=False,
+        )
+        object_reposition_point_sequence.add_children([
+            object_reposition_point_client,
+            object_reached_reposition_point,
+        ])
+
+        # Reposition Pickup Routine
+        reposition_object_look = behaviours.Look(
+            name=f"Look_Object",
+            x=0.2,
+            y=0.0,
+            t = "objects"
+        )
+        reposition_object_sweep = behaviours.Sweep(
+            name=f"Sweep_Object",
+            t = "objects"
+        )
+        reposition_object_adjust = behaviours.Adjust(
+            name = f"Adjust_Object",
+            t = "objects"
+        )
+        reposition_pickup = behaviours.Pick(
+            name = f"Pickup",
+            t = "objects",
+            task = "PICKUP"
+        )
+        reposition_object_check = behaviours.Check(
+            name = f"Check_Object",
+            t = "objects"
+        )
+        reposition_arm_return = behaviours.Return(
+            name = f"Return",
+            t = "objects",
+            task = "RETURN"
+        )
+
+
+        reposition_object_look_fallback = py_trees.composites.Selector(f"LookFallback_Object", memory=True)
+        reposition_object_look_fallback.add_children([
+            reposition_object_look,
+            reposition_object_sweep,
+        ])
+        reposition_pickup_routine = py_trees.composites.Sequence(f"PickupRoutine", memory=True)
+        reposition_pickup_routine.add_children([
+            reposition_object_look_fallback,
+            reposition_object_adjust,
+            reposition_pickup,
+            reposition_object_check,
+        ])
+        reposition_retry_pickup = py_trees.decorators.Retry(name="RetryPickup", child=pickup_routine, num_failures=2)
+
+        reposition_return_after_failed_pickup_fallback = py_trees.composites.Selector("ReturnAfterFailedPickupFallback", memory=True)
+        reposition_return_after_failed_pickup_fallback.add_children([
+            reposition_retry_pickup,
+            reposition_arm_return
+        ])
+    
+        reposition_and_pickup = py_trees.composites.Sequence("RepositionAndPickup", memory=True)
+        reposition_and_pickup.add_children([
+            object_reposition_point_sequence,
+            reposition_return_after_failed_pickup_fallback,
+        ])
+
+        retry_reposition_and_pickup = py_trees.decorators.Retry("RetryRepositionAndPickup", child=reposition_and_pickup, num_failures=1)
+
+        pickup_attempt = py_trees.composites.Selector("PickupAttempt", memory=True)
+        pickup_attempt.add_children([
+            return_after_failed_pickup_fallback,
+            retry_reposition_and_pickup,
+        ])
+
         pickup_sequence = py_trees.composites.Sequence("PickupSequence", memory=True)
         pickup_sequence.add_children([
             find_closest_object,
             object_safe_point_sequence,
             object_approach_point_sequence,
-            return_after_failed_pickup_fallback,
+            pickup_attempt,
         ])
 
         find_closest_box = behaviours.FindClosestObject(
@@ -212,7 +300,7 @@ class CollectMaster(Node):
         box_approach_point_client = behaviours.GoToApproachPointClient(
             name="ApproachPointClient_Box",
             service_name="/pathing_end_point",
-            approach_offset=0.3 ,
+            approach_offset=0.25,
             input_key="closest_box",
             output_key="box_approach_waypoint",
         )
