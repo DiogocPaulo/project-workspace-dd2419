@@ -173,9 +173,9 @@ class ObjectDetectorNode(Node):
                     if obj is not None:
                         frame_objects.append(obj)
             elif self.is_plushie(cluster_points):
-                self.get_logger().info(f"red:{red_ratio}, blue:{blue_ratio}, green:{green_ratio} IM PLUSHIE")
+                #self.get_logger().info(f"red:{red_ratio}, blue:{blue_ratio}, green:{green_ratio} IM PLUSHIE")
                 obj = self.create_object(x + 0.01, z, 0.0, Object.PLUSHIE, msg.header.stamp)
-                self.get_logger().info(f"OI: {obj}")
+                #self.get_logger().info(f"OI: {obj}")
                 if obj is not None:
                     frame_objects.append(obj)
             elif self.is_box(cluster_points):
