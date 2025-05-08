@@ -51,6 +51,6 @@ def generate_launch_description():
             executable="object_filter_node",
             name="robot_detection_filter",
             emulate_tty=True,
-            ros_arguments=["--log-level", "warn"]
+            ros_arguments=["--log-level", "info"]
         ),
     ])
