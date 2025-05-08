@@ -61,13 +61,13 @@ class MapObstacles(Node):
 
         try:
             lidar_transform = self.tf_buffer.lookup_transform(
-                "odom",
+                "map",
                 msg.header.frame_id,
                 rclpy.time.Time(seconds=0),
                 rclpy.duration.Duration(seconds=1.0)
             )
         except tf2_ros.TransformException as ex:
-            self.get_logger().warn(f"Could not find transform between lidar to odom frames: {ex}")
+            self.get_logger().warn(f"Could not find transform between lidar to map frames: {ex}")
             return
 
         lidar_origin_x, lidar_origin_y = self.transform_point(0.0, 0.0, lidar_transform)
@@ -109,7 +109,7 @@ class MapObstacles(Node):
             return
         map_msg = OccupancyGrid()
         map_msg.header.stamp = self.get_clock().now().to_msg()
-        map_msg.header.frame_id = "odom"
+        map_msg.header.frame_id = "map"
 
         map_msg.info.resolution = self.obstacles_map.resolution
         map_msg.info.width = self.obstacles_map.grid_width

@@ -86,7 +86,7 @@ class ObjectFilterNode(Node):
                 self.object_list.append(object_msg)
 
                 object_list_msg = ObjectList()
-                object_list_msg.header.frame_id = "odom"
+                object_list_msg.header.frame_id = "map"
                 object_list_msg.header.stamp = msg.header.stamp
                 object_list_msg.length = len(self.object_list)
                 object_list_msg.objects = self.object_list
@@ -116,6 +116,8 @@ class ObjectFilterNode(Node):
             
             # Find most common type if we have enough consistent observations
             if len(nearby) >= MIN_CONSISTENT:
+                mean_x = np.mean([obj.x for obj in nearby])
+                mean_y = np.mean([obj.y for obj in nearby])
                 most_common, count = max(type_counts.items(), key=lambda x: x[1])
                 if count >= MIN_CONSISTENT:
                     for i, obj in enumerate(self.object_list):
@@ -127,13 +129,15 @@ class ObjectFilterNode(Node):
                                     self.object_list[i].object_type = "box"
                                     break
                             elif dist <= CONFIDENCE_RADIUS:
+                                self.object_list[i].x = mean_x
+                                self.object_list[i].y = mean_y
                                 # Update the type in the main object list
                                 self.object_list[i].object_type = most_common
                                 break
 
                     # Re-publish the corrected object list
                     object_list_msg = ObjectList()
-                    object_list_msg.header.frame_id = "odom"
+                    object_list_msg.header.frame_id = "map"
                     object_list_msg.header.stamp = msg.header.stamp
                     object_list_msg.length = len(self.object_list)
                     object_list_msg.objects = self.object_list
@@ -181,7 +185,7 @@ class ObjectFilterNode(Node):
 
     def publish_object_list(self):
         object_list_msg = ObjectList()
-        object_list_msg.header.frame_id = "odom"
+        object_list_msg.header.frame_id = "map"
         object_list_msg.header.stamp = self.get_clock().now().to_msg()
         object_list_msg.length = len(self.object_list)
         object_list_msg.objects = self.object_list
@@ -199,7 +203,7 @@ class ObjectFilterNode(Node):
 
             transform_msg = TransformStamped()
             transform_msg.header.stamp = self.get_clock().now().to_msg()
-            transform_msg.header.frame_id = "odom"
+            transform_msg.header.frame_id = "map"
             transform_msg.child_frame_id = f"{object_msg.object_type}_{i}"
             transform_msg
             transform_msg.transform.translation.x = object_msg.x

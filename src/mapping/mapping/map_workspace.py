@@ -48,7 +48,7 @@ class MapWorkspace(Node):
             return
         map_msg = OccupancyGrid()
         map_msg.header.stamp = self.get_clock().now().to_msg()
-        map_msg.header.frame_id = "odom"
+        map_msg.header.frame_id = "map"
 
         map_msg.info.resolution = self.workspace_map.resolution
         map_msg.info.width = self.workspace_map.grid_width
