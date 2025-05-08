@@ -354,7 +354,7 @@ class GoToRepositionPointClient(py_trees.behaviour.Behaviour):
         self.client = self.node.create_client(GoToPoint, self.service_name)
         self.node.create_subscription(Odometry, "/odom", self.odom_callback, qos_profile)
         self.tf_buffer = Buffer()
-        self.tf_listener = TransformListener(self.tf_buffer, self, spin_thread=True)
+        self.tf_listener = TransformListener(self.node.tf_buffer, self.node, spin_thread=True)
         return True
 
     def initialise(self):
