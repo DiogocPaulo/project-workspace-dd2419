@@ -162,7 +162,7 @@ class Map:
                 continue
             self.grid[y, x] = max(self.grid[y, x] - self.occupancy_decrease, 0)
         x, y = cells[-1]
-        if not self.is_within_workspace(x, y, world=False):
+        if not self.is_within_grid(x, y, world=False):
             return
         if valid:
             self.grid[y, x] = min(self.grid[y, x] + self.occupancy_increase, 100)

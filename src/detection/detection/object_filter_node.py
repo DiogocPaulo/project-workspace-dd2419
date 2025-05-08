@@ -54,7 +54,7 @@ class ObjectFilterNode(Node):
     def raw_objects_callback(self, msg: ObjectList):
         for raw_obj in msg.objects:
             if self.obstacles_map is not None:
-                free_from_obstacles = self.obstacles_map.are_adjacent_free(raw_obj.x, raw_obj.y, 1, 75)
+                free_from_obstacles = self.obstacles_map.are_adjacent_free(raw_obj.x, raw_obj.y, 2, 75)
             else:
                 free_from_obstacles = True
 

@@ -165,16 +165,16 @@ class ObjectDetectorNode(Node):
                 # Classify based on floor contact points for the current cluster
                 object_type = self.classify_based_on_floor_contact(cluster_points)
                 if object_type == "sphere":
-                    obj = self.create_object(x, z + 0.02, 0.0, Object.SPHERE, msg.header.stamp)
+                    obj = self.create_object(x - 0.05, z + 0.02, 0.0, Object.SPHERE, msg.header.stamp)
                     if obj is not None:
                         frame_objects.append(obj)
                 elif object_type == "cube":
-                    obj = self.create_object(x, z + 0.02, 0.0, Object.CUBE, msg.header.stamp)
+                    obj = self.create_object(x - 0.05, z + 0.02, 0.0, Object.CUBE, msg.header.stamp)
                     if obj is not None:
                         frame_objects.append(obj)
             elif self.is_plushie(cluster_points):
                 #self.get_logger().info(f"red:{red_ratio}, blue:{blue_ratio}, green:{green_ratio} IM PLUSHIE")
-                obj = self.create_object(x + 0.01, z, 0.0, Object.PLUSHIE, msg.header.stamp)
+                obj = self.create_object(x - 0.04, z, 0.0, Object.PLUSHIE, msg.header.stamp)
                 self.get_logger().info(f"OI: {obj}")
                 if obj is not None:
                     frame_objects.append(obj)
@@ -243,9 +243,7 @@ class ObjectDetectorNode(Node):
                     adjustment = offset * direction_unit
                     adjusted_centroid = [x_transformed, y_transformed] + adjustment
 
-                    # Extract adjusted coordinates (x, z are horizontal; y is vertical)
-                    x_adj = adjusted_centroid[0]
-                    y_adj = adjusted_centroid[1]
+                    x_transformed = x_transformed - 0.1
 
                     self.get_logger().info(f"before:{direction} adjusted:{adjusted_centroid}")
 
