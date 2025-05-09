@@ -355,7 +355,7 @@ class GoToRepositionPointClient(py_trees.behaviour.Behaviour):
         self.client = self.node.create_client(GoToPoint, self.service_name)
         self.node.create_subscription(Odometry, "/odom", self.odom_callback, qos_profile)
         self.tf_buffer = Buffer()
-        self.tf_listener = TransformListener(self.node.tf_buffer, self.node, spin_thread=True)
+        self.tf_listener = TransformListener(self.tf_buffer, self.node, spin_thread=True)
         return True
 
     def initialise(self):
@@ -414,7 +414,7 @@ class GoToRepositionPointClient(py_trees.behaviour.Behaviour):
         try:
             object_point = self.blackboard.get(self.object_point_key)
         except Exception as e:
-            self.logger.error(f"{self.name} - Error reading blackboard: {e}")
+            self.node.get_logger.error(f"{self.name} - Error reading blackboard: {e}")
             return py_trees.common.Status.INVALID
         try:
             arm_transform = self.tf_buffer.lookup_transform(
@@ -424,7 +424,7 @@ class GoToRepositionPointClient(py_trees.behaviour.Behaviour):
                 rclpy.duration.Duration(seconds=1.0)
             )
         except tf2_ros.TransformException as ex:
-            self.get_logger().warn(f"Could not find transform between arm base to map frames: {ex}")
+            self.node.get_logger().warn(f"Could not find transform between arm base to map frames: {ex}")
             return
 
         if self.reposition_point is None:
@@ -693,9 +693,6 @@ class Look(py_trees.behaviour.Behaviour):
         
 
 class Adjust(py_trees.behaviour.Behaviour):
-    """
-    A behaviour that determines the next end point and navigates to it.
-    """
     def __init__(self, name, t, **kwargs):
         super().__init__(name)
         self.type = t
@@ -708,17 +705,6 @@ class Adjust(py_trees.behaviour.Behaviour):
         self.joint_future = None
         self.joint_client = None
 
-        self.base = 12000
-        self.v1 = 12000
-        self.v2 = 12000
-        self.v3 = 12000
-        self.off_base = 0.14
-
-        self.eps =20
-        self.step_size = 500
-
-        if self.type == "boxes":
-            self.eps = 40
 
     def setup(self, **kwargs):
         try:
@@ -732,14 +718,10 @@ class Adjust(py_trees.behaviour.Behaviour):
         while not self.camera_client.wait_for_service(timeout_sec=1.0):
             self.node.get_logger().info('Service not available, waiting...')
 
-        self.pos_subscriber = self.node.create_subscription(
-            JointState, '/servo_pos_publisher', self.pos_callback, 10)
 
         self.joint_client = self.node.create_client(JointMove, 'MoveArm')
         while not self.joint_client.wait_for_service(timeout_sec=1.0):
             self.node.get_logger().info('Joint move service not available, waiting...')
-
-        self.clock = self.node.get_clock()
 
 
         return True
@@ -748,18 +730,10 @@ class Adjust(py_trees.behaviour.Behaviour):
         self.stage = 0
         self.future = None
         self.joint_future = None
-        self.step_size = 500
-        self.eps = 15
 
-    def pos_callback(self,msg):
-        self.base = msg.position[5]
-        self.v1 = msg.position[4]
-        self.v2 = msg.position[3]
-        self.v3 = msg.position[2]
 
     def update(self):
         if self.stage == 0:
-            # self.node.get_logger().info(f"Stage: 0")
             request = GetDetectedList.Request()
 
             self.future = self.camera_client.call_async(request)
@@ -768,64 +742,16 @@ class Adjust(py_trees.behaviour.Behaviour):
             return py_trees.common.Status.RUNNING
 
         elif self.stage == 1:
-            # self.node.get_logger().info(f"Stage: 1")
             if self.future.done():
                 response = self.future.result()
-                
+
                 objects = response.objects
                 boxes = response.boxes
 
-                closest_obj = None
-                if self.type == 'objects':
-                    closest_obj = min(objects, key=lambda DetectedData: DetectedData.distance)
-                elif self.type == 'boxes':
-                    closest_obj = min(boxes, key=lambda DetectedData: DetectedData.distance)
-
-
-
-                #Check if within threshhold:
-                if closest_obj.distance <= self.eps:
-                    return py_trees.common.Status.SUCCESS
-
-                base = self.base
-                v3 = self.v3
-
-                if closest_obj.distance < 100:
-                    self.step_size = 200
-                if closest_obj.distance < 30:
-                    self.step_size = 100    
-                if closest_obj.distance < 20:
-                    self.step_size = 50
-
-                #difference in x-axis
-                if(closest_obj.diff_x > 0):
-                    base += self.step_size
-                elif(closest_obj.diff_x < 0):
-                    base -= self.step_size
-
-                #difference in y-axis
-                if(closest_obj.diff_y > 0):
-                    v3 += self.step_size
-                elif(closest_obj.diff_y < 0):
-                    v3 -= self.step_size
-
-                if not (base < 23900 and base > 100):
-                    base = self.base
-
-                if  not (v3 < 20900 and v3 > 3100):
-                    v3 = self.v3
-
-                msg = Int16MultiArray()
-                msg.layout = MultiArrayLayout(dim=[MultiArrayDimension(label="", size=12, stride=12)], data_offset=0)
-                move_time = 100
-                pose = [11000,12000,int(v3),int(self.v2),int(self.v1),int(base),move_time,move_time,move_time,move_time,move_time,move_time]
-                msg.data = pose
-                self.start_time = time.time()
-
                 move_command = JointMove.Request()
-                move_command.input = msg
-
-                self.node.get_logger().info(f"Sending move command")
+                move_command.objects = objects
+                move_command.boxes = boxes
+                move_command.target = self.type
 
                 self.joint_future = self.joint_client.call_async(move_command)
 
@@ -835,11 +761,14 @@ class Adjust(py_trees.behaviour.Behaviour):
         
         
         elif self.stage == 2:
-            # self.node.get_logger().info(f"Stage: 2")
             if self.joint_future.done():
-                self.stage = 0
-            
-
+                response = self.joint_future.result()
+                if response.result == 0:
+                        return py_trees.common.Status.SUCCESS
+                else:
+                    self.stage = 0
+                    return py_trees.common.Status.RUNNING
+                
             return py_trees.common.Status.RUNNING
 
 class Sweep(py_trees.behaviour.Behaviour):
@@ -1342,8 +1271,8 @@ class Return(py_trees.behaviour.Behaviour):
                 request.header.stamp = self.node.get_clock().now().to_msg()
                 request.header.frame_id = "arm_base"
                 request.point = GeometryPoint()
-                request.point.x = self.x
-                request.point.y = self.y
+                request.point.x = 0.0
+                request.point.y = 0.0
                 request.point.z = 0.0
                 request.description = self.task
 
