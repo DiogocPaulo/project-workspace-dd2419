@@ -315,16 +315,17 @@ class GoToSafePointClient(py_trees.behaviour.Behaviour):
             return py_trees.common.Status.RUNNING
 
 class GoToRepositionPointClient(py_trees.behaviour.Behaviour):
-    def __init__(self, name, service_name, approach_offset, input_key, output_key):
+    def __init__(self, name, service_name, reposition_offset, input_key, output_key):
         super().__init__(name)
         self.service_name = service_name
-        self.approach_offset = approach_offset
+        self.reposition_offset = reposition_offset
         self.object_point_key = input_key
         self.waypoint_key = output_key
         self.current_point = (0.0, 0.0)
         self.current_yaw = 0.0
-        self.approach_point = None
-        self.approach_yaw = 0.0
+        self.reposition_point = None
+        self.reposition_yaw = 0.0
+        self.previous_object_point = (0.0, 0.0)
         self.client = None
         self.future = None
         self.sent_request = False
@@ -358,8 +359,6 @@ class GoToRepositionPointClient(py_trees.behaviour.Behaviour):
         return True
 
     def initialise(self):
-        self.approach_point = None
-        self.approach_yaw = 0.0
         self.sent_request = False
         self.future = None
 
@@ -384,12 +383,12 @@ class GoToRepositionPointClient(py_trees.behaviour.Behaviour):
 
         norm_x = (start_x - end_x) / line_length
         norm_y = (start_y - end_y) / line_length
-        self.approach_point = (end_x + norm_x * offset, end_y + norm_y * offset)
-        self.approach_yaw = np.arctan2(
-            end_y - self.approach_point[1],
-            end_x - self.approach_point[0]
+        self.reposition_point = (end_x + norm_x * offset, end_y + norm_y * offset)
+        self.reposition_yaw = np.arctan2(
+            end_y - self.reposition_point[1],
+            end_x - self.reposition_point[0]
         )
-        waypoint = (self.approach_point[0], self.approach_point[1], self.approach_yaw)
+        waypoint = (self.reposition_point[0], self.reposition_point[1], self.reposition_yaw)
         self.blackboard.set(self.waypoint_key, waypoint, overwrite=True)
 
     def transform_point(self, x, y, transform_msg: TransformStamped):
@@ -428,17 +427,17 @@ class GoToRepositionPointClient(py_trees.behaviour.Behaviour):
             self.get_logger().warn(f"Could not find transform between arm base to map frames: {ex}")
             return
 
-        if self.approach_point is None:
+        if self.reposition_point is None:
             new_object_x, new_object_y = self.transform_point(object_point[0], object_point[1], arm_transform)
             object_point = (new_object_x, new_object_y)
-            self.calculate_approach_point(self.current_point, object_point, self.approach_offset)
+            self.calculate_approach_point(self.current_point, object_point, self.reposition_offset)
 
         if not self.sent_request:
             try:
                 request = GoToPoint.Request()
-                request.x = self.approach_point[0]
-                request.y = self.approach_point[1]
-                request.yaw = self.approach_yaw
+                request.x = self.reposition_point[0]
+                request.y = self.reposition_point[1]
+                request.yaw = self.reposition_yaw
                 request.velocity = 0.12
                 request.reverse = False
                 request.slow_approach = True
@@ -478,6 +477,7 @@ class GoToApproachPointClient(py_trees.behaviour.Behaviour):
         self.current_yaw = 0.0
         self.approach_point = None
         self.approach_yaw = 0.0
+        self.previous_object_point = (0.0, 0.0)
         self.client = None
         self.future = None
         self.sent_request = False
@@ -509,8 +509,6 @@ class GoToApproachPointClient(py_trees.behaviour.Behaviour):
         return True
 
     def initialise(self):
-        self.approach_point = None
-        self.approach_yaw = 0.0
         self.sent_request = False
         self.future = None
 
@@ -548,13 +546,14 @@ class GoToApproachPointClient(py_trees.behaviour.Behaviour):
             self.node.get_logger().info(f"{self.name} - Waiting for service {self.service_name} ...")
             return py_trees.common.Status.RUNNING
         try:
-            object_point = self.blackboard.get(self.object_point_key)
+            current_object_point = self.blackboard.get(self.object_point_key)
         except Exception as e:
             self.logger.error(f"{self.name} - Error reading blackboard: {e}")
             return py_trees.common.Status.INVALID
 
-        if self.approach_point is None:
-            self.calculate_approach_point(self.current_point, object_point, self.approach_offset)
+        if self.previous_object_point != current_object_point:
+            self.calculate_approach_point(self.current_point, current_object_point, self.approach_offset)
+            self.previous_object_point = current_object_point
 
         if not self.sent_request:
             try:
