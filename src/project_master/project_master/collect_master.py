@@ -37,7 +37,7 @@ class CollectMaster(Node):
         self.distance_threshold = 0.08
         self.yaw_threshold = math.radians(5)
         self.resolution = 0.05
-        workspace_file = "workspaces/angled_workspace.tsv"
+        workspace_file = "workspaces/large_workspace.tsv"
 
         # Variables
         self.workspace_vertices = self.read_workspace(workspace_file, skip_header=True)
@@ -183,7 +183,7 @@ class CollectMaster(Node):
         object_reposition_point_client = behaviours.GoToRepositionPointClient(
             name="RepositionPointClient_Object",
             service_name="/pathing_end_point",
-            approach_offset=0.20,
+            reposition_offset=0.20,
             input_key="object_position",
             output_key="object_reposition_waypoint",
         )

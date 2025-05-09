@@ -239,7 +239,7 @@ class Map:
                     return False
         return True
 
-    def get_best_safe_point(self, robot_x, robot_y, x, y, radius, threshold, max_search_radius=15, world=True):
+    def get_best_safe_point(self, robot_x, robot_y, x, y, radius, threshold, max_search_radius=20, world=True):
         if self.grid is None:
             return None
         if world:
