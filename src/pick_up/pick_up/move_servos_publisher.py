@@ -125,13 +125,13 @@ class MultiServoPublisher(Node):
 
         self.clock.sleep_for(rclpy.duration.Duration(seconds=3))
         
-        pose = [11000,12000,v3_arm,v2_arm,v1_arm,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
+        pose = [15000,12000,v3_arm,v2_arm,v1_arm,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
         msg.data = pose
         self.publisher.publish(msg)
 
         self.clock.sleep_for(rclpy.duration.Duration(seconds=3))
 
-        pose = [11000,12000,12000,12000,12000,12000,move_time,move_time,move_time,move_time,move_time,move_time]
+        pose = [15000,12000,12000,12000,12000,12000,move_time,move_time,move_time,move_time,move_time,move_time]
         msg.data = pose
         self.publisher.publish(msg)
 
@@ -166,7 +166,7 @@ class MultiServoPublisher(Node):
 
         self.clock.sleep_for(rclpy.duration.Duration(seconds=0.5))
         
-        pose = [11000,12000,v3_arm,v2_arm,v1_arm,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
+        pose = [15000,12000,v3_arm,v2_arm,v1_arm,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
         msg.data = pose
         self.publisher.publish(msg)
 
@@ -224,7 +224,7 @@ class MultiServoPublisher(Node):
         position = position.point
         base_arm,v1_arm,v2_arm,v3_arm = self.FindKinematics(position.x,position.y,position.z)
         
-        pose = [11000,12000,5500,21000,12000,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
+        pose = [15000,12000,5500,21000,12000,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
         self.base = base_arm
         self.v3 = v3_arm
         msg.data = pose
@@ -244,7 +244,7 @@ class MultiServoPublisher(Node):
         zero_time.sec = 0
         zero_time.nanosec = 0
 
-        pose = [14000,12000,12000,12000,12000,12000,move_time,move_time,move_time,move_time,move_time,move_time]
+        pose = [3000,12000,12000,12000,12000,12000,move_time,move_time,move_time,move_time,move_time,move_time]
         msg.data = pose
         self.publisher.publish(msg)
     
@@ -517,7 +517,7 @@ class MultiServoPublisher(Node):
             closest_obj = min(boxes, key=lambda DetectedData: DetectedData.distance)
 
         if target == 'objects':
-            eps = 15
+            eps = 10
         else:
             eps = 30
 
@@ -527,18 +527,18 @@ class MultiServoPublisher(Node):
             response.result = 0
             return response
 
-        step_size = 800
-        move_time = 400
+        step_size = 400
+        move_time = 200
 
         if closest_obj.distance < 100:
-            step_size = 300
-            move_time = 150
+            step_size = 200
+            move_time = 100
         if closest_obj.distance < 30:
             step_size = 100
-            move_time = 100 
+            move_time = 50 
         if closest_obj.distance < 10:
             step_size = 50
-            move_time = 25
+            move_time = 20
 
         base = self.base
         v3 = self.v3
