@@ -457,6 +457,7 @@ class GoToRepositionPointClient(py_trees.behaviour.Behaviour):
                 new_object_point = (new_object_x, new_object_y)
                 self.calculate_reposition_point(self.current_point, new_object_point, self.reposition_offset)
                 self.previous_object_point = current_object_point
+                self.node.get_logger().info(f"{self.name} - Arm detected object at ({new_object_point[0]:.2f}, {new_object_point[1]:.2f}) repositioning to ({self.reposition_point[0]:.2f}, {self.reposition_point[1]:.2f}, yaw: {self.reposition_yaw:.2f})")
             except tf2_ros.TransformException as ex:
                 self.node.get_logger().warn(f"Could not find transform between arm base to map frames: {ex}")
                 return
