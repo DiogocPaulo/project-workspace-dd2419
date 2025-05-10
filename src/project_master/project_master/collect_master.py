@@ -34,8 +34,8 @@ class CollectMaster(Node):
         self.workspace_publisher = self.create_publisher(WorkspaceVertices, "/workspace", 10)
 
         # Constants
-        self.distance_threshold = 0.08
-        self.yaw_threshold = math.radians(5)
+        self.distance_threshold = 0.1
+        self.yaw_threshold = math.radians(8)
         self.resolution = 0.05
         workspace_file = "workspaces/large_workspace.tsv"
 
@@ -236,7 +236,7 @@ class CollectMaster(Node):
             reposition_pickup,
             reposition_object_check,
         ])
-        reposition_retry_pickup = py_trees.decorators.Retry(name="RetryPickup", child=pickup_routine, num_failures=2)
+        reposition_retry_pickup = py_trees.decorators.Retry(name="RetryPickup", child=pickup_routine, num_failures=1)
 
         reposition_return_after_failed_pickup_fallback = py_trees.composites.Selector("ReturnAfterFailedPickupFallback", memory=True)
         reposition_return_after_failed_pickup_fallback.add_children([
