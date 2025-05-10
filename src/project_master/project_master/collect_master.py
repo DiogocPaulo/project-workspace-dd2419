@@ -146,13 +146,8 @@ class CollectMaster(Node):
             name = f"Check_Object",
             t = "objects"
         )
-        arm_return = behaviours.Return(
-            name = f"Return",
-            t = "objects",
-            task = "RETURN"
-        )
-        box_arm_return = behaviours.Return(
-            name = f"Return",
+        object_return = behaviours.Return(
+            name = f"Return_Object",
             t = "objects",
             task = "RETURN"
         )
@@ -176,14 +171,13 @@ class CollectMaster(Node):
         return_after_failed_pickup_fallback = py_trees.composites.Selector("ReturnAfterFailedPickupFallback", memory=True)
         return_after_failed_pickup_fallback.add_children([
             retry_pickup,
-            box_arm_return,
         ])
 
-        # Object Arm Point
+        # Object Reposition Point
         object_reposition_point_client = behaviours.GoToRepositionPointClient(
             name="RepositionPointClient_Object",
             service_name="/pathing_end_point",
-            reposition_offset=0.20,
+            reposition_offset=0.15,
             input_key="object_position",
             output_key="object_reposition_waypoint",
         )
@@ -229,12 +223,11 @@ class CollectMaster(Node):
             name = f"Check_Object",
             t = "objects"
         )
-        reposition_arm_return = behaviours.Return(
-            name = f"Return",
+        reposition_object_return = behaviours.Return(
+            name = f"Return_Object",
             t = "objects",
             task = "RETURN"
         )
-
 
         reposition_object_look_fallback = py_trees.composites.Selector(f"LookFallback_Object", memory=True)
         reposition_object_look_fallback.add_children([
@@ -257,7 +250,7 @@ class CollectMaster(Node):
     
         reposition_and_pickup = py_trees.composites.Sequence("RepositionAndPickup", memory=True)
         reposition_and_pickup.add_children([
-            reposition_arm_return,
+            reposition_object_return,
             object_reposition_point_sequence,
             reposition_return_after_failed_pickup_fallback,
         ])
@@ -272,6 +265,7 @@ class CollectMaster(Node):
 
         pickup_sequence = py_trees.composites.Sequence("PickupSequence", memory=True)
         pickup_sequence.add_children([
+            object_return,
             find_closest_object,
             object_safe_point_sequence,
             object_approach_point_sequence,
@@ -349,6 +343,11 @@ class CollectMaster(Node):
             t = "boxes",
             task = "DROPOFF"
         )
+        box_return = behaviours.Return(
+            name = f"Return_Box",
+            t = "objects",
+            task = "RETURN"
+        )
 
         box_look_fallback = py_trees.composites.Selector(f"LookFallback_Box", memory=True)
         box_look_fallback.add_children([
@@ -365,6 +364,7 @@ class CollectMaster(Node):
 
         drop_sequence = py_trees.composites.Sequence("DropSequence", memory=True)
         drop_sequence.add_children([
+            box_return,
             find_closest_box,
             box_safe_point_sequence,
             box_approach_point_sequence,
