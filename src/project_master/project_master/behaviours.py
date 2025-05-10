@@ -1146,6 +1146,15 @@ class Drop(py_trees.behaviour.Behaviour):
         self.emergancy_distance = 0.35  
         self.emergancy_flag = False
 
+        self.object_position_key = "object_position"
+
+
+        self.blackboard = self.attach_blackboard_client(name=name)
+        self.blackboard.register_key(
+            key=self.object_position_key,
+            access=py_trees.common.Access.WRITE
+        )
+
 
     def setup(self, **kwargs):
         try:
@@ -1210,9 +1219,6 @@ class Drop(py_trees.behaviour.Behaviour):
 
             distance_z = 0 - self.off_base
 
-            if self.emergancy_flag:
-                distance = self.emergancy_distance
-
             distance_y = math.sin(-base)*distance
             distance_x = math.cos(base)*distance
 
@@ -1252,11 +1258,9 @@ class Drop(py_trees.behaviour.Behaviour):
                 if response.result == 0:
                     return py_trees.common.Status.SUCCESS
                 else:
-                    if not self.emergancy_flag:
-                        self.emergancy_flag = True
-                        self.stage = 2
-                    else:
-                        return py_trees.common.Status.FAILURE
+                    object_position = (self.x,self.y)
+                    self.blackboard.set(self.object_position_key,object_position)
+                    return py_trees.common.Status.FAILURE
 
             return py_trees.common.Status.RUNNING
 
