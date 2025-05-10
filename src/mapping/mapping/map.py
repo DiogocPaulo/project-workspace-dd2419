@@ -158,16 +158,11 @@ class Map:
             return
         for cell in cells[:-1]:
             x, y = cell
-            if not self.is_within_grid(x, y, world=False):
-                continue
-            self.grid[y, x] = max(self.grid[y, x] - self.occupancy_decrease, 0)
+            if valid and self.is_within_grid(x, y, world=False):
+                self.grid[y, x] = max(self.grid[y, x] - self.occupancy_decrease, 0)
         x, y = cells[-1]
-        if not self.is_within_workspace(x, y, world=False):
-            return
-        if valid:
+        if valid and self.is_within_grid(x, y, world=False):
             self.grid[y, x] = min(self.grid[y, x] + self.occupancy_increase, 100)
-        else:
-            self.grid[y, x] = max(self.grid[y, x] - self.occupancy_decrease, 0)
 
     def add_workspace_perimeter(self):
         for y in range(self.grid_height):
