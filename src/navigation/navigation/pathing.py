@@ -345,7 +345,7 @@ class Pathing(Node):
         if not self.approaching_object and not self.inflated_map.is_free(self.end_point[0], self.end_point[1], 75):
             self.get_logger().info("End point in inflation radius or occupied cell")
             path = None
-        if self.approaching_object:
+        if self.approaching_object or self.backing:
             self.get_logger().info("Creating path based on empty grid, since approaching objects")
             empty_grid = np.full((self.inflated_map.grid_height, self.inflated_map.grid_width), 0, dtype=np.int8)
             path_planner = AdaptiveAStar(grid=empty_grid)

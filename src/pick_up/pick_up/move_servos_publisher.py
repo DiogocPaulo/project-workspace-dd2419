@@ -224,13 +224,13 @@ class MultiServoPublisher(Node):
         position = position.point
         base_arm,v1_arm,v2_arm,v3_arm = self.FindKinematics(position.x,position.y,position.z)
         
-        pose = [15000,12000,5500,21000,12000,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
+        pose = [15000,12000,7000,21000,12000,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
         self.base = base_arm
         self.v3 = v3_arm
         msg.data = pose
         self.publisher.publish(msg)
 
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=5))
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=3))
     
         return 0
     
@@ -251,7 +251,7 @@ class MultiServoPublisher(Node):
         return 0
     
     def adjust_callback(self, request):
-        self.get_logger().info(f'Received adjust request')
+        #self.get_logger().info(f'Received adjust request')
 
         self.take_detected_flag = True
         objects = self.detected_objects
@@ -270,15 +270,22 @@ class MultiServoPublisher(Node):
         elif target == 'boxes':
             closest_obj = min(boxes, key=lambda DetectedData: DetectedData.distance)
 
-        step_size = 50
-        eps = 5
+        step_size = 100
+        eps = 8
 
         base = self.base
         v3 = self.v3
 
         while closest_obj.distance > eps:
+            if closest_obj.distance < 50:
+                step_size = 50
+
             if closest_obj.distance < 30:
+                step_size = 20
+            
+            if closest_obj.distance < 15:
                 step_size = 10
+
             #difference in x-axis
             if(closest_obj.diff_x > 0):
                 base += step_size
@@ -510,14 +517,19 @@ class MultiServoPublisher(Node):
         boxes = request.boxes
         target = request.target
 
+        if target == "objects" and len(objects)==0:
+            return 2
+        if target == "boxes" and len(boxes)==0:
+            return 2
+
         closest_obj = None
-        if target == 'objects':
+        if target == 'objects' and len(objects)>0:
             closest_obj = min(objects, key=lambda DetectedData: DetectedData.distance)
-        elif target == 'boxes':
+        elif target == 'boxes' and len(objects)>0:
             closest_obj = min(boxes, key=lambda DetectedData: DetectedData.distance)
 
         if target == 'objects':
-            eps = 10
+            eps = 12
         else:
             eps = 30
 
@@ -537,8 +549,8 @@ class MultiServoPublisher(Node):
             step_size = 100
             move_time = 50 
         if closest_obj.distance < 10:
-            step_size = 50
-            move_time = 20
+            step_size = 30
+            move_time = 15
 
         base = self.base
         v3 = self.v3

@@ -236,7 +236,7 @@ class CollectMaster(Node):
             reposition_pickup,
             reposition_object_check,
         ])
-        reposition_retry_pickup = py_trees.decorators.Retry(name="RetryPickup", child=pickup_routine, num_failures=1)
+        reposition_retry_pickup = py_trees.decorators.Retry(name="RepositionRetryPickup", child=reposition_pickup_routine, num_failures=1)
 
         reposition_return_after_failed_pickup_fallback = py_trees.composites.Selector("ReturnAfterFailedPickupFallback", memory=True)
         reposition_return_after_failed_pickup_fallback.add_children([
@@ -355,7 +355,7 @@ class CollectMaster(Node):
         box_reposition_point_client = behaviours.GoToRepositionPointClient(
             name="RepositionPointClient_Box",
             service_name="/pathing_end_point",
-            reposition_offset=0.20,
+            reposition_offset=0.25,
             input_key="object_position",
             output_key="box_reposition_waypoint",
         )
@@ -409,7 +409,7 @@ class CollectMaster(Node):
             reposition_box_adjust,
             reposition_drop,
         ])
-        reposition_retry_drop = py_trees.decorators.Retry(name="RetryDrop", child=pickup_routine, num_failures=1)
+        reposition_retry_drop = py_trees.decorators.Retry(name="RepositionRetryDrop", child=reposition_drop_routine, num_failures=1)
 
         reposition_return_after_failed_drop_fallback = py_trees.composites.Selector("ReturnAfterFailedDropFallback", memory=True)
         reposition_return_after_failed_drop_fallback.add_children([

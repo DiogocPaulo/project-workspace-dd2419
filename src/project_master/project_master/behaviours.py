@@ -635,6 +635,9 @@ class Look(py_trees.behaviour.Behaviour):
         self.clock = None
         self.stage = 0
 
+        self.see_counter_max = 5
+        self.see_counter = 0
+
     def setup(self, **kwargs):
         try:
             self.node = kwargs.get("node")
@@ -661,6 +664,11 @@ class Look(py_trees.behaviour.Behaviour):
     def initialise(self):
         self.stage = 0
         self.future = None
+        self.see_counter = 0
+
+    def print_seen(self,objects):
+        for o in objects:
+            self.node.get_logger().info(f"Seeing {o.label} at ({o.center_x},{o.center_y}) with confidence: {o.confidence}")
 
     def update(self):
         if self.stage == 0:
@@ -705,19 +713,33 @@ class Look(py_trees.behaviour.Behaviour):
         elif self.stage == 3:
             if self.future.done():
                 response = self.future.result()
+
                 
                 if self.type == "objects":
                     if len(response.objects) > 0:
-                        self.node.get_logger().info("OBJECT SEEN!")
-                        return py_trees.common.Status.SUCCESS
+                        self.print_seen(response.objects)
+                        self.see_counter+=1
+                        if self.see_counter>=self.see_counter_max:
+                            self.node.get_logger().info("Look for objects succeeded")
+                            return py_trees.common.Status.SUCCESS
+                        else:
+                            self.stage = 2
                     else:
-                        self.node.get_logger().info("NO OBJECT SEEN!")
+                        self.node.get_logger().info("Look for objects failed")
                         return py_trees.common.Status.FAILURE
                 elif self.type == "boxes":
                     if len(response.boxes) > 0:
-                        return py_trees.common.Status.SUCCESS
+                        self.print_seen(response.boxes)
+                        self.see_counter+=1
+                        if self.see_counter>=self.see_counter_max:
+                            self.node.get_logger().info("Look for boxes succeeded")
+                            return py_trees.common.Status.SUCCESS
+                        else:
+                            self.stage = 2
                     else:
+                        self.node.get_logger().info("Look for boxes failed")
                         return py_trees.common.Status.FAILURE
+                    
 
             return py_trees.common.Status.RUNNING
         
@@ -734,6 +756,12 @@ class Adjust(py_trees.behaviour.Behaviour):
         self.future = None
         self.joint_future = None
         self.joint_client = None
+
+        self.see_counter_max = 4
+        self.see_counter = 0
+
+        self.correct_counter_max = 2
+        self.correct_counter = 0
 
 
     def setup(self, **kwargs):
@@ -760,6 +788,12 @@ class Adjust(py_trees.behaviour.Behaviour):
         self.stage = 0
         self.future = None
         self.joint_future = None
+        self.see_counter = 0
+        self.correct_counter = 0
+
+    def print_seen(self,objects):
+        for o in objects:
+            self.node.get_logger().info(f"Seeing {o.label} at ({o.center_x},{o.center_y}) with confidence: {o.confidence}")
 
 
     def update(self):
@@ -778,6 +812,30 @@ class Adjust(py_trees.behaviour.Behaviour):
                 objects = response.objects
                 boxes = response.boxes
 
+                if self.type == "objects" and len(objects) == 0:
+                    self.see_counter += 1
+                    if self.see_counter >= self.see_counter_max:
+                        self.node.get_logger().info(f"Adjust failed")
+                        return py_trees.common.Status.FAILURE
+                    else:
+                        self.stage = 0
+                else:
+                    self.print_seen(objects)
+                    self.see_counter = 0
+
+                if self.type == "boxes" and len(boxes) == 0:
+                    self.see_counter += 1
+                    if self.see_counter >= self.see_counter_max:
+                        self.node.get_logger().info(f"Adjust failed")
+                        return py_trees.common.Status.FAILURE
+                    else:
+                        self.stage = 0
+                else:
+                    self.print_seen(boxes)
+                    self.see_counter = 0
+
+                
+
                 move_command = JointMove.Request()
                 move_command.objects = objects
                 move_command.boxes = boxes
@@ -794,10 +852,19 @@ class Adjust(py_trees.behaviour.Behaviour):
             if self.joint_future.done():
                 response = self.joint_future.result()
                 if response.result == 0:
+                    self.correct_counter += 1
+                    if self.correct_counter >= self.correct_counter_max:
+                        self.node.get_logger().info(f"Adjust succeeded")
                         return py_trees.common.Status.SUCCESS
-                else:
+                    else:
+                        self.stage=0
+                elif response.result == 1:
+                    self.correct_counter = 0
                     self.stage = 0
                     return py_trees.common.Status.RUNNING
+                else:
+                    self.see_counter += 1
+                    self.stage = 0
                 
             return py_trees.common.Status.RUNNING
 
@@ -817,6 +884,8 @@ class Sweep(py_trees.behaviour.Behaviour):
         self.wait = 2000
 
         self.counter = 0
+        self.see_counter = 0
+        self.see_counter_max = 5
 
 
         self.positions = [
@@ -850,11 +919,12 @@ class Sweep(py_trees.behaviour.Behaviour):
 
     def initialise(self):   
         self.stage = 0
+        self.counter = 0
+        self.see_counter = 0
         self.future = None
 
     def update(self):
         if self.stage == 0:
-            self.node.get_logger().info(f"Stage: 0")
 
             msg = Int16MultiArray()
             msg.layout = MultiArrayLayout(dim=[MultiArrayDimension(label="", size=12, stride=12)], data_offset=0)
@@ -875,15 +945,12 @@ class Sweep(py_trees.behaviour.Behaviour):
             return py_trees.common.Status.RUNNING
 
         elif self.stage == 1:
-            self.node.get_logger().info(f"Stage: 1")
-            # self.node.get_logger().info(f"Stage: 2")
             if time.time() - self.start_time >= self.wait:
                 self.stage = 2
 
             return py_trees.common.Status.RUNNING
 
         elif self.stage == 2:
-            self.node.get_logger().info(f"Stage: 2")
             request = GetDetectedList.Request()
 
             self.future = self.camera_client.call_async(request)
@@ -893,24 +960,44 @@ class Sweep(py_trees.behaviour.Behaviour):
             return py_trees.common.Status.RUNNING
 
         elif self.stage == 3:
-            self.node.get_logger().info(f"Stage: 3  ")
             if self.future.done():
                 response = self.future.result()
                 
                 objects = response.objects
                 boxes = response.boxes
 
-                if len(objects) > 0:
-                    return py_trees.common.Status.SUCCESS
+                if self.type == "objects" and len(objects) > 0:
+                    self.see_counter += 1
+                    if self.see_counter >= self.see_counter_max:
+                        self.node.get_logger().info(f"Sweep Success")
+                        return py_trees.common.Status.SUCCESS
+                    else:
+                        self.stage = 2
+                else:
+                    self.see_counter = 0
+                    self.stage = 4
 
-                if self.counter >= len(self.positions):
-                    return py_trees.common.Status.FAILURE
-
-                self.counter += 1
-
-                self.stage = 0
+                if self.type == "boxes" and len(boxes) > 0:
+                    self.see_counter += 1
+                    if self.see_counter >= self.see_counter_max:
+                        self.node.get_logger().info(f"Sweep Success")
+                        return py_trees.common.Status.SUCCESS
+                    else:
+                        self.stage = 2
+                else:
+                    self.see_counter = 0
+                    self.stage = 4
 
             return py_trees.common.Status.RUNNING
+        
+        elif self.stage == 4:
+            if self.counter >= len(self.positions):
+                self.node.get_logger().info(f"Sweep failed")
+                return py_trees.common.Status.FAILURE
+
+            self.counter += 1
+
+            self.stage = 0
 
 
 class Check(py_trees.behaviour.Behaviour):
