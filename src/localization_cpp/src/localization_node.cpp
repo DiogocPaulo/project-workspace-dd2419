@@ -31,6 +31,7 @@ Node::Node() : rclcpp::Node("localization_node") {
     // Initialize LidarScanStorage and ICP
     scan_storage_ = LidarScanStorage(2, 0.5); // Range for surrounding scans
     icp_ = ICP(0.2, 100); // 10 cm threshold, 50 iterations
+    optimizer_ = std::make_unique<PoseGraphOptimizer>();
 
     RCLCPP_INFO(this->get_logger(), "Localization node initialized.");
 }
@@ -72,11 +73,21 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
 
             // Only attempt alignment if there's significant drift potential
             if ((newest_scan.id - oldest_scan.id) > 10) {
+                correctScanPosesWithOptimizer();
+                std::vector<Scan> surrounding_scans = scan_storage_.getSurroundingScans(current_pose_);
+            }
+
+            /*
+            // Only attempt alignment if there's significant drift potential
+            if ((newest_scan.id - oldest_scan.id) > 10) {
                 std::vector<Scan> all_scans = scan_storage_.getAllScans();
                 std::sort(all_scans.begin(), all_scans.end(), 
                     [](const Scan& a, const Scan& b) { return a.id < b.id; });
                 performChainAlignment(all_scans);
             }
+            */
+
+            
         }
 
         /*
@@ -159,7 +170,7 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
             }
 
             // Store the current scan in the LidarScanStorage
-            if (std::abs(angular_velocity_) < 0.1 && std::abs(linear_velocity_) < 0.01) { // (current_pose_.position - stored_scan->pose.position).norm() > 0.1 || 
+            if (std::abs(angular_velocity_) < 0.1) { // && std::abs(linear_velocity_) < 0.01
                 //stored_scan->agePoints(10); // Age points in the storage
                 std::vector<Eigen::Vector2d> range_limited_alinged_points = limitPointsByRangeFromPose(aligned_points, current_pose_.position, 4);
                 scan_storage_.addScan(range_limited_alinged_points, current_pose_);
@@ -181,6 +192,118 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
         RCLCPP_WARN(this->get_logger(), "Could not transform %s to map: %s", msg->header.frame_id.c_str(), ex.what());
         return; // Skip processing if transform is unavailable
     }
+}
+
+void Node::correctScanPosesWithOptimizer() {
+    auto scans = scan_storage_.getAllScans();
+    std::sort(scans.begin(), scans.end(), 
+              [](const Scan& a, const Scan& b) { return a.id < b.id; });
+
+    if (scans.size() < 2) {
+        RCLCPP_WARN(this->get_logger(), "Not enough scans for optimization.");
+        return;
+    }
+
+    RCLCPP_INFO(this->get_logger(), "Starting pose graph optimization with %lu scans.", scans.size());
+
+    // Step 1: Add all scans as vertices
+    for (size_t i = 0; i < scans.size(); ++i) {
+        const auto& scan = scans[i];
+
+        Eigen::Isometry3d pose = Eigen::Isometry3d::Identity();
+        pose.translation() = Eigen::Vector3d(scan.pose.position.x(), scan.pose.position.y(), 0.0);
+        pose.linear() = Eigen::AngleAxisd(scan.pose.theta, Eigen::Vector3d::UnitZ()).toRotationMatrix();
+
+        optimizer_->addVertex(pose, i == 0);
+    }
+    RCLCPP_INFO(this->get_logger(), "Vertices added to optimizer.");
+
+    // Step 2: Add relative constraints (edges)
+    for (size_t i = 1; i < scans.size(); ++i) {
+        const auto& prev = scans[i - 1];
+        const auto& curr = scans[i];
+
+        double dx = curr.pose.position.x() - prev.pose.position.x();
+        double dy = curr.pose.position.y() - prev.pose.position.y();
+        double dtheta = curr.pose.theta - prev.pose.theta;
+
+        Eigen::Isometry3d relative = Eigen::Isometry3d::Identity();
+        relative.translation() = Eigen::Vector3d(dx, dy, 0.0);
+        relative.linear() = Eigen::AngleAxisd(dtheta, Eigen::Vector3d::UnitZ()).toRotationMatrix();
+
+        Eigen::Matrix<double, 6, 6> info = Eigen::Matrix<double, 6, 6>::Identity();
+
+        optimizer_->addEdge(prev.id, curr.id, relative, info);
+    }
+    RCLCPP_INFO(this->get_logger(), "Sequential edges added to optimizer.");
+
+    // Step 3: Attempt loop closure
+    const auto& first = scans.front();
+    const auto& last = scans.back();
+    double loop_dist = (first.pose.position - last.pose.position).norm();
+
+    if (loop_dist < 1.0) {
+        RCLCPP_INFO(this->get_logger(), "Loop closure candidate found (distance = %.3f).", loop_dist);
+
+        Eigen::Matrix3d base_transform;
+        std::vector<Eigen::Vector2d> aligned_points;
+        double fitness, inlier_rmse;
+
+        icp_.setTarget(first.points);
+        icp_.computeICP(last.points, base_transform, aligned_points, fitness, inlier_rmse);
+
+        RCLCPP_INFO(this->get_logger(), "ICP result: fitness = %.3f, inlier RMSE = %.3f", fitness, inlier_rmse);
+
+        if (fitness > 0.8 && inlier_rmse < 0.1) {
+            RCLCPP_INFO(this->get_logger(), "Loop closure accepted.");
+
+            Eigen::Isometry3d loop = Eigen::Isometry3d::Identity();
+            loop.translation() = Eigen::Vector3d(base_transform(0, 2), base_transform(1, 2), 0.0);
+            loop.linear() = Eigen::AngleAxisd(std::atan2(base_transform(1, 0), base_transform(0, 0)),
+                                              Eigen::Vector3d::UnitZ()).toRotationMatrix();
+
+            Eigen::Matrix<double, 6, 6> info = Eigen::Matrix<double, 6, 6>::Identity();
+            optimizer_->addEdge(last.id, first.id, loop, info, true);
+
+            tf2::Quaternion icp_rotation_quat;
+            double icp_rotation_theta = std::atan2(base_transform(1, 0), base_transform(0, 0));
+            icp_rotation_quat.setRPY(0.0, 0.0, icp_rotation_theta);
+
+            translation_[0] += base_transform(0, 2);
+            translation_[1] += base_transform(1, 2);
+            rotation_ = icp_rotation_quat * rotation_;
+
+            RCLCPP_INFO(this->get_logger(), "Transform updated with loop closure.");
+            publishPointCloud(first.points);
+            publishAllScans();
+        } else {
+            RCLCPP_WARN(this->get_logger(), "Loop closure rejected: fitness or RMSE threshold not met.");
+        }
+    } else {
+        RCLCPP_DEBUG(this->get_logger(), "No loop closure (distance = %.3f).", loop_dist);
+    }
+
+    // Step 4: Run optimization
+    RCLCPP_INFO(this->get_logger(), "Running optimizer...");
+    optimizer_->optimize();
+    RCLCPP_INFO(this->get_logger(), "Optimizer finished.");
+
+    // Step 5: Update poses
+    for (auto& scan : scans) {
+        Eigen::Isometry3d opt_pose = optimizer_->getPose(scan.id);
+        Eigen::Vector3d t = opt_pose.translation();
+        double theta = Eigen::Rotation2Dd(opt_pose.rotation().block<2, 2>(0, 0)).angle();
+
+        scan.pose = Pose2D(t.x(), t.y(), theta);
+        scan.applyPoseUpdate(scan.pose);
+    }
+
+    scan_storage_.clear();
+    for (const auto& scan : scans) {
+        scan_storage_.addScan(scan.points, scan.pose);
+    }
+
+    RCLCPP_INFO(this->get_logger(), "Scan poses updated and stored.");
 }
 
 // New function to perform chain-based alignment
