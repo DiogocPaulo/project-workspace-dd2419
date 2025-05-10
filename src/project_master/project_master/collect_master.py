@@ -166,7 +166,7 @@ class CollectMaster(Node):
             object_check,
         ])
 
-        retry_pickup = py_trees.decorators.Retry(name="RetryPickup", child=pickup_routine, num_failures=2)
+        retry_pickup = py_trees.decorators.Retry(name="RetryPickup", child=pickup_routine, num_failures=1)
 
         return_after_failed_pickup_fallback = py_trees.composites.Selector("ReturnAfterFailedPickupFallback", memory=True)
         return_after_failed_pickup_fallback.add_children([
@@ -349,14 +349,94 @@ class CollectMaster(Node):
             box_adjust,
             drop
         ])
-        retry_drop = py_trees.decorators.Retry(name="RetryDrop", child=drop_routine, num_failures=2)
+        retry_drop = py_trees.decorators.Retry(name="RetryDrop", child=drop_routine, num_failures=1)
+
+        # Object Reposition Point
+        box_reposition_point_client = behaviours.GoToRepositionPointClient(
+            name="RepositionPointClient_Object",
+            service_name="/pathing_end_point",
+            reposition_offset=0.20,
+            input_key="object_position",
+            output_key="object_reposition_waypoint",
+        )
+
+        box_reached_reposition_point = behaviours.ReachedWaypoint(
+            name="ReachedRepositionPoint_Object",
+            input_key="object_reposition_waypoint",
+            distance_threshold=self.distance_threshold,
+            yaw_threshold=self.yaw_threshold,
+        )
+
+        box_reposition_point_sequence = py_trees.composites.Sequence(
+            name="RepositionPointSequence_Object",
+            memory=False,
+        )
+
+        box_reposition_point_sequence.add_children([
+            box_reposition_point_client,
+            box_reached_reposition_point,
+        ])
+
+        # Reposition Pickup Routine
+        reposition_box_look = behaviours.Look(
+            name=f"Look_Box",
+            x=0.2,
+            y=0.0,
+            t = "boxes"
+        )
+        reposition_box_sweep = behaviours.Sweep(
+            name=f"Sweep_Box",
+            t = "boxes"
+        )
+        reposition_box_adjust = behaviours.Adjust(
+            name = f"Adjust_Box",
+            t = "boxes"
+        )
+        reposition_drop = behaviours.Drop(
+            name = f"Drop",
+            t = "boxes",
+            task = "DROPOFF"
+        )
+
+        reposition_box_look_fallback = py_trees.composites.Selector(f"LookFallback_Box", memory=True)
+        reposition_box_look_fallback.add_children([
+            reposition_box_look,
+            reposition_box_sweep,
+        ])
+        reposition_drop_routine = py_trees.composites.Sequence(f"RepositionDropRoutine", memory=True)
+        reposition_drop_routine.add_children([
+            reposition_box_look_fallback,
+            reposition_box_adjust,
+            reposition_drop,
+        ])
+        reposition_retry_drop = py_trees.decorators.Retry(name="RetryDrop", child=pickup_routine, num_failures=1)
+
+        reposition_return_after_failed_drop_fallback = py_trees.composites.Selector("ReturnAfterFailedDropFallback", memory=True)
+        reposition_return_after_failed_drop_fallback.add_children([
+            reposition_retry_drop,
+        ])
+    
+        reposition_and_drop = py_trees.composites.Sequence("RepositionAndDrop", memory=True)
+        reposition_and_drop.add_children([
+            box_reposition_point_sequence,
+            reposition_return_after_failed_drop_fallback,
+        ])
+
+        retry_reposition_and_drop = py_trees.decorators.Retry("RetryRepositionAndDrop", child=reposition_and_drop, num_failures=1)
+
+        drop_attempt = py_trees.composites.Selector("DropAttempt", memory=True)
+        drop_attempt.add_children([
+            retry_drop,
+            retry_reposition_and_drop,
+        ])
+
 
         drop_sequence = py_trees.composites.Sequence("DropSequence", memory=True)
         drop_sequence.add_children([
             find_closest_box,
             box_safe_point_sequence,
             box_approach_point_sequence,
-            retry_drop,
+            drop_attempt,
         ])
 
         collection_sequence.add_children([
