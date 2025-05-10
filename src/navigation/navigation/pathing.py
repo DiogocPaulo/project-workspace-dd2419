@@ -335,7 +335,10 @@ class Pathing(Node):
             if self.safe_point is None:
                 self.safe_point = (0.0, 0.0)
 
-        path_planner = AdaptiveAStar(self.inflated_map.grid)
+        if not self.approaching_object:
+            path_planner = AdaptiveAStar(self.inflated_map.grid)
+        else:
+            path_planner = AdaptiveAStar(self.workspace_map.grid)
         start_x, start_y = self.inflated_map.world_to_grid(self.start_point[0], self.start_point[1])
         if not self.backing:
             end_x, end_y = self.inflated_map.world_to_grid(self.end_point[0], self.end_point[1])
