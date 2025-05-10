@@ -353,22 +353,22 @@ class CollectMaster(Node):
 
         # Object Reposition Point
         box_reposition_point_client = behaviours.GoToRepositionPointClient(
-            name="RepositionPointClient_Object",
+            name="RepositionPointClient_Box",
             service_name="/pathing_end_point",
             reposition_offset=0.20,
             input_key="object_position",
-            output_key="object_reposition_waypoint",
+            output_key="box_reposition_waypoint",
         )
 
         box_reached_reposition_point = behaviours.ReachedWaypoint(
-            name="ReachedRepositionPoint_Object",
-            input_key="object_reposition_waypoint",
+            name="ReachedRepositionPoint_Box",
+            input_key="box_reposition_waypoint",
             distance_threshold=self.distance_threshold,
             yaw_threshold=self.yaw_threshold,
         )
 
         box_reposition_point_sequence = py_trees.composites.Sequence(
-            name="RepositionPointSequence_Object",
+            name="RepositionPointSequence_Box",
             memory=False,
         )
 
