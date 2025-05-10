@@ -45,10 +45,11 @@ def compare_object_lists(correct_object_list, found_object_list):
             if distance <= 0.20:
                 match_found = True
                 score += 1
+                print(f"MATCH(object type: {found_object.object_type}, x: {found_object.x:.2f}, y: {found_object.y:.2f}, DISTANCE: {distance:.2f}, distance_x: {-(correct_object.x - found_object.x):.2f}, distance_y: {-(correct_object.y - found_object.y):.2f} )")
                 correct_object_list.remove(correct_object)
                 break
         if not match_found:
-            print(f"No match for (object type: {found_object.object_type}, x: {found_object.x:.2f}, y: {found_object.y:.2f})")
+            print(f"No match for (object type: {found_object.object_type}, x: {found_object.x:.2f}, y: {found_object.y:.2f}, distance_x: {-(correct_object.x - found_object.x):.2f}, distance_y: {-(correct_object.y - found_object.y):.2f})")
             score -= 1
     return score
 

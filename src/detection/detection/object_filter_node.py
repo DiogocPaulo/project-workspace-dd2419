@@ -107,7 +107,7 @@ class ObjectFilterNode(Node):
                 for obj in self.initial_object_list:
                     dist = np.sqrt((raw_obj.x - obj.x)**2 + (raw_obj.y - obj.y)**2)
                     if raw_obj.object_type == "box" or obj.object_type == "box":
-                        if dist <= 0.24:
+                        if dist <= 0.3:
                             nearby.append(obj)
                     elif dist <= CONFIDENCE_RADIUS: # If the object is within 1 cm of an existing object
                         nearby.append(obj)
@@ -128,7 +128,7 @@ class ObjectFilterNode(Node):
                             for nearby_obj in nearby:
                                 dist = np.sqrt((obj.x - nearby_obj.x)**2 + (obj.y - nearby_obj.y)**2)
                                 if obj.object_type == "box":
-                                    if dist <= 0.24:
+                                    if dist <= 0.3:
                                         self.object_list[i].object_type = "box"
                                         break
                                 elif dist <= CONFIDENCE_RADIUS:
@@ -174,7 +174,7 @@ class ObjectFilterNode(Node):
 
                 # Determine threshold based on types
                 if obj1.object_type == "box" or obj2.object_type == "box":
-                    threshold = 0.24  # Boxes need 18cm
+                    threshold = 0.3  # Boxes need 18cm
                 elif obj1.object_type == obj2.object_type: 
                     threshold = 0.15
                 else:

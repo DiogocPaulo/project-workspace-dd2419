@@ -152,35 +152,63 @@ class ObjectDetectorNode(Node):
             pure_red = pure_green = pure_blue = False 
 
             # Check if the cluster is predominantly red, green, or blue
-            if red_ratio > 0.001 and green_ratio == 0.0 and blue_ratio == 0.0:
+            if red_ratio > 0.01 and green_ratio == 0.0 and blue_ratio == 0.0:
                 pure_red = True
-            elif green_ratio > 0.001 and red_ratio == 0.0 and blue_ratio == 0.0:
+            elif green_ratio > 0.005 and red_ratio == 0.0 and blue_ratio == 0.0:
                 pure_green = True
-            elif blue_ratio > 0.001 and red_ratio == 0.0 and green_ratio >= 0.02:
+            elif blue_ratio > 0.001 and red_ratio == 0.0 and green_ratio >= 0.001 and green_ratio <0.021:
                 pure_blue = True
 
             x, y, z = np.mean(cluster_points, axis=0)
+
+            self.get_logger().info(f"red:{red_ratio}, blue:{blue_ratio}, green:{green_ratio}")
 
             if pure_red or pure_green or pure_blue:
                 # Classify based on floor contact points for the current cluster
                 object_type = self.classify_based_on_floor_contact(cluster_points)
                 if object_type == "sphere":
+                    #self.get_logger().info(f"red:{red_ratio}, blue:{blue_ratio}, green:{green_ratio} IM SPHERE")
                     obj = self.create_object(x - 0.05, z + 0.02, 0.0, Object.SPHERE, msg.header.stamp)
                     if obj is not None:
                         frame_objects.append(obj)
                 elif object_type == "cube":
-                    obj = self.create_object(x - 0.05, z + 0.02, 0.0, Object.CUBE, msg.header.stamp)
+                    obj = self.create_object(x - 0.05,z + 0.02, 0.0, Object.CUBE, msg.header.stamp)
                     if obj is not None:
                         frame_objects.append(obj)
             elif self.is_plushie(cluster_points):
                 #self.get_logger().info(f"red:{red_ratio}, blue:{blue_ratio}, green:{green_ratio} IM PLUSHIE")
-                obj = self.create_object(x - 0.04, z, 0.0, Object.PLUSHIE, msg.header.stamp)
+                obj = self.create_object(x - 0.04,z, 0.0, Object.PLUSHIE, msg.header.stamp)
                 self.get_logger().info(f"OI: {obj}")
                 if obj is not None:
                     frame_objects.append(obj)
             elif self.is_box(cluster_points):
                 angle = self.estimate_box_orientation(cluster_points)
-                obj = self.create_object(x, z, angle, Object.BOX, msg.header.stamp)
+
+                direction = np.array([x, y, z])
+                direction_magnitude = np.linalg.norm(direction)
+                if direction_magnitude > 0:
+                    direction_unit = direction / direction_magnitude
+                else:
+                    direction_unit = np.zeros_like(direction)
+
+                # Determine offset based on angle (half of hidden dimension)
+                if angle == 0:
+                    offset = 0.08  # Half of 16cm width (hidden dimension)
+                elif angle == 90:
+                    offset = 0.12  # Half of 24cm length (hidden dimension)
+                else:
+                    offset = 0.0
+
+                # Adjust centroid by moving along the line of sight
+                adjustment = offset * direction_unit
+                adjusted_centroid = [x, y, z] + adjustment
+
+                x_new = adjusted_centroid[0]
+
+                self.get_logger().info(f"direction_unit:{direction_unit} x:{x:.2f}, y:{y:.2f} z:{z:.2f}")
+
+                obj = self.create_object(x_new, adjusted_centroid[2], angle, Object.BOX, msg.header.stamp)
+                obj2 = self.create_object(x, z, angle, Object.BOX, msg.header.stamp)
                 if obj is not None:
                     frame_objects.append(obj)
 
@@ -219,33 +247,17 @@ class ObjectDetectorNode(Node):
                 point_out = do_transform_point(point_in, transform)
 
                 # Extract the transformed coordinates
-                x_transformed = point_out.point.x
+                x_transformed = point_out.point.x - 0.1
                 y_transformed = point_out.point.y
 
-                if object_type == "box":
-                    direction = np.array([x_transformed, y_transformed])
-
-                    direction_magnitude = np.linalg.norm(direction)
-                    if direction_magnitude > 0:
-                        direction_unit = direction / direction_magnitude
-                    else:
-                        direction_unit = np.zeros_like(direction)
-
-                    # Determine offset based on angle (half of hidden dimension)
-                    if angle == 0:
-                        offset = 0.08  # Half of 16cm width (hidden dimension)
-                    elif angle == 90:
-                        offset = 0.12  # Half of 24cm length (hidden dimension)
-                    else:
-                        offset = 0.0
-
-                    # Adjust centroid by moving along the line of sight
-                    adjustment = offset * direction_unit
-                    adjusted_centroid = [x_transformed, y_transformed] + adjustment
-
-                    x_transformed = x_transformed - 0.1
-
-                    self.get_logger().info(f"before:{direction} adjusted:{adjusted_centroid}")
+                if object_type == "box":     
+                    x_transformed = x_transformed - 0.2
+                    self.get_logger().info(f"before_x:{x_transformed} before_y:{y_transformed} angle:{angle}")
+                # elif object_type == "plushie":
+                #     x_transformed = x_transformed - 0.1
+                #     self.get_logger().info(f"object type:{object_type} bef_x:{x_transformed} bef_y:{y_transformed}")
+                else:
+                    self.get_logger().info(f"object type:{object_type} bef_x:{x_transformed} bef_y:{y_transformed}")
 
 
                 # Check if within workspace
@@ -254,8 +266,6 @@ class ObjectDetectorNode(Node):
                 else:
                     is_in = False
 
-                if object_type == "box" or object_type == "plushie":
-                        self.get_logger().info(f"adjusted_x:{x_transformed} and adjusted_y:{y_transformed}")
 
                 if is_in:
                     object_msg = Object()
