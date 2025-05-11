@@ -40,7 +40,7 @@ class FindClosestObject(py_trees.behaviour.Behaviour):
         super().__init__(name)
         self.find_box = find_box
         self.object_point_key = output_key
-        self.current_point = (0.0, 0.0)
+        self.current_point = (None, None)
         self.object_list = []
         self.received_objects = False
         self.blackboard = self.attach_blackboard_client(name=name)
@@ -117,7 +117,7 @@ class ReachedWaypoint(py_trees.behaviour.Behaviour):
         self.waypoint_key = input_key
         self.distance_threshold = distance_threshold
         self.yaw_threshold = yaw_threshold
-        self.current_point = (0.0, 0.0)
+        self.current_point = (None, None)
         self.current_yaw = 0.0
         self.end_point = None
         self.end_yaw = 0.0
@@ -192,7 +192,7 @@ class GoToSafePointClient(py_trees.behaviour.Behaviour):
         self.service_name = service_name
         self.object_point_key = input_key
         self.waypoint_key = output_key
-        self.current_point = (0.0, 0.0)
+        self.current_point = (None, None)
         self.current_yaw = 0.0
         self.safe_point = None
         self.safe_yaw = 0.0
@@ -349,7 +349,7 @@ class GoToRepositionPointClient(py_trees.behaviour.Behaviour):
         self.reposition_offset = reposition_offset
         self.object_point_key = input_key
         self.waypoint_key = output_key
-        self.current_point = (0.0, 0.0)
+        self.current_point = (None, None)
         self.current_yaw = 0.0
         self.reposition_point = None
         self.reposition_yaw = 0.0
@@ -503,7 +503,7 @@ class GoToApproachPointClient(py_trees.behaviour.Behaviour):
         self.approach_offset = approach_offset
         self.object_point_key = input_key
         self.waypoint_key = output_key
-        self.current_point = (0.0, 0.0)
+        self.current_point = (None, None)
         self.current_yaw = 0.0
         self.approach_point = None
         self.approach_yaw = 0.0
