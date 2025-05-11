@@ -262,7 +262,7 @@ class CollectMaster(Node):
             reposition_pickup,
             reposition_object_check,
         ])
-        reposition_retry_pickup = py_trees.decorators.Retry(name="RepositionRetryPickup", child=reposition_pickup_routine, num_failures=1)
+        reposition_retry_pickup = py_trees.decorators.Retry(name="RepositionRetryPickup", child=reposition_pickup_routine, num_failures=2)
 
         reposition_return_after_failed_pickup_fallback = py_trees.composites.Selector("ReturnAfterFailedPickupFallback", memory=True)
         reposition_return_after_failed_pickup_fallback.add_children([
@@ -315,7 +315,6 @@ class CollectMaster(Node):
             object_safe_point_sequence,
             object_approach_point_sequence,
             pickup_attempt,
-            object_return_point_sequence
         ])
 
         find_closest_box = behaviours.FindClosestObject(
@@ -541,12 +540,13 @@ class CollectMaster(Node):
             box_safe_point_sequence,
             box_approach_point_sequence,
             drop_attempt,
-            box_return_point_sequence,
         ])
 
         collection_sequence.add_children([
             pickup_sequence,
+            object_return_point_sequence,
             drop_sequence,
+            box_return_point_sequence,
         ])
 
         root.add_child(collection_sequence)
