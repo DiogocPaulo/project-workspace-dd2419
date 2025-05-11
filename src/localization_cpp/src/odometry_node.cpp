@@ -109,7 +109,7 @@ void OdometryNode::updateOdometry() {
 
     // For debugging purposes print the state
     Eigen::VectorXd state = ekf_.getState();
-    //RCLCPP_INFO(this->get_logger(), "State: x=%.2f, y=%.2f, theta=%.2f, v=%.2f, w=%.2f", state(0), state(1), state(2), state(3), state(4));
+    RCLCPP_INFO(this->get_logger(), "State: x=%.2f, y=%.2f, theta=%.2f, v=%.2f, w=%.2f", state(0), state(1), state(2), state(3), state(4));
 
     // Correct the state using IMU data (skipping correction == only using encoder data, i.e previous odometry node)
     if (imu_data_received_) { // (now_time - last_imu_time_).nanoseconds() / 1e9 < 0.1 <-- Synchronize with IMU data
@@ -142,9 +142,6 @@ void OdometryNode::publishOdometry(const rclcpp::Time& current_time) {
     double v = state(3);
     double w = state(4);
 
-    RCLCPP_INFO(this->get_logger(), "State in Odom frame: x=%.2f, y=%.2f, theta=%.2f, v=%.2f, w=%.2f", state(0), state(1), state(2), state(3), state(4));
-
-
     // Create base_link pose in odom frame
     tf2::Quaternion q;
     q.setRPY(0.0, 0.0, theta);
@@ -163,8 +160,6 @@ void OdometryNode::publishOdometry(const rclcpp::Time& current_time) {
         odom_to_map_ = tf_buffer_->lookupTransform("map", "odom", tf2::TimePointZero);
     }
     tf2::doTransform(pose_odom, pose_in_map, odom_to_map_);
-
-    RCLCPP_INFO(this->get_logger(), "State in Map frame: x=%.2f, y=%.2f, theta=%.2f, v=%.2f, w=%.2f", pose_in_map.pose.position.x, pose_in_map.pose.position.y, theta, v, w);
 
     // Publish tf: odom -> base_link
     geometry_msgs::msg::TransformStamped transform_msg;

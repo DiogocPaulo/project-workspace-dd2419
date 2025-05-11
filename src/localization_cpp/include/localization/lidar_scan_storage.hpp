@@ -57,22 +57,6 @@ struct Scan {
             age_counter = 100; // Reset counter
         }
     }
-
-    // Add this inside the Scan struct
-    void applyPoseUpdate(const Pose2D& new_pose) {
-        // Compute relative transformation
-        double delta_theta = new_pose.theta - pose.theta;
-        Eigen::Rotation2Dd rotation(delta_theta);
-        Eigen::Vector2d translation = new_pose.position - rotation * pose.position;
-
-        // Apply to all points
-        for (auto& point : points) {
-            point = rotation * point + translation;
-        }
-
-        // Update stored pose
-        pose = new_pose;
-    }
 };
 
 class LidarScanStorage {

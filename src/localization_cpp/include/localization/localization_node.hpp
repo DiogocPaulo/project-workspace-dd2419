@@ -28,7 +28,6 @@
 #include "localization/scan_processing.hpp"
 #include "localization/lidar_scan_storage.hpp"
 #include "localization/icp.hpp"
-#include "localization/pose_graph_optimization.hpp"
 
 // PCL (Point Cloud Library) includes for point cloud processing
 #include <pcl/point_cloud.h>
@@ -57,7 +56,6 @@ private:
 
     // Utility functions
     void performChainAlignment(const std::vector<Scan>& scans);
-    void correctScanPosesWithOptimizer();
 
     // ROS Subscribers
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_sub_;
@@ -89,7 +87,6 @@ private:
     double linear_velocity_;
     double angular_velocity_;
     std::unordered_set<int> corrected_scan_ids_;
-    std::unique_ptr<PoseGraphOptimizer> optimizer_;
     
     // Publisher for the point cloud
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr cloud_pub_;
