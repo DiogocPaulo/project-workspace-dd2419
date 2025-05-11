@@ -664,7 +664,7 @@ class GoToWaypointClient(py_trees.behaviour.Behaviour):
             self.node.get_logger().info(f"{self.name} - Waiting for service {self.service_name} ...")
             return py_trees.common.Status.RUNNING
         try:
-            waypoint = self.blackboard.get(self.end_point_key)
+            waypoint = self.blackboard.get(self.waypoint_key)
         except Exception as e:
             self.logger.error(f"{self.name} - Error reading blackboard: {e}")
             return py_trees.common.Status.INVALID
