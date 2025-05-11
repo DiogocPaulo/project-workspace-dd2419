@@ -1113,6 +1113,10 @@ class Pick(py_trees.behaviour.Behaviour):
         while not self.pickup_client.wait_for_service(timeout_sec=1.0):
             self.node.get_logger().info('Service not available, waiting...')
 
+        # self.camera_client = self.node.create_client(GetDetectedList, 'get_detected_list')
+        # while not self.camera_client.wait_for_service(timeout_sec=1.0):
+        #     self.node.get_logger().info('Service not available, waiting...')
+
         self.pos_subscriber = self.node.create_subscription(
             JointState, '/servo_pos_publisher', self.pos_callback, 10)
 
@@ -1184,7 +1188,7 @@ class Pick(py_trees.behaviour.Behaviour):
                 request.point = GeometryPoint()
                 request.point.x = self.x
                 request.point.y = self.y
-                request.point.z = -0.15
+                request.point.z = -0.14
                 request.description = self.task
 
                 self.future = self.pickup_client.call_async(request)

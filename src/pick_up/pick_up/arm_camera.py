@@ -40,7 +40,7 @@ class ArmCamera(Node):
         self.detected_boxes = []
         self.clock = self.get_clock()
 
-        self.CONFIDENCE_THRESHOLD = 0.75
+        self.CONFIDENCE_THRESHOLD = 0.6
 
         self.subscription = self.create_subscription(
             Image, '/arm_camera/image_raw', self.image_callback, 10)
@@ -58,6 +58,9 @@ class ArmCamera(Node):
 
         found_objects = False
         found_boxes = False
+
+        detected_boxes  = []
+        detected_objects = []
 
         # Center crosshairs
         height, width, _ = cv_image.shape
@@ -101,15 +104,9 @@ class ArmCamera(Node):
             entity.timestamp=msg.header.stamp
 
             if entity.label == 'objects' or entity.label == 'plushie':
-                if not found_objects:
-                    self.detected_objects = []
-                    found_objects = True
-                self.detected_objects.append(entity)
+                detected_objects.append(entity)
             elif entity.label == 'Box':
-                if not found_boxes:
-                    self.detected_boxes = []
-                    found_objects = True
-                self.detected_boxes.append(entity)
+                detected_boxes.append(entity)
 
 
         cv2.line(cv_image, (center_x_screen - 20, center_y_screen), (center_x_screen + 20, center_y_screen), (0, 0, 255), 2)
@@ -117,6 +114,9 @@ class ArmCamera(Node):
         cv2.circle(cv_image, (center_x_screen, center_y_screen), 5, (0, 0, 255), -1)
 
         ros_image = self.bridge.cv2_to_imgmsg(cv_image, encoding="bgr8")
+
+        self.detected_objects = detected_objects
+        self.detected_boxes = detected_boxes
 
         self.publisher.publish(ros_image)
 
