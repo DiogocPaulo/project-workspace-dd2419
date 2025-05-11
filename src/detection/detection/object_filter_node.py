@@ -12,6 +12,7 @@ from nav_msgs.msg import OccupancyGrid
 from geometry_msgs.msg import TransformStamped, Quaternion
 
 import tf2_ros
+import time
 
 from mapping.map import Map
 
@@ -30,6 +31,8 @@ class ObjectFilterNode(Node):
         self.object_list = []
         self.initial_object_list = []  
         self.obstacles_map = None
+
+        self.start_time2 = time.time()
         
         # Constant
         self.map_file = "maps/map.csv"
@@ -52,13 +55,27 @@ class ObjectFilterNode(Node):
             self.obstacles_map.update_grid(grid)
 
     def raw_objects_callback(self, msg: ObjectList):
+        elapsed2 = time.time() - self.start_time2
+
+        if elapsed2 < 60:
+            threshold2 = 0.1
+        elif 60<= elapsed2 < 180:
+            threshold2 = 0.2
+        else:
+            threshold2 = 0.3
+
         for raw_obj in msg.objects:
+            if raw_obj.object_type == "box":
+                    raw_obj.x = raw_obj.x + threshold2
+                    
             if self.obstacles_map is not None:
                 free_from_obstacles = self.obstacles_map.are_adjacent_free(raw_obj.x, raw_obj.y, 2, 75)
             else:
                 free_from_obstacles = True
 
             if free_from_obstacles == True:
+                raw_obj.x = raw_obj.x - threshold2
+
                 self.initial_object_list.append(raw_obj)
 
                 # Check if the new object is a duplicate based on proximity

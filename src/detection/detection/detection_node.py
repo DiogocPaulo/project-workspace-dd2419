@@ -47,6 +47,8 @@ class ObjectDetectorNode(Node):
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self, spin_thread=True)
 
+        self.start_time = time.time()
+
         # Variables
         self.workspace_vertices = []
         self.workspace_map = None
@@ -152,11 +154,11 @@ class ObjectDetectorNode(Node):
             pure_red = pure_green = pure_blue = False 
 
             # Check if the cluster is predominantly red, green, or blue
-            if red_ratio > 0.01 and green_ratio == 0.0 and blue_ratio == 0.0:
+            if red_ratio > 0.001 and green_ratio == 0.0 and blue_ratio == 0.0:
                 pure_red = True
             elif green_ratio > 0.005 and red_ratio == 0.0 and blue_ratio == 0.0:
                 pure_green = True
-            elif blue_ratio > 0.001 and red_ratio == 0.0 and green_ratio >= 0.001 and green_ratio <0.021:
+            elif blue_ratio > 0.001 and red_ratio == 0.0 and green_ratio >= 0.0 and green_ratio <0.021:
                 pure_blue = True
 
             x, y, z = np.mean(cluster_points, axis=0)
@@ -218,6 +220,15 @@ class ObjectDetectorNode(Node):
             self.publish_raw_objects(frame_objects, msg.header.stamp)
 
     def create_object(self, x, y, angle, object_type, stamp):
+        elapsed = time.time() - self.start_time
+
+        if elapsed < 60:
+            threshold = 0.1
+        elif 60<= elapsed < 180:
+            threshold = 0.2
+        else:
+            threshold = 0.3
+
         # Create a PointStamped message for the input coordinates
         point_in = PointStamped()
         point_in.header.frame_id = 'camera_depth_optical_frame'
@@ -247,11 +258,11 @@ class ObjectDetectorNode(Node):
                 point_out = do_transform_point(point_in, transform)
 
                 # Extract the transformed coordinates
-                x_transformed = point_out.point.x - 0.1
+                x_transformed = point_out.point.x - threshold
                 y_transformed = point_out.point.y
 
                 if object_type == "box":     
-                    x_transformed = x_transformed - 0.2
+                    x_transformed = x_transformed - threshold
                     self.get_logger().info(f"before_x:{x_transformed} before_y:{y_transformed} angle:{angle}")
                 # elif object_type == "plushie":
                 #     x_transformed = x_transformed - 0.1
@@ -269,7 +280,7 @@ class ObjectDetectorNode(Node):
 
                 if is_in:
                     object_msg = Object()
-                    object_msg.x = x_transformed
+                    object_msg.x = x_transformed + threshold
                     object_msg.y = y_transformed
                     object_msg.angle = angle
                     object_msg.object_type = object_type
