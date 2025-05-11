@@ -722,7 +722,7 @@ class Look(py_trees.behaviour.Behaviour):
         self.clock = None
         self.stage = 0
 
-        self.see_counter_max = 5
+        self.see_counter_max = 1
         self.see_counter = 0
 
     def setup(self, **kwargs):
@@ -844,10 +844,10 @@ class Adjust(py_trees.behaviour.Behaviour):
         self.joint_future = None
         self.joint_client = None
 
-        self.see_counter_max = 4
+        self.see_counter_max = 3
         self.see_counter = 0
 
-        self.correct_counter_max = 2
+        self.correct_counter_max = 1
         self.correct_counter = 0
 
 

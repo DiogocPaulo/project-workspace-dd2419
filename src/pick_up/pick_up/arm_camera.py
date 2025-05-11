@@ -118,7 +118,7 @@ class ArmCamera(Node):
         self.detected_objects = detected_objects
         self.detected_boxes = detected_boxes
 
-        self.publisher.publish(ros_image)
+        # self.publisher.publish(ros_image)
 
     def compute_distance(self,x1,y1,x2,y2):
         return math.sqrt((x2 - x1)**2 + (y2 - y1)**2)

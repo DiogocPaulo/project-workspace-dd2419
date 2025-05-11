@@ -193,7 +193,7 @@ class CollectMaster(Node):
         object_reposition_point_client = behaviours.GoToRepositionPointClient(
             name="RepositionPointClient_Object",
             service_name="/pathing_end_point",
-            reposition_offset=0.20,
+            reposition_offset=0.15,
             input_key="object_position",
             output_key="object_reposition_waypoint",
         )
@@ -420,7 +420,7 @@ class CollectMaster(Node):
         box_reposition_point_client = behaviours.GoToRepositionPointClient(
             name="RepositionPointClient_Box",
             service_name="/pathing_end_point",
-            reposition_offset=0.25,
+            reposition_offset=0.20,
             input_key="object_position",
             output_key="box_reposition_waypoint",
         )

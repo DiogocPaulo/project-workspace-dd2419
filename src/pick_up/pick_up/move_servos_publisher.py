@@ -230,7 +230,7 @@ class MultiServoPublisher(Node):
         msg.data = pose
         self.publisher.publish(msg)
 
-        self.clock.sleep_for(rclpy.duration.Duration(seconds=3))
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=4))
     
         return 0
     
@@ -517,11 +517,6 @@ class MultiServoPublisher(Node):
         boxes = request.boxes
         target = request.target
 
-        if target == "objects" and len(objects)==0:
-            return 2
-        if target == "boxes" and len(boxes)==0:
-            return 2
-
         closest_obj = None
         if target == 'objects' and len(objects)>0:
             closest_obj = min(objects, key=lambda DetectedData: DetectedData.distance)
@@ -529,9 +524,13 @@ class MultiServoPublisher(Node):
             closest_obj = min(boxes, key=lambda DetectedData: DetectedData.distance)
 
         if target == 'objects':
-            eps = 12
+            eps = 10
         else:
             eps = 30
+
+        if closest_obj == None:
+            response.result = 1
+            return response
 
         #Check if within threshhold:
         if closest_obj.distance <= eps:
@@ -540,17 +539,17 @@ class MultiServoPublisher(Node):
             return response
 
         step_size = 400
-        move_time = 200
+        move_time = 150
 
         if closest_obj.distance < 100:
             step_size = 200
-            move_time = 100
+            move_time = 75
         if closest_obj.distance < 30:
             step_size = 100
-            move_time = 50 
+            move_time = 35 
         if closest_obj.distance < 10:
-            step_size = 30
-            move_time = 15
+            step_size = 75
+            move_time = 25
 
         base = self.base
         v3 = self.v3
