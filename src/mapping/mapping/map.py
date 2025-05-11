@@ -20,7 +20,7 @@ class Map:
         self.grid = grid
         self.workspace_vertices = None
         self.occupancy_increase = 25
-        self.occupancy_decrease = 1
+        self.occupancy_decrease = 5
 
     def initialise_grid(self, workspace_vertices, empty=False):
         # Initialise grid based on a workspace perimeter
@@ -32,8 +32,8 @@ class Map:
         y_min = math.floor(min(y_list) / self.resolution) - 1.5
         y_max = math.ceil(max(y_list) / self.resolution) + 0.5
 
-        self.grid_width = math.ceil(x_max - x_min)
-        self.grid_height = math.ceil(y_max - y_min) - 1
+        self.grid_width = math.ceil(x_max - x_min) + 20
+        self.grid_height = math.ceil(y_max - y_min) + 20
         
         self.origin_x = (x_min) * self.resolution
         self.origin_y = (y_min) * self.resolution
@@ -158,16 +158,11 @@ class Map:
             return
         for cell in cells[:-1]:
             x, y = cell
-            if not self.is_within_grid(x, y, world=False):
-                continue
-            self.grid[y, x] = max(self.grid[y, x] - self.occupancy_decrease, 0)
+            if valid and self.is_within_grid(x, y, world=False):
+                self.grid[y, x] = max(self.grid[y, x] - self.occupancy_decrease, 0)
         x, y = cells[-1]
-        if not self.is_within_grid(x, y, world=False):
-            return
-        if valid:
+        if valid and self.is_within_grid(x, y, world=False):
             self.grid[y, x] = min(self.grid[y, x] + self.occupancy_increase, 100)
-        else:
-            self.grid[y, x] = max(self.grid[y, x] - self.occupancy_decrease, 0)
 
     def add_workspace_perimeter(self):
         for y in range(self.grid_height):
@@ -239,7 +234,7 @@ class Map:
                     return False
         return True
 
-    def get_best_safe_point(self, robot_x, robot_y, x, y, radius, threshold, max_search_radius=15, world=True):
+    def get_best_safe_point(self, robot_x, robot_y, x, y, radius, threshold, max_search_radius=20, world=True):
         if self.grid is None:
             return None
         if world:
