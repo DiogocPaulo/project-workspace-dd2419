@@ -129,6 +129,21 @@ class CollectMaster(Node):
             y=0.0,
             t = "objects"
         )
+
+        object_look_left = behaviours.Look(
+            name=f"Look_Object",
+            x=0.2,
+            y=0.2,
+            t = "objects"
+        )
+
+        object_look_right = behaviours.Look(
+            name=f"Look_Object",
+            x=0.2,
+            y=-0.2,
+            t = "objects"
+        )
+
         object_sweep = behaviours.Sweep(
             name=f"Sweep_Object",
             t = "objects"
@@ -155,7 +170,8 @@ class CollectMaster(Node):
         object_look_fallback = py_trees.composites.Selector(f"LookFallback_Object", memory=True)
         object_look_fallback.add_children([
             object_look,
-            object_sweep,
+            object_look_left,
+            object_look_right
         ])
 
         pickup_routine = py_trees.composites.Sequence(f"PickupRoutine", memory=True)
@@ -206,8 +222,17 @@ class CollectMaster(Node):
             y=0.0,
             t = "objects"
         )
-        reposition_object_sweep = behaviours.Sweep(
-            name=f"Sweep_Object",
+        reposition_object_look_left = behaviours.Look(
+            name=f"Look_Object",
+            x=0.2,
+            y=0.2,
+            t = "objects"
+        )
+
+        reposition_object_look_right = behaviours.Look(
+            name=f"Look_Object",
+            x=0.2,
+            y=-0.2,
             t = "objects"
         )
         reposition_object_adjust = behaviours.Adjust(
@@ -227,7 +252,8 @@ class CollectMaster(Node):
         reposition_object_look_fallback = py_trees.composites.Selector(f"LookFallback_Object", memory=True)
         reposition_object_look_fallback.add_children([
             reposition_object_look,
-            reposition_object_sweep,
+            reposition_object_look_left,
+            reposition_object_look_right,
         ])
         reposition_pickup_routine = py_trees.composites.Sequence(f" ", memory=True)
         reposition_pickup_routine.add_children([
@@ -350,6 +376,19 @@ class CollectMaster(Node):
             y=0.0,
             t = "boxes"
         )
+        box_look_left = behaviours.Look(
+            name=f"Look_Object",
+            x=0.2,
+            y=0.2,
+            t = "boxes"
+        )
+
+        box_look_right = behaviours.Look(
+            name=f"Look_Object",
+            x=0.2,
+            y=-0.2,
+            t = "boxes"
+        )
         box_sweep = behaviours.Sweep(
             name=f"Sweep_Box",
             t = "boxes"
@@ -367,7 +406,8 @@ class CollectMaster(Node):
         box_look_fallback = py_trees.composites.Selector(f"LookFallback_Box", memory=True)
         box_look_fallback.add_children([
             box_look,
-            box_sweep,
+            box_look_left,
+            box_look_right,
         ])
         drop_routine = py_trees.composites.Sequence(f"DropRoutine", memory=True)
         drop_routine.add_children([
@@ -410,6 +450,19 @@ class CollectMaster(Node):
             y=0.0,
             t = "boxes"
         )
+        reposition_box_look_left = behaviours.Look(
+            name=f"Look_Object",
+            x=0.2,
+            y=0.2,
+            t = "boxes"
+        )
+
+        reposition_box_look_right = behaviours.Look(
+            name=f"Look_Object",
+            x=0.2,
+            y=-0.2,
+            t = "boxes"
+        )
         reposition_box_sweep = behaviours.Sweep(
             name=f"Sweep_Box",
             t = "boxes"
@@ -427,7 +480,8 @@ class CollectMaster(Node):
         reposition_box_look_fallback = py_trees.composites.Selector(f"LookFallback_Box", memory=True)
         reposition_box_look_fallback.add_children([
             reposition_box_look,
-            reposition_box_sweep,
+            reposition_box_look_left,
+            reposition_box_look_right,
         ])
         reposition_drop_routine = py_trees.composites.Sequence(f"RepositionDropRoutine", memory=True)
         reposition_drop_routine.add_children([
