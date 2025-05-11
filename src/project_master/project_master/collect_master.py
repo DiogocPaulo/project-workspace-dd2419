@@ -257,6 +257,31 @@ class CollectMaster(Node):
             retry_reposition_and_pickup,
         ])
 
+        # Object Return Point
+        object_return_point_client = behaviours.GoToWaypointClient(
+            name="ReturnPointClient_Object",
+            service_name="/pathing_end_point",
+            input_key="object_safe_waypoint",
+            velocity=0.12,
+            reverse=True,
+            slow_approach=False,
+            approaching_object=True,
+        )
+        object_reached_return_point = behaviours.ReachedWaypoint(
+            name="ReachedReturnPoint_Object",
+            input_key="object_safe_waypoint",
+            distance_threshold=self.distance_threshold,
+            yaw_threshold=self.yaw_threshold,
+        )
+        object_return_point_sequence = py_trees.composites.Sequence(
+            name="ReturnPointSequence_Object",
+            memory=False,
+        )
+        object_return_point_sequence.add_children([
+            object_return_point_client,
+            object_reached_return_point,
+        ])
+
         pickup_sequence = py_trees.composites.Sequence("PickupSequence", memory=True)
         pickup_sequence.add_children([
             object_return,
@@ -264,6 +289,7 @@ class CollectMaster(Node):
             object_safe_point_sequence,
             object_approach_point_sequence,
             pickup_attempt,
+            object_return_point_sequence
         ])
 
         find_closest_box = behaviours.FindClosestObject(
@@ -430,6 +456,30 @@ class CollectMaster(Node):
             retry_reposition_and_drop,
         ])
 
+        # Box Return Point
+        box_return_point_client = behaviours.GoToWaypointClient(
+            name="ReturnPointClient_Box",
+            service_name="/pathing_end_point",
+            input_key="box_safe_waypoint",
+            velocity=0.12,
+            reverse=True,
+            slow_approach=False,
+            approaching_object=True,
+        )
+        box_reached_return_point = behaviours.ReachedWaypoint(
+            name="ReachedReturnPoint_Box",
+            input_key="box_safe_waypoint",
+            distance_threshold=self.distance_threshold,
+            yaw_threshold=self.yaw_threshold,
+        )
+        box_return_point_sequence = py_trees.composites.Sequence(
+            name="ReturnPointSequence_Box",
+            memory=False,
+        )
+        box_return_point_sequence.add_children([
+            box_return_point_client,
+            box_reached_return_point,
+        ])
 
         drop_sequence = py_trees.composites.Sequence("DropSequence", memory=True)
         drop_sequence.add_children([
@@ -437,6 +487,7 @@ class CollectMaster(Node):
             box_safe_point_sequence,
             box_approach_point_sequence,
             drop_attempt,
+            box_return_point_sequence,
         ])
 
         collection_sequence.add_children([

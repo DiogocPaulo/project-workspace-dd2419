@@ -619,6 +619,93 @@ class GoToApproachPointClient(py_trees.behaviour.Behaviour):
         else:
             return py_trees.common.Status.RUNNING
 
+class GoToWaypointClient(py_trees.behaviour.Behaviour):
+    def __init__(self, name, service_name, velocity, reverse, slow_approach, approaching_object, input_key):
+        super().__init__(name)
+        self.service_name = service_name
+        self.velocity = velocity
+        self.reverse = reverse
+        self.slow_approach = slow_approach
+        self.approaching_object = approaching_object
+        self.waypoint_key = input_key
+        self.end_point = None
+        self.end_yaw = 0.0
+        self.client = None
+        self.future = None
+        self.sent_request = False
+        self.blackboard = self.attach_blackboard_client(name=name)
+        self.blackboard.register_key(
+            key=self.waypoint_key,
+            access=py_trees.common.Access.READ
+        )
+
+    def setup(self, **kwargs):
+        try:
+            self.node = kwargs.get("node")
+        except Exception as e:
+            self.logger.error(f"{self.name} - Setup failed: {e}")
+            return False
+
+        qos_profile = QoSProfile(
+            depth=1,
+            history=HistoryPolicy.KEEP_LAST,
+            reliability=ReliabilityPolicy.BEST_EFFORT
+        )
+
+        self.client = self.node.create_client(GoToPoint, self.service_name)
+        return True
+
+    def initialise(self):
+        self.sent_request = False
+        self.future = None
+
+    def update(self):
+        if not self.client.service_is_ready():
+            self.node.get_logger().info(f"{self.name} - Waiting for service {self.service_name} ...")
+            return py_trees.common.Status.RUNNING
+        try:
+            waypoint = self.blackboard.get(self.end_point_key)
+        except Exception as e:
+            self.logger.error(f"{self.name} - Error reading blackboard: {e}")
+            return py_trees.common.Status.INVALID
+
+        self.end_point = (waypoint[0], waypoint[1])
+        self.end_yaw = waypoint[2]
+
+        if not self.sent_request:
+            try:
+                request = GoToPoint.Request()
+                request.x = self.end_point[0]
+                request.y = self.end_point[1]
+                request.yaw = self.end_yaw
+                request.velocity = self.velocity
+                request.reverse = self.reverse
+                request.slow_approach = self.slow_approach
+                request.approaching_object = self.approaching_object
+
+                self.future = self.client.call_async(request)
+                self.sent_request = True
+                self.node.get_logger().info(f"{self.name} - Sent request to {self.service_name}")
+                return py_trees.common.Status.RUNNING
+            except Exception as e:
+                self.node.get_logger().error(f"{self.name} - Failed to send request: {e}")
+                return py_trees.common.Status.FAILURE
+
+        if self.future.done():
+            try:
+                response = self.future.result()
+                if response.success:
+                    self.node.get_logger().info(f"{self.name} - Service call response: {response.success}, {response.message}")
+                    return py_trees.common.Status.SUCCESS
+                else:
+                    self.node.get_logger().info(f"{self.name} - Service call response: {response.success}, {response.message}")
+                    return py_trees.common.Status.FAILURE
+            except Exception as e:
+                self.node.get_logger().error(f"{self.name} - Service call failed with exception: {e}")
+                return py_trees.common.Status.FAILURE
+        else:
+            return py_trees.common.Status.RUNNING
+
 class Look(py_trees.behaviour.Behaviour):
     """
     A behaviour that determines the next end point and navigates to it.
