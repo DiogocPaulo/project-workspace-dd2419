@@ -57,10 +57,14 @@ class ObjectFilterNode(Node):
     def raw_objects_callback(self, msg: ObjectList):
         elapsed2 = time.time() - self.start_time2
 
+        if elapsed2 == 60 or elapsed2 == 180:
+            self.get_logger().info(f"TIME: {elapsed2}")
+
         if elapsed2 < 60:
             threshold2 = 0.1
-        elif 60<= elapsed2 < 180:
+        elif 60<= elapsed2 < 160:
             threshold2 = 0.2
+            self.get_logger().info(f"TIME: {elapsed2}")
         else:
             threshold2 = 0.3
 
@@ -69,7 +73,7 @@ class ObjectFilterNode(Node):
                     raw_obj.x = raw_obj.x + threshold2
                     
             if self.obstacles_map is not None:
-                free_from_obstacles = self.obstacles_map.are_adjacent_free(raw_obj.x, raw_obj.y, 2, 75)
+                free_from_obstacles = self.obstacles_map.are_adjacent_free(raw_obj.x, raw_obj.y, 1, 75)
             else:
                 free_from_obstacles = True
 
@@ -193,7 +197,7 @@ class ObjectFilterNode(Node):
                 if obj1.object_type == "box" or obj2.object_type == "box":
                     threshold = 0.3  # Boxes need 18cm
                 elif obj1.object_type == obj2.object_type: 
-                    threshold = 0.15
+                    threshold = 0.18
                 else:
                     threshold = 0.06 # Others need 5cm
 
