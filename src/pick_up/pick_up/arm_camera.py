@@ -40,7 +40,7 @@ class ArmCamera(Node):
         self.detected_boxes = []
         self.clock = self.get_clock()
 
-        self.CONFIDENCE_THRESHOLD = 0.6
+        self.CONFIDENCE_THRESHOLD = 0.3
 
         self.subscription = self.create_subscription(
             Image, '/arm_camera/image_raw', self.image_callback, 10)

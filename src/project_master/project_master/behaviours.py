@@ -444,6 +444,9 @@ class GoToRepositionPointClient(py_trees.behaviour.Behaviour):
         except Exception as e:
             self.node.get_logger.error(f"{self.name} - Error reading blackboard: {e}")
             return py_trees.common.Status.INVALID
+        if current_object_point == (None, None):
+            self.node.get_logger().warn(f"{self.name} - No object point provided for repositioning")
+            return py_trees.common.Status.FAILURE
 
         if self.previous_object_point != current_object_point or self.reposition_point is None:
             try:
