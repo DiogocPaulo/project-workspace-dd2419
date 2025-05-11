@@ -32,8 +32,8 @@ class Map:
         y_min = math.floor(min(y_list) / self.resolution) - 1.5
         y_max = math.ceil(max(y_list) / self.resolution) + 0.5
 
-        self.grid_width = math.ceil(x_max - x_min)
-        self.grid_height = math.ceil(y_max - y_min) - 1
+        self.grid_width = math.ceil(x_max - x_min) + 20
+        self.grid_height = math.ceil(y_max - y_min) + 20
         
         self.origin_x = (x_min) * self.resolution
         self.origin_y = (y_min) * self.resolution
