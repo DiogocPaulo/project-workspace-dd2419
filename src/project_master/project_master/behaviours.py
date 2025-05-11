@@ -725,11 +725,21 @@ class Look(py_trees.behaviour.Behaviour):
         self.see_counter_max = 1
         self.see_counter = 0
 
+        self.object_position_key = "object_position"
+
+
+        self.blackboard = self.attach_blackboard_client(name=name)
+        self.blackboard.register_key(
+            key=self.object_position_key,
+            access=py_trees.common.Access.WRITE
+        )
+
+
     def setup(self, **kwargs):
         try:
             self.node = kwargs.get("node")
         except Exception as e:
-            self.logger.error(f"{self.name} - Setup failed: {e}")
+            self.node.get_logger.error(f"{self.name} - Setup failed: {e}")
             return False
 
 
@@ -769,7 +779,7 @@ class Look(py_trees.behaviour.Behaviour):
                 request.point.x = self.x
                 request.point.y = self.y
                 request.point.z = 0.0
-                request.description = "LOOK"
+                request.description = "LOOK" 
 
                 self.future = self.pickup_client.call_async(request)
                 self.stage = 1
@@ -813,6 +823,8 @@ class Look(py_trees.behaviour.Behaviour):
                             self.stage = 2
                     else:
                         self.node.get_logger().info("Look for objects failed")
+                        object_position = (None,None)
+                        self.blackboard.set(self.object_position_key,object_position)
                         return py_trees.common.Status.FAILURE
                 elif self.type == "boxes":
                     if len(response.boxes) > 0:
@@ -825,6 +837,147 @@ class Look(py_trees.behaviour.Behaviour):
                             self.stage = 2
                     else:
                         self.node.get_logger().info("Look for boxes failed")
+                        object_position = (None,None)
+                        self.blackboard.set(self.object_position_key,object_position)
+                        return py_trees.common.Status.FAILURE
+                    
+
+            return py_trees.common.Status.RUNNING
+
+class LookUp(py_trees.behaviour.Behaviour):
+    """
+    A behaviour that determines the next end point and navigates to it.
+    """
+    def __init__(self, name, x, y, t, **kwargs):
+        super().__init__(name)
+        self.x = x
+        self.y = y
+        self.type = t
+        self.node = None
+        self.pickup_client = None
+        self.camera_client = None
+        self.request_args = kwargs
+        self.clock = None
+        self.stage = 0
+
+        self.see_counter_max = 1
+        self.see_counter = 0
+
+
+        self.object_position_key = "object_position"
+
+
+        self.blackboard = self.attach_blackboard_client(name=name)
+        self.blackboard.register_key(
+            key=self.object_position_key,
+            access=py_trees.common.Access.WRITE
+        )
+
+
+    def setup(self, **kwargs):
+        try:
+            self.node = kwargs.get("node")
+        except Exception as e:
+            self.node.get_logger.error(f"{self.name} - Setup failed: {e}")
+            return False
+
+
+        self.pickup_client = self.node.create_client(PickObject, 'PickObject')
+        while not self.pickup_client.wait_for_service(timeout_sec=1.0):
+            self.node.get_logger().info("Arm Request service not yet avaliable, waiting ...")
+
+        self.camera_client = self.node.create_client(GetDetectedList, 'get_detected_list')
+        while not self.camera_client.wait_for_service(timeout_sec=1.0):
+            self.node.get_logger().info('Service not available, waiting...')
+
+        self.clock = self.node.get_clock()
+
+        self.future = None
+
+
+        return True
+
+    def initialise(self):
+        self.stage = 0
+        self.future = None
+        self.see_counter = 0
+
+    def print_seen(self,objects):
+        for o in objects:
+            self.node.get_logger().info(f"Seeing {o.label} at ({o.center_x},{o.center_y}) with confidence: {o.confidence}")
+
+    def update(self):
+        if self.stage == 0:
+            try:
+                request = PickObject.Request()
+
+                request.header = Header()
+                request.header.stamp = self.node.get_clock().now().to_msg()
+                request.header.frame_id = "arm_base"
+                request.point = GeometryPoint()
+                request.point.x = self.x
+                request.point.y = self.y
+                request.point.z = 0.0
+                request.description = "LOOKUP" 
+
+                self.future = self.pickup_client.call_async(request)
+                self.stage = 1
+                self.node.get_logger().info(f"{self.name} - Sent request to Look")
+                return py_trees.common.Status.RUNNING
+            except Exception as e:
+                self.node.get_logger().error(f"{self.name} - Failed to send request: {e}")
+                return py_trees.common.Status.FAILURE
+
+            return py_trees.common.Status.RUNNING
+
+        elif self.stage == 1:
+            if self.future.done():
+                response = self.future.result()
+                if response.result == 0:
+                    self.stage = 2
+
+            return py_trees.common.Status.RUNNING
+                
+        elif self.stage == 2:
+            request = GetDetectedList.Request()
+
+            self.future = self.camera_client.call_async(request)
+            self.stage = 3
+
+            return py_trees.common.Status.RUNNING
+
+        elif self.stage == 3:
+            if self.future.done():
+                response = self.future.result()
+
+                
+                if self.type == "objects":
+                    if len(response.objects) > 0:
+                        self.print_seen(response.objects)
+                        self.see_counter+=1
+                        if self.see_counter>=self.see_counter_max:
+                            self.node.get_logger().info("Look for objects succeeded")
+                            return py_trees.common.Status.SUCCESS
+                        else:
+                            self.stage = 2
+                    else:
+                        self.node.get_logger().info("Look for objects failed")
+                        object_position = (None,None)
+                        self.blackboard.set(self.object_position_key,object_position)
+                        return py_trees.common.Status.FAILURE
+                elif self.type == "boxes":
+                    if len(response.boxes) > 0:
+                        self.print_seen(response.boxes)
+                        self.see_counter+=1
+                        if self.see_counter>=self.see_counter_max:
+                            self.node.get_logger().info("Look for boxes succeeded")
+                            return py_trees.common.Status.SUCCESS
+                        else:
+                            self.stage = 2
+                    else:
+                        self.node.get_logger().info("Look for boxes failed")
+                        object_position = (None,None)
+                        self.blackboard.set(self.object_position_key,object_position)
                         return py_trees.common.Status.FAILURE
                     
 
@@ -849,6 +1002,16 @@ class Adjust(py_trees.behaviour.Behaviour):
 
         self.correct_counter_max = 1
         self.correct_counter = 0
+
+
+        self.object_position_key = "object_position"
+
+
+        self.blackboard = self.attach_blackboard_client(name=name)
+        self.blackboard.register_key(
+            key=self.object_position_key,
+            access=py_trees.common.Access.WRITE
+        )
 
 
     def setup(self, **kwargs):
@@ -914,6 +1077,8 @@ class Adjust(py_trees.behaviour.Behaviour):
                     self.see_counter += 1
                     if self.see_counter >= self.see_counter_max:
                         self.node.get_logger().info(f"Adjust failed")
+                        object_position = (None,None)
+                        self.blackboard.set(self.object_position_key,object_position)
                         return py_trees.common.Status.FAILURE
                     else:
                         self.stage = 0
@@ -951,6 +1116,7 @@ class Adjust(py_trees.behaviour.Behaviour):
                     return py_trees.common.Status.RUNNING
                 else:
                     self.see_counter += 1
+
                     self.stage = 0
                 
             return py_trees.common.Status.RUNNING
@@ -973,6 +1139,15 @@ class Sweep(py_trees.behaviour.Behaviour):
         self.counter = 0
         self.see_counter = 0
         self.see_counter_max = 5
+
+        self.object_position_key = "object_position"
+
+
+        self.blackboard = self.attach_blackboard_client(name=name)
+        self.blackboard.register_key(
+            key=self.object_position_key,
+            access=py_trees.common.Access.WRITE
+        )
 
 
         self.positions = [
@@ -1121,6 +1296,7 @@ class Check(py_trees.behaviour.Behaviour):
 
     def initialise(self):
         self.stage = 0
+        self.counter = 0
         self.future = None
 
     def update(self):
@@ -1142,12 +1318,13 @@ class Check(py_trees.behaviour.Behaviour):
                 boxes = response.boxes
 
                 if len(objects)>0:
+                    self.node.get_logger().info(f"Check Succeeded")
                     return py_trees.common.Status.SUCCESS
 
                 self.counter += 1
 
                 if self.counter > self.counter_max:
-                    self.counter = 0
+                    self.node.get_logger().info(f"Check Failed")
                     return py_trees.common.Status.FAILURE
                 else:
                     self.stage = 0
@@ -1275,7 +1452,7 @@ class Pick(py_trees.behaviour.Behaviour):
                 request.point = GeometryPoint()
                 request.point.x = self.x
                 request.point.y = self.y
-                request.point.z = -0.14
+                request.point.z = -0.15
                 request.description = self.task
 
                 self.future = self.pickup_client.call_async(request)

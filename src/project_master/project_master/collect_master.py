@@ -130,15 +130,22 @@ class CollectMaster(Node):
             t = "objects"
         )
 
+        object_look_up = behaviours.LookUp(
+            name=f"LookUp_Object",
+            x=0.2,
+            y=0.0,
+            t = "objects"
+        )
+
         object_look_left = behaviours.Look(
-            name=f"Look_Object",
+            name=f"LookLeft_Object",
             x=0.2,
             y=0.2,
             t = "objects"
         )
 
         object_look_right = behaviours.Look(
-            name=f"Look_Object",
+            name=f"LookRight_Object",
             x=0.2,
             y=-0.2,
             t = "objects"
@@ -170,6 +177,7 @@ class CollectMaster(Node):
         object_look_fallback = py_trees.composites.Selector(f"LookFallback_Object", memory=True)
         object_look_fallback.add_children([
             object_look,
+            object_look_up,
             object_look_left,
             object_look_right
         ])
@@ -217,20 +225,28 @@ class CollectMaster(Node):
 
         # Reposition Pickup Routine
         reposition_object_look = behaviours.Look(
-            name=f"Look_Object",
+            name=f"RepositionLook_Object",
             x=0.2,
             y=0.0,
             t = "objects"
         )
+
+        reposition_object_look_up = behaviours.LookUp(
+            name=f"RepositionLookUp_Object",
+            x=0.2,
+            y=0.0,
+            t = "objects"
+        )
+
         reposition_object_look_left = behaviours.Look(
-            name=f"Look_Object",
+            name=f"RepositionLookLeft_Object",
             x=0.2,
             y=0.2,
             t = "objects"
         )
 
         reposition_object_look_right = behaviours.Look(
-            name=f"Look_Object",
+            name=f"RepositionLookRight_Object",
             x=0.2,
             y=-0.2,
             t = "objects"
@@ -252,6 +268,7 @@ class CollectMaster(Node):
         reposition_object_look_fallback = py_trees.composites.Selector(f"LookFallback_Object", memory=True)
         reposition_object_look_fallback.add_children([
             reposition_object_look,
+            reposition_object_look_up,
             reposition_object_look_left,
             reposition_object_look_right,
         ])
@@ -375,15 +392,22 @@ class CollectMaster(Node):
             y=0.0,
             t = "boxes"
         )
+
+        box_look_up = behaviours.LookUp(
+            name=f"LookUp_Box",
+            x=0.2,
+            y=0.0,
+            t = "objects"
+        )
         box_look_left = behaviours.Look(
-            name=f"Look_Object",
+            name=f"LookLeft_Box",
             x=0.2,
             y=0.2,
             t = "boxes"
         )
 
         box_look_right = behaviours.Look(
-            name=f"Look_Object",
+            name=f"LookRight_Box",
             x=0.2,
             y=-0.2,
             t = "boxes"
@@ -405,6 +429,7 @@ class CollectMaster(Node):
         box_look_fallback = py_trees.composites.Selector(f"LookFallback_Box", memory=True)
         box_look_fallback.add_children([
             box_look,
+            box_look_up,
             box_look_left,
             box_look_right,
         ])
@@ -450,14 +475,14 @@ class CollectMaster(Node):
             t = "boxes"
         )
         reposition_box_look_left = behaviours.Look(
-            name=f"Look_Object",
+            name=f"RepositionLookLeft_Box",
             x=0.2,
             y=0.2,
             t = "boxes"
         )
 
         reposition_box_look_right = behaviours.Look(
-            name=f"Look_Object",
+            name=f"RepositionLookRight_Box",
             x=0.2,
             y=-0.2,
             t = "boxes"

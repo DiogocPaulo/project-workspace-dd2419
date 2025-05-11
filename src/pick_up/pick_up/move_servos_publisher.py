@@ -79,6 +79,8 @@ class MultiServoPublisher(Node):
             response.result = self.dropoff_callback(request)
         elif request.description == "LOOK":
             response.result = self.look_callback(request)
+        elif request.description == "LOOKUP":
+            response.result = self.lookup_callback(request)
         elif request.description == "RETURN":
             response.result = self.return_callback(request)
         else:
@@ -224,7 +226,53 @@ class MultiServoPublisher(Node):
         position = position.point
         base_arm,v1_arm,v2_arm,v3_arm = self.FindKinematics(position.x,position.y,position.z)
         
-        pose = [17000,12000,7000,21000,12000,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
+        pose = [17000,12000,6500,21000,12000,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
+        self.base = base_arm
+        self.v3 = v3_arm
+        msg.data = pose
+        self.publisher.publish(msg)
+
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=4))
+    
+        return 0
+
+    def lookup_callback(self, request):
+        self.get_logger().info(f'Received look up request at {request.point}')
+        msg = Int16MultiArray()
+        msg.layout = MultiArrayLayout(dim=[MultiArrayDimension(label="", size=12, stride=12)], data_offset=0)
+        move_time = 2000 #arm speed (milliseconds)
+
+        zero_time = Time()
+        zero_time.sec = 0
+        zero_time.nanosec = 0
+    
+        # Transform ---------------------------------------
+        tf_future = self.tfBuffer.wait_for_transform_async(
+            target_frame = 'arm_base',
+            source_frame = request.header.frame_id,
+            time = zero_time # Get latest transform instead of timestamped, since we want to pickup when the robot is standing still
+        )
+
+        rclpy.spin_until_future_complete(self,tf_future, timeout_sec=1)
+
+        try:
+            t = self.tfBuffer.lookup_transform(
+                'arm_base',
+                request.header.frame_id,
+                zero_time
+        )
+        except TransformException as ex:
+            self.get_logger().info(
+                f'Could not transform map to arm_base: {ex}'
+            )
+        # Transform ---------------------------------------
+
+        self.clock.sleep_for(rclpy.duration.Duration(seconds=0.5)) #Give arm time to do its thing
+        position = do_transform_point(request,t)
+        position = position.point
+        base_arm,v1_arm,v2_arm,v3_arm = self.FindKinematics(position.x,position.y,position.z)
+        
+        pose = [17000,12000,8000,21000,12000,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
         self.base = base_arm
         self.v3 = v3_arm
         msg.data = pose
@@ -529,7 +577,7 @@ class MultiServoPublisher(Node):
             eps = 30
 
         if closest_obj == None:
-            response.result = 1
+            response.result = 2
             return response
 
         #Check if within threshhold:
@@ -545,11 +593,11 @@ class MultiServoPublisher(Node):
             step_size = 200
             move_time = 75
         if closest_obj.distance < 30:
-            step_size = 100
+            step_size = 120
             move_time = 35 
         if closest_obj.distance < 10:
-            step_size = 75
-            move_time = 25
+            step_size = 100
+            move_time = 35
 
         base = self.base
         v3 = self.v3

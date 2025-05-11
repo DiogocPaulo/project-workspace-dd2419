@@ -57,7 +57,7 @@ class Pathing(Node):
         self.adaptive_h = {}
         self.workspace_inflation_radius = 0.30
         self.objects_inflation_radius = 0.35
-        self.obstacles_inflation_radius = 0.35
+        self.obstacles_inflation_radius = 0.30
 
         # Variables
         self.start_point = (0.0, 0.0)
