@@ -1016,6 +1016,13 @@ class Adjust(py_trees.behaviour.Behaviour):
             access=py_trees.common.Access.WRITE
         )
 
+        self.object_type_key = "object_type"
+
+        self.blackboard.register_key(
+            key=self.object_type_key,
+            access=py_trees.common.Access.WRITE
+        )
+
 
     def setup(self, **kwargs):
         try:
@@ -1109,7 +1116,9 @@ class Adjust(py_trees.behaviour.Behaviour):
                 if response.result == 0:
                     self.correct_counter += 1
                     if self.correct_counter >= self.correct_counter_max:
-                        self.node.get_logger().info(f"Adjust succeeded")
+                        object_type = response.target
+                        self.blackboard.set(self.object_type_key,object_type)
+                        self.node.get_logger().info(f"Adjust succeeded and saw {object_type}")
                         return py_trees.common.Status.SUCCESS
                     else:
                         self.stage=0
@@ -1357,13 +1366,21 @@ class Pick(py_trees.behaviour.Behaviour):
         self.v3 = 12000
         self.off_base = 0.14
 
+        self.current_object_type = "None"
+
         self.object_position_key = "object_position"
+        self.object_type_key = "object_type"
 
 
         self.blackboard = self.attach_blackboard_client(name=name)
         self.blackboard.register_key(
             key=self.object_position_key,
             access=py_trees.common.Access.WRITE
+        )
+
+        self.blackboard.register_key(
+            key=self.object_type_key,
+            access=py_trees.common.Access.READ
         )
 
 
@@ -1419,6 +1436,7 @@ class Pick(py_trees.behaviour.Behaviour):
 
         # Stage 2 estimates the position of the target given where the arm is pointing
         elif self.stage == 2:
+            self.current_object_type = self.blackboard.get(self.object_type_key)
             l1 = 0.101
             l2 = 0.095
             base = math.radians((12000 - self.base) / 100)
@@ -1431,6 +1449,9 @@ class Pick(py_trees.behaviour.Behaviour):
             distance = l2 + math.tan((math.pi/2)-charlie)*distance_y + 0.085  #math.cos(alpha)*l1 + math.cos(beta)*l2
 
             if distance < 0.25: distance -= 0.01
+
+            if self.current_object_type == "plushie":
+                distance = distance + 0.01
 
             distance_z = 0 - self.off_base
 
@@ -1455,7 +1476,12 @@ class Pick(py_trees.behaviour.Behaviour):
                 request.point = GeometryPoint()
                 request.point.x = self.x
                 request.point.y = self.y
-                request.point.z = -0.15
+                if self.current_object_type == "plushie":
+                    self.node.get_logger().info(f"Picking Up Plushie")
+                    request.point.z = -0.13
+                else:
+                    self.node.get_logger().info(f"Picking Up Object")
+                    request.point.z = -0.15
                 request.description = self.task
 
                 self.future = self.pickup_client.call_async(request)
