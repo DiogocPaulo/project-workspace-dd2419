@@ -119,6 +119,8 @@ def generate_waypoints(map: Map, workspace_vertices, outer_offset, inner_offset)
         next_x, next_y = offset_vertices[(i + 1) % num_vertices]
         distance = np.hypot(next_x - current_x, next_y - current_y)
         resolution = max(1, math.ceil(distance * 1.2))
+        if (i > len(outer_vertices) - 2):
+            resolution = max(1, math.ceil(distance * 0.6))
         for j in range(resolution):
             x = current_x + (next_x - current_x) * (j + 1) / resolution
             y = current_y + (next_y - current_y) * (j + 1) / resolution
@@ -159,7 +161,7 @@ class ExploreMaster(Node):
         self.map = Map(self.resolution)
         self.map.initialise_grid(self.workspace_vertices)
         self.map.inflate_grid(0.30)
-        self.show_waypoints = False
+        self.show_waypoints = True
         self.explore_complete = False
         self.end_points = generate_waypoints(self.map, self.workspace_vertices, 0.35, 0.50)
 
