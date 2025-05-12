@@ -127,13 +127,13 @@ class MultiServoPublisher(Node):
 
         self.clock.sleep_for(rclpy.duration.Duration(seconds=3))
         
-        pose = [17000,12000,v3_arm,v2_arm,v1_arm,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
+        pose = [18000,12000,v3_arm,v2_arm,v1_arm,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
         msg.data = pose
         self.publisher.publish(msg)
 
         self.clock.sleep_for(rclpy.duration.Duration(seconds=3))
 
-        pose = [17000,12000,12000,12000,12000,12000,move_time,move_time,move_time,move_time,move_time,move_time]
+        pose = [18000,12000,12000,12000,12000,12000,move_time,move_time,move_time,move_time,move_time,move_time]
         msg.data = pose
         self.publisher.publish(msg)
 
@@ -168,7 +168,7 @@ class MultiServoPublisher(Node):
 
         self.clock.sleep_for(rclpy.duration.Duration(seconds=0.5))
         
-        pose = [17000,12000,v3_arm,v2_arm,v1_arm,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
+        pose = [18000,12000,v3_arm,v2_arm,v1_arm,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
         msg.data = pose
         self.publisher.publish(msg)
 
@@ -226,7 +226,7 @@ class MultiServoPublisher(Node):
         position = position.point
         base_arm,v1_arm,v2_arm,v3_arm = self.FindKinematics(position.x,position.y,position.z)
         
-        pose = [17000,12000,6500,21000,12000,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
+        pose = [18000,12000,6500,21000,12000,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
         self.base = base_arm
         self.v3 = v3_arm
         msg.data = pose
@@ -272,7 +272,7 @@ class MultiServoPublisher(Node):
         position = position.point
         base_arm,v1_arm,v2_arm,v3_arm = self.FindKinematics(position.x,position.y,position.z)
         
-        pose = [17000,12000,8000,21000,12000,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
+        pose = [18000,12000,8000,21000,12000,base_arm,move_time,move_time,move_time,move_time,move_time,move_time]
         self.base = base_arm
         self.v3 = v3_arm
         msg.data = pose
@@ -622,7 +622,7 @@ class MultiServoPublisher(Node):
 
         msg = Int16MultiArray()
         msg.layout = MultiArrayLayout(dim=[MultiArrayDimension(label="", size=12, stride=12)], data_offset=0)
-        pose = [11000,12000,int(v3),int(self.v2),int(self.v1),int(base),move_time,move_time,move_time,move_time,move_time,move_time]
+        pose = [18000,12000,int(v3),int(self.v2),int(self.v1),int(base),move_time,move_time,move_time,move_time,move_time,move_time]
         msg.data = pose
 
         self.publisher.publish(msg)

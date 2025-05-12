@@ -29,7 +29,7 @@ run-explore:
 	ros2 launch project_master explore_launch.py | tee logs/explore.log
 
 run-collect:
-	# cp maps/collection_1_map.csv maps/map.csv
+	cp maps/explore_map.csv maps/map.csv
 	ros2 launch project_master collect_launch.py | tee logs/collect.log
 
 check-explore:

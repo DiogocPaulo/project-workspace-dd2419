@@ -273,7 +273,7 @@ class Map:
         for safe_point in potential_safe_points:
             centre_distance = np.hypot(safe_point[0] - x, safe_point[1] - y)
             robot_distance = np.hypot(safe_point[0] - robot_x, safe_point[1] - robot_y)
-            cost = (1 * robot_distance) + (2 * centre_distance)
+            cost = (1.0 * robot_distance) + (2 * centre_distance)
             if cost < min_cost:
                 min_cost = cost
                 best_safe_point = safe_point
