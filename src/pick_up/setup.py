@@ -28,6 +28,9 @@ setup(
         'console_scripts': [
             'talker = pick_up.move_servos_publisher:main',
             'listener = pick_up.servo_pos_subscriber:main',
+            'FrameExtractor = pick_up.pick_up_camera:main',
+            'YOLOTrainer = pick_up.pick_up_camera:main',
+            'arm_camera = pick_up.arm_camera:main',
         ],
     },
 )

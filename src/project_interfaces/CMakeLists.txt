@@ -20,14 +20,18 @@ set(msg_files
 	"msg/Object.msg"
 	"msg/ObjectList.msg"
 	"msg/ArmTaskMessage.msg"
+	"msg/DetectedData.msg"
+	"msg/DetectedDataArray.msg"
 	"msg/NavPoint.msg"
 	"msg/NavPath.msg"
 	)
 
 set(srv_files
 	"srv/GoToPoint.srv"
-  "srv/PickObject.srv"
-  "srv/Trigger.srv"
+	"srv/PickObject.srv"
+	"srv/Trigger.srv"
+	"srv/GetDetectedList.srv"
+	"srv/JointMove.srv"
 	)
 
 set(action_files

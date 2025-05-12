@@ -23,6 +23,7 @@ setup(
     entry_points={
         'console_scripts': [
             'explore_master = project_master.explore_master:main',
+            'collect_master = project_master.collect_master:main',
         ],
     },
 )

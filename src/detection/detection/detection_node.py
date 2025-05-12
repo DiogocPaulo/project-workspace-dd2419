@@ -270,7 +270,6 @@ class ObjectDetectorNode(Node):
                 else:
                     self.get_logger().info(f"object type:{object_type} bef_x:{x_transformed} bef_y:{y_transformed}")
 
-
                 # Check if within workspace
                 if self.workspace_map is not None:
                     is_in = self.workspace_map.is_free(x_transformed, y_transformed, 75)

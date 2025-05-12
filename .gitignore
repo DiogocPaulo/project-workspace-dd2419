@@ -7,9 +7,8 @@ bags/
 *.log
 map.csv
 ros_bag_images/
-rosbag2_2025_04_04-18_45_02/
 *.json
-
+rosbag*/
 
 # Based on github ROS gitignore
 devel/

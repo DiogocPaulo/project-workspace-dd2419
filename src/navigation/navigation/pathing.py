@@ -146,7 +146,7 @@ class Pathing(Node):
         inflated_grid = np.max(stacked_grids, axis=0)
         self.inflated_map.update_grid(inflated_grid)
 
-        if grid_intersection(self.path_grid, self.inflated_map.grid):
+        if grid_intersection(self.path_grid, self.inflated_map.grid) and not self.approaching_object:
             self.calculate_astar_path()
         else:
             self.get_logger().info("Current path is still valid")
@@ -335,7 +335,6 @@ class Pathing(Node):
             if self.safe_point is None:
                 self.safe_point = (0.0, 0.0)
 
-        path_planner = AdaptiveAStar(self.inflated_map.grid)
         start_x, start_y = self.inflated_map.world_to_grid(self.start_point[0], self.start_point[1])
         if not self.backing:
             end_x, end_y = self.inflated_map.world_to_grid(self.end_point[0], self.end_point[1])
@@ -346,7 +345,13 @@ class Pathing(Node):
         if not self.approaching_object and not self.inflated_map.is_free(self.end_point[0], self.end_point[1], 75):
             self.get_logger().info("End point in inflation radius or occupied cell")
             path = None
+        if self.approaching_object or self.backing:
+            self.get_logger().info("Creating path based on empty grid, since approaching objects")
+            empty_grid = np.full((self.inflated_map.grid_height, self.inflated_map.grid_width), 0, dtype=np.int8)
+            path_planner = AdaptiveAStar(grid=empty_grid)
+            path = path_planner.plan_path((start_y, start_x), (end_y, end_x))
         else:
+            path_planner = AdaptiveAStar(grid=self.inflated_map.grid)
             path = path_planner.plan_path((start_y, start_x), (end_y, end_x))
 
         if path is None:

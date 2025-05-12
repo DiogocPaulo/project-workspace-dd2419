@@ -26,7 +26,6 @@ setup(
         'console_scripts': [
             'map_workspace = mapping.map_workspace:main',
             'map_objects = mapping.map_objects:main',
-            'map_boxes = mapping.map_boxes:main',
             'map_obstacles = mapping.map_obstacles:main',
         ],
     },

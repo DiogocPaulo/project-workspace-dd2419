@@ -94,8 +94,6 @@ class ObjectFilterNode(Node):
                         is_duplicate = True
                         break
 
-                
-
                 self.get_logger().info(f"initial:{self.initial_object_list} and free:{free_from_obstacles}")
 
                 # If not a duplicate, add the new object to the list
