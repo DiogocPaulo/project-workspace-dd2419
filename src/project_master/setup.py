@@ -22,8 +22,6 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'project_master = project_master.project_master:main',
-            'explore_master = project_master.explore_master:main',
             'collect_master = project_master.collect_master:main',
         ],
     },

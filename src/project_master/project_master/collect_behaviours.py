@@ -28,8 +28,6 @@ from std_msgs.msg import Header
 from geometry_msgs.msg import Point as GeometryPoint
 from geometry_msgs.msg import PointStamped, TransformStamped, Pose, Quaternion, Vector3
 
-from project_master import behaviours
-
 # a node has executed completely after returning a SUCCESS or FAILURE
 
 # setup - one time constructor

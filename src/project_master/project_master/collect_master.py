@@ -25,7 +25,7 @@ import time
 from std_msgs.msg import Header
 from geometry_msgs.msg import Point as GeometryPoint
 
-from project_master import behaviours
+from project_master import collect_behaviours
 
 class CollectMaster(Node):
     def __init__(self):
@@ -71,20 +71,20 @@ class CollectMaster(Node):
         root = py_trees.composites.Selector("CollectionRoot", memory=True)
         collection_sequence = py_trees.composites.Sequence("Collection", memory=True)
 
-        find_closest_object = behaviours.FindClosestObject(
+        find_closest_object = collect_behaviours.FindClosestObject(
             name="FindClosest_Object",
             find_box=False,
             output_key="closest_object",
         )
 
         # Object Safe Point
-        object_safe_point_client = behaviours.GoToSafePointClient(
+        object_safe_point_client = collect_behaviours.GoToSafePointClient(
             name="SafePointClient_Object",
             service_name="/pathing_end_point",
             input_key="closest_object",
             output_key="object_safe_waypoint",
         )
-        object_reached_safe_point = behaviours.ReachedWaypoint(
+        object_reached_safe_point = collect_behaviours.ReachedWaypoint(
             name="ReachedSafePoint_Object",
             input_key="object_safe_waypoint",
             distance_threshold=self.distance_threshold,
@@ -100,14 +100,14 @@ class CollectMaster(Node):
         ])
 
         # Object Approach Point
-        object_approach_point_client = behaviours.GoToApproachPointClient(
+        object_approach_point_client = collect_behaviours.GoToApproachPointClient(
             name="ApproachPointClient_Object",
             service_name="/pathing_end_point",
             approach_offset=0.20,
             input_key="closest_object",
             output_key="object_approach_waypoint",
         )
-        object_reached_approach_point = behaviours.ReachedWaypoint(
+        object_reached_approach_point = collect_behaviours.ReachedWaypoint(
             name="ReacheApproachPoint_Object",
             input_key="object_approach_waypoint",
             distance_threshold=self.distance_threshold,
@@ -123,52 +123,52 @@ class CollectMaster(Node):
         ])
 
         # Pickup Routine
-        object_look = behaviours.Look(
+        object_look = collect_behaviours.Look(
             name=f"Look_Object",
             x=0.2,
             y=0.0,
             t = "objects"
         )
 
-        object_look_up = behaviours.LookUp(
+        object_look_up = collect_behaviours.LookUp(
             name=f"LookUp_Object",
             x=0.2,
             y=0.0,
             t = "objects"
         )
 
-        object_look_left = behaviours.Look(
+        object_look_left = collect_behaviours.Look(
             name=f"LookLeft_Object",
             x=0.2,
             y=0.2,
             t = "objects"
         )
 
-        object_look_right = behaviours.Look(
+        object_look_right = collect_behaviours.Look(
             name=f"LookRight_Object",
             x=0.2,
             y=-0.2,
             t = "objects"
         )
 
-        object_sweep = behaviours.Sweep(
+        object_sweep = collect_behaviours.Sweep(
             name=f"Sweep_Object",
             t = "objects"
         )
-        object_adjust = behaviours.Adjust(
+        object_adjust = collect_behaviours.Adjust(
             name = f"Adjust_Object",
             t = "objects"
         )
-        pickup = behaviours.Pick(
+        pickup = collect_behaviours.Pick(
             name = f"Pickup",
             t = "objects",
             task = "PICKUP"
         )
-        object_check = behaviours.Check(
+        object_check = collect_behaviours.Check(
             name = f"Check_Object",
             t = "objects"
         )
-        object_return = behaviours.Return(
+        object_return = collect_behaviours.Return(
             name = f"Return_Object",
             t = "objects",
             task = "RETURN"
@@ -198,7 +198,7 @@ class CollectMaster(Node):
         ])
 
         # Object Reposition Point
-        object_reposition_point_client = behaviours.GoToRepositionPointClient(
+        object_reposition_point_client = collect_behaviours.GoToRepositionPointClient(
             name="RepositionPointClient_Object",
             service_name="/pathing_end_point",
             reposition_offset=0.15,
@@ -206,7 +206,7 @@ class CollectMaster(Node):
             output_key="object_reposition_waypoint",
         )
 
-        object_reached_reposition_point = behaviours.ReachedWaypoint(
+        object_reached_reposition_point = collect_behaviours.ReachedWaypoint(
             name="ReachedRepositionPoint_Object",
             input_key="object_reposition_waypoint",
             distance_threshold=self.distance_threshold,
@@ -224,43 +224,43 @@ class CollectMaster(Node):
         ])
 
         # Reposition Pickup Routine
-        reposition_object_look = behaviours.Look(
+        reposition_object_look = collect_behaviours.Look(
             name=f"RepositionLook_Object",
             x=0.2,
             y=0.0,
             t = "objects"
         )
 
-        reposition_object_look_up = behaviours.LookUp(
+        reposition_object_look_up = collect_behaviours.LookUp(
             name=f"RepositionLookUp_Object",
             x=0.2,
             y=0.0,
             t = "objects"
         )
 
-        reposition_object_look_left = behaviours.Look(
+        reposition_object_look_left = collect_behaviours.Look(
             name=f"RepositionLookLeft_Object",
             x=0.2,
             y=0.2,
             t = "objects"
         )
 
-        reposition_object_look_right = behaviours.Look(
+        reposition_object_look_right = collect_behaviours.Look(
             name=f"RepositionLookRight_Object",
             x=0.2,
             y=-0.2,
             t = "objects"
         )
-        reposition_object_adjust = behaviours.Adjust(
+        reposition_object_adjust = collect_behaviours.Adjust(
             name = f"Adjust_Object",
             t = "objects"
         )
-        reposition_pickup = behaviours.Pick(
+        reposition_pickup = collect_behaviours.Pick(
             name = f"Pickup",
             t = "objects",
             task = "PICKUP"
         )
-        reposition_object_check = behaviours.Check(
+        reposition_object_check = collect_behaviours.Check(
             name = f"Check_Object",
             t = "objects"
         )
@@ -301,7 +301,7 @@ class CollectMaster(Node):
         ])
 
         # Object Return Point
-        object_return_point_client = behaviours.GoToWaypointClient(
+        object_return_point_client = collect_behaviours.GoToWaypointClient(
             name="ReturnPointClient_Object",
             service_name="/pathing_end_point",
             input_key="object_safe_waypoint",
@@ -310,7 +310,7 @@ class CollectMaster(Node):
             slow_approach=False,
             approaching_object=True,
         )
-        object_reached_return_point = behaviours.ReachedWaypoint(
+        object_reached_return_point = collect_behaviours.ReachedWaypoint(
             name="ReachedReturnPoint_Object",
             input_key="object_safe_waypoint",
             distance_threshold=self.distance_threshold,
@@ -334,20 +334,20 @@ class CollectMaster(Node):
             pickup_attempt,
         ])
 
-        find_closest_box = behaviours.FindClosestObject(
+        find_closest_box = collect_behaviours.FindClosestObject(
             name="FindClosest_Box",
             find_box=True,
             output_key="closest_box",
         )
 
         # Box Safe Point
-        box_safe_point_client = behaviours.GoToSafePointClient(
+        box_safe_point_client = collect_behaviours.GoToSafePointClient(
             name="SafePointClient_Box",
             service_name="/pathing_end_point",
             input_key="closest_box",
             output_key="box_safe_waypoint",
         )
-        box_reached_safe_point = behaviours.ReachedWaypoint(
+        box_reached_safe_point = collect_behaviours.ReachedWaypoint(
             name="ReachedSafePoint_Box",
             input_key="box_safe_waypoint",
             distance_threshold=self.distance_threshold,
@@ -363,14 +363,14 @@ class CollectMaster(Node):
         ])
 
         # Box Approach Point
-        box_approach_point_client = behaviours.GoToApproachPointClient(
+        box_approach_point_client = collect_behaviours.GoToApproachPointClient(
             name="ApproachPointClient_Box",
             service_name="/pathing_end_point",
             approach_offset=0.25,
             input_key="closest_box",
             output_key="box_approach_waypoint",
         )
-        box_reached_approach_point = behaviours.ReachedWaypoint(
+        box_reached_approach_point = collect_behaviours.ReachedWaypoint(
             name="ReacheApproachPoint_Box",
             input_key="box_approach_waypoint",
             distance_threshold=self.distance_threshold,
@@ -386,41 +386,41 @@ class CollectMaster(Node):
         ])
 
         # Drop Routine
-        box_look = behaviours.Look(
+        box_look = collect_behaviours.Look(
             name=f"Look_Box",
             x=0.2,
             y=0.0,
             t = "boxes"
         )
 
-        box_look_up = behaviours.LookUp(
+        box_look_up = collect_behaviours.LookUp(
             name=f"LookUp_Box",
             x=0.2,
             y=0.0,
             t = "objects"
         )
-        box_look_left = behaviours.Look(
+        box_look_left = collect_behaviours.Look(
             name=f"LookLeft_Box",
             x=0.2,
             y=0.2,
             t = "boxes"
         )
 
-        box_look_right = behaviours.Look(
+        box_look_right = collect_behaviours.Look(
             name=f"LookRight_Box",
             x=0.2,
             y=-0.2,
             t = "boxes"
         )
-        box_sweep = behaviours.Sweep(
+        box_sweep = collect_behaviours.Sweep(
             name=f"Sweep_Box",
             t = "boxes"
         )
-        box_adjust = behaviours.Adjust(
+        box_adjust = collect_behaviours.Adjust(
             name = f"Adjust_Box",
             t = "boxes"
         )
-        drop = behaviours.Drop(
+        drop = collect_behaviours.Drop(
             name = f"Drop",
             t = "boxes",
             task = "DROPOFF"
@@ -442,7 +442,7 @@ class CollectMaster(Node):
         retry_drop = py_trees.decorators.Retry(name="RetryDrop", child=drop_routine, num_failures=1)
 
         # Object Reposition Point
-        box_reposition_point_client = behaviours.GoToRepositionPointClient(
+        box_reposition_point_client = collect_behaviours.GoToRepositionPointClient(
             name="RepositionPointClient_Box",
             service_name="/pathing_end_point",
             reposition_offset=0.20,
@@ -450,7 +450,7 @@ class CollectMaster(Node):
             output_key="box_reposition_waypoint",
         )
 
-        box_reached_reposition_point = behaviours.ReachedWaypoint(
+        box_reached_reposition_point = collect_behaviours.ReachedWaypoint(
             name="ReachedRepositionPoint_Box",
             input_key="box_reposition_waypoint",
             distance_threshold=self.distance_threshold,
@@ -468,34 +468,34 @@ class CollectMaster(Node):
         ])
 
         # Reposition Pickup Routine
-        reposition_box_look = behaviours.Look(
+        reposition_box_look = collect_behaviours.Look(
             name=f"Look_Box",
             x=0.2,
             y=0.0,
             t = "boxes"
         )
-        reposition_box_look_left = behaviours.Look(
+        reposition_box_look_left = collect_behaviours.Look(
             name=f"RepositionLookLeft_Box",
             x=0.2,
             y=0.2,
             t = "boxes"
         )
 
-        reposition_box_look_right = behaviours.Look(
+        reposition_box_look_right = collect_behaviours.Look(
             name=f"RepositionLookRight_Box",
             x=0.2,
             y=-0.2,
             t = "boxes"
         )
-        reposition_box_sweep = behaviours.Sweep(
+        reposition_box_sweep = collect_behaviours.Sweep(
             name=f"Sweep_Box",
             t = "boxes"
         )
-        reposition_box_adjust = behaviours.Adjust(
+        reposition_box_adjust = collect_behaviours.Adjust(
             name = f"Adjust_Box",
             t = "boxes"
         )
-        reposition_drop = behaviours.Drop(
+        reposition_drop = collect_behaviours.Drop(
             name = f"Drop",
             t = "boxes",
             task = "DROPOFF"
@@ -535,7 +535,7 @@ class CollectMaster(Node):
         ])
 
         # Box Return Point
-        box_return_point_client = behaviours.GoToWaypointClient(
+        box_return_point_client = collect_behaviours.GoToWaypointClient(
             name="ReturnPointClient_Box",
             service_name="/pathing_end_point",
             input_key="box_safe_waypoint",
@@ -544,7 +544,7 @@ class CollectMaster(Node):
             slow_approach=False,
             approaching_object=True,
         )
-        box_reached_return_point = behaviours.ReachedWaypoint(
+        box_reached_return_point = collect_behaviours.ReachedWaypoint(
             name="ReachedReturnPoint_Box",
             input_key="box_safe_waypoint",
             distance_threshold=self.distance_threshold,
