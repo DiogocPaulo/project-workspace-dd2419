@@ -6,12 +6,11 @@ class RobotState:
     A class to keep track of the robots current state.
     Uses an odometry message to update the state.
     """
-    def __init__(self, target_velocity):
+    def __init__(self):
         self.x = 0.0
         self.y = 0.0
         self.yaw = 0.0
         self.velocity = 0.0
-        self.target_velocity = target_velocity
 
     def update_state(self, odom_msg: Odometry):
         self.x = odom_msg.pose.pose.position.x
@@ -23,7 +22,7 @@ class RobotState:
         self.yaw = np.arctan2(siny_cosp, cosy_cosp)
 
         odom_velocity = odom_msg.twist.twist.linear.x
-        self.velocity = odom_velocity + (self.target_velocity - odom_velocity)
+        self.velocity = odom_velocity
 
     def distance_to_state(self, x, y):
         return np.hypot(self.x - x, self.y - y)

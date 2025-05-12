@@ -1,4 +1,4 @@
-# Launches odometry and lidar (requires setup_launch to be run first)
+# Launches odometry node (requires setup_launch to be run first)
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
@@ -21,7 +21,33 @@ def generate_launch_description():
         Node(
             package="tf2_ros",
             executable="static_transform_publisher",
-            arguments=["0", "0", "0", "0", "0", "0", "1", "map", "odom"],
+            arguments=[
+                "--x", "0",
+                "--y", "0",
+                "--z", "0",
+                "--qx", "0",
+                "--qy", "0",
+                "--qz", "0",
+                "--qw", "1",
+                "--frame-id", "map",
+                "--child-frame-id", "odom"
+            ],
+            output="screen",
+        ),
+        Node(
+            package="tf2_ros",
+            executable="static_transform_publisher",
+            arguments=[
+                "--x", "0",
+                "--y", "0.085",
+                "--z", "0.155",
+                "--qx", "0",
+                "--qy", "0",
+                "--qz", "0",
+                "--qw", "1",
+                "--frame-id", "base_link",
+                "--child-frame-id", "lidar_link"
+            ],
             output="screen",
         ),
         Node(
@@ -34,6 +60,19 @@ def generate_launch_description():
             package="localisation",
             executable="odometry",
             name="robot_odometry",
+            emulate_tty=True,
+            ros_arguments=["--log-level", "info"],
+            output="screen",
         ),
+        # Node(
+        #     package="localization_cpp",
+        #     executable="localization_node",
+        #     name="robot_localization_node",
+        #     emulate_tty=True,
+        #     output="screen",
+        # ),
     ])
+
+    
+
 

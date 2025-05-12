@@ -17,6 +17,7 @@
   <depend>tf2_ros</depend>
   <depend>py_trees</depend>
   <depend>py_trees_ros</depend>
+  <depend>python3-shapely</depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
