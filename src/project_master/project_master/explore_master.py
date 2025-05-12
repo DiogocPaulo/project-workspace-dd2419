@@ -18,7 +18,7 @@ from nav_msgs.msg import Path, Odometry
 from project_interfaces.msg import Vertex, WorkspaceVertices
 from mapping.map import Map
 
-from project_master import behaviours
+from project_master import explore_behaviours
 
 def offset_outer_vertices(workspace_vertices, offset):
     vertices = [np.array(vertex) for vertex in workspace_vertices]
@@ -245,7 +245,7 @@ class ExploreMaster(Node):
         for i, (x, y, yaw) in enumerate(self.end_points):
             point_selector = py_trees.composites.Selector(f"EndPoint_{i}", memory=True)
 
-            end_point_client = behaviours.ServiceClient(
+            end_point_client = explore_behaviours.ServiceClient(
                 name=f"GoToPoint_{i}",
                 service_type=GoToPoint,
                 service_name="/pathing_end_point",
@@ -258,7 +258,7 @@ class ExploreMaster(Node):
                 approaching_object=False,
             )
 
-            reached_end_point = behaviours.ReachedEndPoint(
+            reached_end_point = explore_behaviours.ReachedEndPoint(
                 name=f"ReachedEndPoint_{i}",
                 x=x,
                 y=y,

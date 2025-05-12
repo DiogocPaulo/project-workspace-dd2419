@@ -24,7 +24,6 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'mapping = mapping.mapping:main',
             'map_workspace = mapping.map_workspace:main',
             'map_objects = mapping.map_objects:main',
             'map_boxes = mapping.map_boxes:main',
