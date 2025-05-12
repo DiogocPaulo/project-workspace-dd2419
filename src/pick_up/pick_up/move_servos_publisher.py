@@ -119,7 +119,7 @@ class MultiServoPublisher(Node):
         self.get_logger().info(f"APPLYING SERVO ANGLES: BASE={base_arm} SERVO5={v1_arm} SERVO4={v2_arm} SERVO3={v3_arm}")
         self.get_logger().info(f"PICKUP INITIATED")
 
-        ose = [3000,12000,self.v3,self.v2,self.v1,self.base,int(move_time/2),int(move_time/2),int(move_time/2),(move_time/2),int(move_time/2),int(move_time/2)]
+        pose = [3000,12000,self.v3,self.v2,self.v1,self.base,int(move_time/2),int(move_time/2),int(move_time/2),(move_time/2),int(move_time/2),int(move_time/2)]
         msg.data = pose
         self.publisher.publish(msg)
 
