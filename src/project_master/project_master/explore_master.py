@@ -120,7 +120,7 @@ def generate_waypoints(map: Map, workspace_vertices, outer_offset, inner_offset)
         distance = np.hypot(next_x - current_x, next_y - current_y)
         resolution = max(1, math.ceil(distance * 1.2))
         if (i > len(outer_vertices) - 2):
-            resolution = max(1, math.ceil(distance * 0.6))
+            resolution = max(1, math.ceil(distance * 0.8))
         for j in range(resolution):
             x = current_x + (next_x - current_x) * (j + 1) / resolution
             y = current_y + (next_y - current_y) * (j + 1) / resolution
@@ -135,6 +135,8 @@ def generate_waypoints(map: Map, workspace_vertices, outer_offset, inner_offset)
         rounded_x, rounded_y = map.round_world(current_x, current_y)
         if i == (num_waypoints - 1):
             waypoints[i] = (rounded_x, rounded_y, final_heading)
+        elif i == (num_waypoints - 3):
+            waypoints[i] = (rounded_x, rounded_y, math.pi)
         else:
             waypoints[i] = (rounded_x, rounded_y, heading)
 
@@ -154,14 +156,14 @@ class ExploreMaster(Node):
         self.target_velocity = 0.16
         self.resolution = 0.05
         self.distance_threshold = 0.1
-        self.yaw_threshold = math.radians(7)
+        self.yaw_threshold = math.radians(8)
 
         #Variables
 
         self.map = Map(self.resolution)
         self.map.initialise_grid(self.workspace_vertices)
         self.map.inflate_grid(0.30)
-        self.show_waypoints = True
+        self.show_waypoints = False
         self.explore_complete = False
         self.end_points = generate_waypoints(self.map, self.workspace_vertices, 0.35, 0.50)
 

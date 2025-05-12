@@ -158,7 +158,7 @@ class ObjectDetectorNode(Node):
                 pure_red = True
             elif green_ratio > 0.005 and red_ratio == 0.0 and blue_ratio == 0.0:
                 pure_green = True
-            elif blue_ratio > 0.001 and red_ratio == 0.0 and green_ratio >= 0.0 and green_ratio <0.021:
+            elif blue_ratio > 0.01 and red_ratio == 0.0 and green_ratio >= 0.0 and green_ratio <0.021:
                 pure_blue = True
 
             x, y, z = np.mean(cluster_points, axis=0)

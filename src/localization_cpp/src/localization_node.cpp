@@ -134,12 +134,12 @@ void Node::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) 
             double icp_rotation_theta = std::atan2(icp_transform(1, 0), icp_transform(0, 0));
 
             // Skip invalid icp
-            if (std::abs(icp_translation_x) > 0.22 || std::abs(icp_translation_y) > 0.22 || std::abs(icp_rotation_theta) > (M_PI / 2)) {
+            if (std::abs(icp_translation_x) > 0.2 || std::abs(icp_translation_y) > 0.2 || std::abs(icp_rotation_theta) > (M_PI / 2)) {
                 return;
             }
 
             // Use ICP if fitness and RMSE is good enough
-            if (fitness > 0.5 && inlier_rmse < 0.2) {
+            if (fitness > 0.5 && inlier_rmse < 0.3) {
                 // Convert pre_rotation to theta (angle) for quaternion
                 //double pre_rotation_theta = std::atan2(pre_rotation(1, 0), pre_rotation(0, 0));
 
