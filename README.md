@@ -32,43 +32,95 @@ make run-joystick
 ```
 
 
-# Arm control
+---
+
+## Arm Control
+
+To initiate the arm control sequence:
+
+```bash
 ros2 launch pick_up pick_up_launch.py
 
-# Arm Camera
+```
+
+## Arm Camera
+
+To launch the arm camera:
+
+```bash
 ros2 launch robp_launch arm_camera_launch.yaml
 
-Rviz instructions:
-- Add
-- By topic
-- Arm_camera/image_raw -> image
+```
 
-# Detection
+**RViz Instructions:**
 
+* Click **Add**
+* Select **By topic**
+* Navigate to `Arm_camera/image_raw` -> `image`
 
-Either (with odom):
+---
+
+## Detection
+
+First, configure your frames depending on whether you are using odometry.
+
+**Option A: With Odometry**
+
+```bash
 ros2 launch robp_launch frames_launch.xml
 ros2 run tf2_ros static_transform_publisher --frame-id map --child-frame-id odom
 
-or (no odom):
+```
+
+**Option B: Without Odometry**
+
+```bash
 ros2 launch robp_launch frames_launch.xml
 ros2 run tf2_ros static_transform_publisher --frame-id map --child-frame-id base_link
 
-ros2 launch robp_launch rs_d435i_launch.py (launch the camera)
+```
+
+Next, launch the camera and the detection node:
+
+```bash
+ros2 launch robp_launch rs_d435i_launch.py
 ros2 launch detection detection_launch.py
 
-Rviz instructions:
-- Add
-- By topic
-- camera_depth/color/points_transformed -> PointCloud2
+```
 
-# Lidar (probably since we havent been able to test it yet)
+**RViz Instructions:**
 
+* Click **Add**
+* Select **By topic**
+* Navigate to `camera_depth/color/points_transformed` -> `PointCloud2`
+
+---
+
+## Lidar
+
+To launch the Lidar sensor:
+
+```bash
 ros2 launch robp_launch lidar_launch.yaml
 
-Rviz instructions:
-- Add
-- By topic
-- laser_scan
+```
 
-(make sure fixed frame is lidar_link)
+**RViz Instructions:**
+
+* Click **Add**
+* Select **By topic**
+* Navigate to `laser_scan`
+* *Important:* Make sure the fixed frame is set to `lidar_link`.
+
+
+```markdown
+## Repository Structure
+
+The `src/` directory is organized into functional ROS 2 packages:
+
+* **`project_interfaces/`** - Contains custom ROS 2 messages (`.msg`), services (`.srv`), and actions (`.action`) used for communication across nodes (e.g., `Object`, `NavPath`, `PickUpObject`).
+* **`localization_cpp/`** - Performance-critical C++ logic handling wheel encoders, IMU data, Extended Kalman Filtering (EKF), and coordinate transforms (`/odom` $\rightarrow$ `/base_link`).
+* **`mapping/`** - Python nodes responsible for workspace, object, and obstacle mapping (`map_workspace`, `map_objects`, `map_obstacles`).
+* **`navigation/`** - Implements navigation flows such as Pure Pursuit and manual joystick control.
+* **`detection/`** - Vision and perception pipelines handling depth and color data from the Intel RealSense camera.
+* **`pick_up/`** - Actuation and control workflows for the robotic arm and servo mechanisms.
