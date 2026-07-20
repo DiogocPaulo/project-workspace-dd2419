@@ -34,7 +34,7 @@ Below are demonstrations of the autonomous exploration and object collection pha
 
 | Autonomous Exploration | Object Collection |
 | :---: | :---: |
-| ![Exploration](docs/media/exploration_preview.gif) <br> *Sneezy mapping the environment* | ![Collection](docs/media/collection_preview.gif) <br> *Arm manipulation and object retrieval* |
+| ![Exploration](exploration.gif) <br> *Sneezy mapping the environment* | ![Collection](collection.gif) <br> *Arm manipulation and object retrieval* |
 
 # Build
 
