@@ -36,7 +36,9 @@ Below are demonstrations of the autonomous exploration and object collection pha
 | :---: | :---: |
 | ![Exploration](docs/media/exploration_preview.gif) <br> *Sneezy mapping the environment* | ![Collection](docs/media/collection_preview.gif) <br> *Arm manipulation and object retrieval* |
 
-# Localization and Navigation Steps
+# Build
+
+## Localization and Navigation Steps
 Have to launch phidgets before Localization and navigation. Thus for movement do the following:
 1. Launch phidgets and frames:
 ```bash
@@ -69,7 +71,7 @@ make run-joystick
 
 ---
 
-# Arm Control
+## Arm Control
 
 To initiate the arm control sequence:
 
@@ -78,7 +80,7 @@ ros2 launch pick_up pick_up_launch.py
 
 ```
 
-# Arm Camera
+## Arm Camera
 
 To launch the arm camera:
 
@@ -95,7 +97,7 @@ ros2 launch robp_launch arm_camera_launch.yaml
 
 ---
 
-# Detection
+## Detection
 
 First, configure your frames depending on whether you are using odometry.
 
@@ -131,7 +133,7 @@ ros2 launch detection detection_launch.py
 
 ---
 
-# Lidar
+## Lidar
 
 To launch the Lidar sensor:
 
