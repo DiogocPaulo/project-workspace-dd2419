@@ -34,7 +34,7 @@ make run-joystick
 
 ---
 
-## Arm Control
+# Arm Control
 
 To initiate the arm control sequence:
 
@@ -43,7 +43,7 @@ ros2 launch pick_up pick_up_launch.py
 
 ```
 
-## Arm Camera
+# Arm Camera
 
 To launch the arm camera:
 
@@ -60,7 +60,7 @@ ros2 launch robp_launch arm_camera_launch.yaml
 
 ---
 
-## Detection
+# Detection
 
 First, configure your frames depending on whether you are using odometry.
 
@@ -96,7 +96,7 @@ ros2 launch detection detection_launch.py
 
 ---
 
-## Lidar
+# Lidar
 
 To launch the Lidar sensor:
 
@@ -113,8 +113,8 @@ ros2 launch robp_launch lidar_launch.yaml
 * *Important:* Make sure the fixed frame is set to `lidar_link`.
 
 
-```markdown
-## Repository Structure
+
+# Repository Structure
 
 The `src/` directory is organized into functional ROS 2 packages:
 
