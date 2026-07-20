@@ -3,9 +3,34 @@ ROS2 workspace for robotics project (DD2419). Group 4 with robot **Sneezy**!
 
 # Localisation and Navigation Steps
 Have to launch phidgets before Localisation and navigation. Thus for movement do the following:
-1. Launch phidgets and frames `make run-setup`
-2. Launch localisation includes odometry `make run-localisation`
-3. Launch navigation method `make run-navigation` for pure pursuit or `make run-joystick`
+1. Launch phidgets and frames:
+```bash
+make run-setup
+
+```
+
+
+2. Launch localization (includes odometry):
+```bash
+make run-localisation
+
+```
+
+
+3. Launch your preferred navigation method:
+* For pure pursuit:
+```bash
+make run-navigation
+
+```
+
+
+* For joystick control:
+```bash
+make run-joystick
+
+```
+
 
 # Arm control
 ros2 launch pick_up pick_up_launch.py
